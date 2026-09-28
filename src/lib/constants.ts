@@ -471,6 +471,18 @@ export const models: readonly ModelDefinition[] = [
     contextWindow: 1_000_000,
   },
   {
+    name: "Claude Sonnet 5.5",
+    value: "claude-sonnet-5.5",
+    tokenMultiplier: 1.5,
+    author: "anthropic",
+    description: "Fast, balanced model for coding, agents, and everyday knowledge work.",
+    premium: true,
+    featured: true,
+    features: ["reasoning", "smart", "coding", "fast"],
+    efforts: ["low", "medium", "high", "xhigh", "max"],
+    contextWindow: 1_000_000,
+  },
+  {
     name: "Claude Sonnet 5",
     value: "claude-sonnet-5",
     tokenMultiplier: 1.5,

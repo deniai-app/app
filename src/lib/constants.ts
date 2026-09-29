@@ -152,7 +152,6 @@ export const models: readonly ModelDefinition[] = [
     tokenMultiplier: 1.5,
     author: "openai",
     description: "High-end GPT-6 model for demanding reasoning, coding, and agentic work.",
-    featured: true,
     features: ["reasoning", "coding", "smart", "fast"],
     efforts: ["none", "low", "medium", "high", "xhigh", "max"],
     supportsProMode: true,

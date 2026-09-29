@@ -24,6 +24,7 @@ import { PasswordResetEmail, passwordResetEmailSubject } from "@/emails/password
 import { VerificationEmail, verificationEmailSubject } from "@/emails/verification-email";
 import { env } from "@/env";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { deletePersonalStripeCustomers } from "@/lib/account-deletion-billing";
 import {
   checkSignupEmail,
   signupEmailDenialCode,
@@ -367,6 +368,9 @@ export const auth = betterAuth({
   user: {
     deleteUser: {
       enabled: true,
+      beforeDelete: async (user) => {
+        await deletePersonalStripeCustomers(user.id);
+      },
     },
   },
   session: {

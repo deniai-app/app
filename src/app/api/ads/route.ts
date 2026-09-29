@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { chooseAd, signAdDelivery } from "@/lib/ads";
+import { localizedCreative } from "@/lib/ad-variants";
 import { isFreeAdViewer } from "@/lib/usage";
 
 export async function GET(request: Request) {
@@ -14,7 +15,9 @@ export async function GET(request: Request) {
   ) {
     return Response.json({ ad: null }, { headers: { "Cache-Control": "private, no-store" } });
   }
-  const excludeId = new URL(request.url).searchParams.get("exclude");
+  const params = new URL(request.url).searchParams;
+  const excludeId = params.get("exclude");
+  const locale = params.get("locale") === "ja" ? "ja" : "en";
   const ad = await chooseAd(session.session.userId, Boolean(session.user.isAnonymous), excludeId);
   const token = ad ? signAdDelivery(ad.id, session.session.userId, ad.url) : null;
   return Response.json(
@@ -22,8 +25,7 @@ export async function GET(request: Request) {
       ad: ad
         ? {
             id: ad.id,
-            title: ad.title,
-            description: ad.description,
+            ...localizedCreative(ad, locale),
             token,
             url: `/api/ads/click?id=${encodeURIComponent(ad.id)}&token=${encodeURIComponent(token ?? "")}`,
           }

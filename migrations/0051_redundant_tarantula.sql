@@ -1,0 +1,1 @@
+ALTER TABLE "ad_campaign" ADD COLUMN "default_language" text;

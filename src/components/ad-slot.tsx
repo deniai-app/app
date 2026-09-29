@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useExtracted } from "next-intl";
+import { useExtracted, useLocale } from "next-intl";
 import { ArrowUpRight } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ export function AdSlot({
   onAdSelected,
 }: AdSlotProps) {
   const t = useExtracted();
+  const locale = useLocale();
   const [requestNumber, setRequestNumber] = useState(0);
   const previousInFlight = useRef(requestInFlight);
   const [delivery, setDelivery] = useState<{
@@ -51,7 +52,7 @@ export function AdSlot({
 
   useEffect(() => {
     const controller = new AbortController();
-    const params = new URLSearchParams({ placement: "chat" });
+    const params = new URLSearchParams({ placement: "chat", locale });
     if (excludedId.current) params.set("exclude", excludedId.current);
     fetch(`/api/ads?${params}`, { signal: controller.signal, cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
@@ -68,7 +69,7 @@ export function AdSlot({
         if (!controller.signal.aborted) setDelivery({ viewerId, chatId, requestNumber, ad: null });
       });
     return () => controller.abort();
-  }, [chatId, onAdSelected, requestNumber, viewerId]);
+  }, [chatId, locale, onAdSelected, requestNumber, viewerId]);
 
   useEffect(() => {
     if (!visible || !ad) return;

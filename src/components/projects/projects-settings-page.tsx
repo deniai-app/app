@@ -229,7 +229,12 @@ export function ProjectsSettingsPage() {
               {organizations.length > 0 ? (
                 <Select value={createScope} onValueChange={setCreateScope}>
                   <SelectTrigger size="sm" className="min-w-40">
-                    <SelectValue />
+                    <SelectValue>
+                      {createScope === "__personal__"
+                        ? t("Personal")
+                        : (organizations.find((org) => org.id === createScope)?.name ??
+                          t("Personal"))}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__personal__">{t("Personal")}</SelectItem>

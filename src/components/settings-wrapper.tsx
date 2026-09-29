@@ -7,6 +7,7 @@ import type React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { usePlatformCapabilities } from "@/components/platform-capabilities-provider";
+import { authClient } from "@/lib/auth-client";
 import { formatAppDate } from "@/lib/format-date";
 import { isStandaloneSettingsRoute } from "@/lib/settings-routes";
 import { trpc } from "@/lib/trpc/react";
@@ -21,8 +22,9 @@ export default function SettingsWrapper({ children }: { children: React.ReactNod
   const isStandaloneRoute = isStandaloneSettingsRoute(pathname);
   const { features } = usePlatformCapabilities();
   const billingDisabled = !features.billing;
+  const isAnonymous = Boolean(authClient.useSession().data?.user?.isAnonymous);
   const statusQuery = trpc.billing.status.useQuery(undefined, {
-    enabled: !billingDisabled && !isStandaloneRoute,
+    enabled: !billingDisabled && !isStandaloneRoute && !isAnonymous,
     staleTime: 60_000,
   });
   const usageQuery = trpc.billing.usage.useQuery(undefined, {
@@ -40,7 +42,8 @@ export default function SettingsWrapper({ children }: { children: React.ReactNod
     return <div className="mx-auto w-full max-w-5xl pb-12 pt-4">{children}</div>;
   }
 
-  const isUsageLoading = usageQuery.isLoading || (!billingDisabled && statusQuery.isLoading);
+  const isUsageLoading =
+    usageQuery.isLoading || (!billingDisabled && !isAnonymous && statusQuery.isLoading);
   const status = statusQuery.data;
   const usage = usageQuery.data;
   const usages = usage?.usage;

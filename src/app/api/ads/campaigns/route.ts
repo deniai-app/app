@@ -5,7 +5,8 @@ import { db } from "@/db/drizzle";
 import { adCampaign } from "@/db/schema";
 import { env } from "@/env";
 import { reviewAd } from "@/lib/ad-review";
-import { adCreativeSchema } from "@/lib/ad-creative";
+import { adCreativeSchema, hasOnlyOppositeVariant } from "@/lib/ad-creative";
+import { creativeFields } from "@/lib/ad-variants";
 import { activatePaidAd, releaseExpiredAdCheckout } from "@/lib/ad-checkout";
 import { adPlans } from "@/lib/ads";
 import { isAllowedAdOrigin } from "@/lib/ad-origin";
@@ -18,7 +19,8 @@ const inputSchema = z
     plan: z.enum(adPlans),
     budgetYen: z.number().int().min(300).max(100_000),
   })
-  .refine((input) => input.plan !== "fixed" || input.budgetYen === 3000);
+  .refine((input) => input.plan !== "fixed" || input.budgetYen === 3000)
+  .refine(hasOnlyOppositeVariant);
 
 export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -108,7 +110,9 @@ export async function POST(request: Request) {
     .insert(adCampaign)
     .values({
       userId: session.session.userId,
-      ...input.data,
+      ...creativeFields(input.data),
+      plan: input.data.plan,
+      budgetYen: input.data.budgetYen,
       status: review.approved ? "approved" : "rejected",
       reviewReason: review.reason,
     })

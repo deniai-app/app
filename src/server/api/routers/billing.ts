@@ -19,6 +19,7 @@ import {
   isTrialFingerprintEligible,
 } from "@/lib/billing-card-usage";
 import { isBillingDisabled } from "@/lib/billing-config";
+import { getAccountDeletionStatus } from "@/lib/account-deletion-billing";
 import { isAffiliatePaidStatus, processAffiliatePurchase } from "@/lib/affiliate";
 import {
   createFlashOfferEndAt,
@@ -61,7 +62,12 @@ const planIdSchema = z.enum([
 
 type BillingRecord = typeof billing.$inferSelect;
 const ACTIVE_SUB_STATUSES = new Set(["trialing", "active", "past_due"]);
-const billingEnabledProcedure = protectedProcedure.use(({ next }) => {
+const billingEnabledProcedure = protectedProcedure.use(({ ctx, next }) => {
+  // Anonymous guest sessions have placeholder email addresses and must not
+  // create Stripe customers. Sign in to a permanent account before billing.
+  if (ctx.session?.user?.isAnonymous) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sign in before using billing." });
+  }
   if (isBillingDisabled) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -171,86 +177,80 @@ async function findOrCreateStripeCustomer({
   name?: string | null;
   userId: string;
 }) {
-  let customer: Stripe.Customer | undefined;
+  // Email is not an account identifier: different accounts may share or change it.
+  // Fail closed on search errors rather than creating a duplicate customer.
+  const query = `metadata['userId']:'${escapeStripeSearchValue(userId)}'`;
+  let page: string | undefined;
+  do {
+    const search = await stripe.customers.search({ query, limit: 100, page });
+    const personalCustomer = search.data.find((candidate) => !candidate.metadata.organizationId);
+    if (personalCustomer) return personalCustomer;
+    page = search.next_page ?? undefined;
+  } while (page);
 
-  try {
-    const search = await stripe.customers.search({
-      query: `metadata['userId']:'${escapeStripeSearchValue(userId)}'`,
-      limit: 1,
-    });
-    customer = search.data[0];
-  } catch (error) {
-    console.warn("Stripe customer search failed, falling back to list", error);
-  }
-
-  if (!customer) {
-    const list = await stripe.customers.list({ email, limit: 1 });
-    customer = list.data[0];
-  }
-
-  if (customer) {
-    return customer;
-  }
-
-  return stripe.customers.create({
-    email,
-    name: name ?? undefined,
-    metadata: { userId },
-  });
+  return stripe.customers.create(
+    { email, name: name ?? undefined, metadata: { userId } },
+    { idempotencyKey: `billing-personal-${userId}` },
+  );
 }
 
 async function ensureBillingRecord(ctx: ProtectedContext, userId: string) {
-  const existing = await ctx.db
-    .select()
-    .from(billing)
-    .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
-    .limit(1);
+  return ctx.db.transaction(async (tx) => {
+    // Serialize creation for this account across concurrent checkout and card requests.
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${"personal:" + userId}, 0))`,
+    );
+    const existing = await tx
+      .select()
+      .from(billing)
+      .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
+      .limit(1);
 
-  if (existing[0]) {
-    const record = existing[0];
-    if (!record.firstPaidAt && !record.flashOfferEndsAt) {
-      const [updated] = await ctx.db
-        .update(billing)
-        .set({
-          flashOfferEndsAt: createFlashOfferEndAt(),
-          updatedAt: new Date(),
-        })
-        .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
-        .returning();
+    if (existing[0]) {
+      const record = existing[0];
+      if (!record.firstPaidAt && !record.flashOfferEndsAt) {
+        const [updated] = await tx
+          .update(billing)
+          .set({
+            flashOfferEndsAt: createFlashOfferEndAt(),
+            updatedAt: new Date(),
+          })
+          .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
+          .returning();
 
-      return updated ?? record;
+        return updated ?? record;
+      }
+
+      return record;
     }
 
-    return record;
-  }
-
-  const profile = await fetchUserProfile(ctx, userId);
-  const customer = await findOrCreateStripeCustomer({
-    email: profile.email,
-    name: profile.name,
-    userId,
-  });
-
-  const [created] = await ctx.db
-    .insert(billing)
-    .values({
+    const profile = await fetchUserProfile(ctx, userId);
+    const customer = await findOrCreateStripeCustomer({
+      email: profile.email,
+      name: profile.name,
       userId,
-      stripeCustomerId: customer.id,
-      status: "inactive",
-      flashOfferEndsAt: createFlashOfferEndAt(),
-    })
-    .onConflictDoUpdate({
-      target: billing.userId,
-      targetWhere: sql`organization_id IS NULL`,
-      set: {
-        stripeCustomerId: customer.id,
-        flashOfferEndsAt: createFlashOfferEndAt(),
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
+    });
 
-  return created;
+    const [created] = await tx
+      .insert(billing)
+      .values({
+        userId,
+        stripeCustomerId: customer.id,
+        status: "inactive",
+        flashOfferEndsAt: createFlashOfferEndAt(),
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (created) return created;
+    const [record] = await tx
+      .select()
+      .from(billing)
+      .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
+      .limit(1);
+    if (!record) throw new Error("Unable to create personal billing record");
+    return record;
+  });
 }
 
 async function syncSubscription(ctx: ProtectedContext, userId: string) {
@@ -351,6 +351,9 @@ async function reuseOpenCheckoutSession({
 }
 
 export const billingRouter = router({
+  accountDeletionStatus: protectedProcedure.query(({ ctx }) =>
+    getAccountDeletionStatus(ctx.userId),
+  ),
   plans: billingEnabledProcedure.query(async ({ ctx }) => {
     const individualPlans = billingPlans.filter((p) => !isTeamPlan(p.id));
     const billingRecord = await ensureBillingRecord(ctx, ctx.userId);

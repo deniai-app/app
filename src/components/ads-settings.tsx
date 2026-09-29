@@ -31,10 +31,79 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { campaignGroup, paginateCampaigns, type AdCampaignFilter } from "@/lib/ad-campaign-list";
 
+function variantFromForm(form: FormData, language: "japanese" | "english") {
+  if (form.get(`${language}Enabled`) !== "on") return null;
+  return {
+    title: form.get(`${language}Title`),
+    description: form.get(`${language}Description`),
+  };
+}
+
+function VariantFields({
+  language,
+  idPrefix,
+  title,
+  description,
+}: {
+  language: "japanese" | "english";
+  idPrefix: string;
+  title?: string | null;
+  description?: string | null;
+}) {
+  const t = useExtracted();
+  const [enabled, setEnabled] = useState(Boolean(title && description));
+  return (
+    <fieldset className="flex flex-col gap-3 rounded-lg border p-4">
+      <label className="flex items-center gap-2 text-sm font-medium">
+        <input
+          type="checkbox"
+          name={`${language}Enabled`}
+          checked={enabled}
+          onChange={(event) => setEnabled(event.target.checked)}
+        />
+        {language === "japanese" ? t("Japanese variant") : t("English variant")}
+      </label>
+      {enabled && (
+        <>
+          <Field>
+            <FieldLabel htmlFor={`${idPrefix}-${language}-title`}>{t("Ad title")}</FieldLabel>
+            <Input
+              id={`${idPrefix}-${language}-title`}
+              name={`${language}Title`}
+              defaultValue={title ?? ""}
+              minLength={3}
+              maxLength={100}
+              required
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${idPrefix}-${language}-description`}>
+              {t("Ad description")}
+            </FieldLabel>
+            <Textarea
+              id={`${idPrefix}-${language}-description`}
+              name={`${language}Description`}
+              defaultValue={description ?? ""}
+              minLength={10}
+              maxLength={240}
+              required
+            />
+          </Field>
+        </>
+      )}
+    </fieldset>
+  );
+}
+
 type Campaign = {
   id: string;
   title: string;
   description: string;
+  defaultLanguage: "ja" | "en" | null;
+  japaneseTitle: string | null;
+  japaneseDescription: string | null;
+  englishTitle: string | null;
+  englishDescription: string | null;
   url: string;
   plan: string;
   status: string;
@@ -61,9 +130,12 @@ export function AdsSettings() {
   const [error, setError] = useState("");
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [editError, setEditError] = useState("");
+  const [defaultLanguage, setDefaultLanguage] = useState<"ja" | "en">("ja");
+  const [editLanguage, setEditLanguage] = useState<"ja" | "en">("ja");
   const [plan, setPlan] = useState("cpm");
   const [budget, setBudget] = useState(3000);
   function startEditing(ad: Campaign) {
+    setEditLanguage(ad.defaultLanguage ?? (ad.japaneseTitle ? "en" : "ja"));
     setEditingCampaign(ad);
     setEditError("");
   }
@@ -74,7 +146,19 @@ export function AdsSettings() {
     const previous = {
       title: editingCampaign.title,
       description: editingCampaign.description,
+      defaultLanguage: editingCampaign.defaultLanguage,
       url: editingCampaign.url,
+      japaneseVariant:
+        editingCampaign.japaneseTitle && editingCampaign.japaneseDescription
+          ? {
+              title: editingCampaign.japaneseTitle,
+              description: editingCampaign.japaneseDescription,
+            }
+          : null,
+      englishVariant:
+        editingCampaign.englishTitle && editingCampaign.englishDescription
+          ? { title: editingCampaign.englishTitle, description: editingCampaign.englishDescription }
+          : null,
     };
     const form = new FormData(event.currentTarget);
     setBusy(true);
@@ -86,7 +170,10 @@ export function AdsSettings() {
         body: JSON.stringify({
           title: form.get("title"),
           description: form.get("description"),
+          defaultLanguage: editLanguage,
           url: form.get("url"),
+          japaneseVariant: editLanguage === "en" ? variantFromForm(form, "japanese") : null,
+          englishVariant: editLanguage === "ja" ? variantFromForm(form, "english") : null,
           previous,
         }),
       });
@@ -144,7 +231,10 @@ export function AdsSettings() {
         body: JSON.stringify({
           title: form.get("title"),
           description: form.get("description"),
+          defaultLanguage,
           url: form.get("url"),
+          japaneseVariant: defaultLanguage === "en" ? variantFromForm(form, "japanese") : null,
+          englishVariant: defaultLanguage === "ja" ? variantFromForm(form, "english") : null,
           plan,
           budgetYen: plan === "fixed" ? 3000 : budget,
         }),
@@ -157,6 +247,7 @@ export function AdsSettings() {
       setFilter("all");
       setPage(1);
       formElement.reset();
+      setDefaultLanguage("ja");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("Unable to submit ad"));
     } finally {
@@ -250,6 +341,23 @@ export function AdsSettings() {
           <CardContent>
             <FieldGroup className="gap-4">
               <Field>
+                <FieldLabel htmlFor="new-ad-language">{t("Default ad language")}</FieldLabel>
+                <Select
+                  value={defaultLanguage}
+                  onValueChange={(value) => setDefaultLanguage(value as "ja" | "en")}
+                >
+                  <SelectTrigger id="new-ad-language" className="w-full">
+                    <SelectValue>
+                      {defaultLanguage === "ja" ? t("Japanese") : t("English")}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ja">{t("Japanese")}</SelectItem>
+                    <SelectItem value="en">{t("English")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
                 <FieldLabel htmlFor="new-ad-title">{t("Ad title")}</FieldLabel>
                 <Input id="new-ad-title" name="title" minLength={3} maxLength={100} required />
               </Field>
@@ -263,6 +371,16 @@ export function AdsSettings() {
                   required
                 />
               </Field>
+              <FieldDescription>
+                {t(
+                  "Optionally add a version in the other language. Both versions are reviewed before publishing.",
+                )}
+              </FieldDescription>
+              <VariantFields
+                key={`new-${defaultLanguage}-${campaigns?.length ?? 0}`}
+                language={defaultLanguage === "ja" ? "english" : "japanese"}
+                idPrefix="new"
+              />
               <Field>
                 <FieldLabel htmlFor="new-ad-url">{t("Destination URL (HTTPS)")}</FieldLabel>
                 <Input id="new-ad-url" name="url" type="url" pattern="https://.*" required />
@@ -432,6 +550,25 @@ export function AdsSettings() {
                 </FieldDescription>
                 <FieldGroup className="gap-4">
                   <Field>
+                    <FieldLabel htmlFor={`edit-language-${ad.id}`}>
+                      {t("Default ad language")}
+                    </FieldLabel>
+                    <Select
+                      value={editLanguage}
+                      onValueChange={(value) => setEditLanguage(value as "ja" | "en")}
+                    >
+                      <SelectTrigger id={`edit-language-${ad.id}`} className="w-full">
+                        <SelectValue>
+                          {editLanguage === "ja" ? t("Japanese") : t("English")}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ja">{t("Japanese")}</SelectItem>
+                        <SelectItem value="en">{t("English")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
                     <FieldLabel htmlFor={`edit-title-${ad.id}`}>{t("Ad title")}</FieldLabel>
                     <Input
                       id={`edit-title-${ad.id}`}
@@ -455,6 +592,15 @@ export function AdsSettings() {
                       required
                     />
                   </Field>
+                  <VariantFields
+                    key={`${ad.id}-${editLanguage}`}
+                    language={editLanguage === "ja" ? "english" : "japanese"}
+                    idPrefix={ad.id}
+                    title={editLanguage === "ja" ? ad.englishTitle : ad.japaneseTitle}
+                    description={
+                      editLanguage === "ja" ? ad.englishDescription : ad.japaneseDescription
+                    }
+                  />
                   <Field>
                     <FieldLabel htmlFor={`edit-url-${ad.id}`}>
                       {t("Destination URL (HTTPS)")}

@@ -262,7 +262,12 @@ export function ProjectPage({ projectId, initialProjectName }: ProjectPageProps)
                 }}
               >
                 <SelectTrigger id="proj-share">
-                  <SelectValue />
+                  <SelectValue>
+                    {project?.organizationId
+                      ? (organizations.find((org) => org.id === project.organizationId)?.name ??
+                        t("Only you"))
+                      : t("Only you")}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__personal__">{t("Only you")}</SelectItem>

@@ -630,7 +630,7 @@ export const defaultModel = models.find((model) => model.value === "gpt-6-luna")
 
 /**
  * Models available on the Free plan.
- * Paid tiers (Plus / Pro / Max / Team) unlock the full model catalog.
+ * Verified cards and paid tiers (Plus / Pro / Max / Team) unlock the full model catalog.
  */
 export const FREE_PLAN_MODEL_VALUES = [
   "gpt-6-luna",
@@ -660,11 +660,23 @@ export function getModelsForGuest() {
   return models.filter((model) => isGuestModel(model.value));
 }
 
-export function getModelsForPlanTier(tier: "free" | "plus" | "pro" | "max" | null | undefined) {
-  if (!tier || tier === "free") {
-    return models.filter((model) => isFreePlanModel(model.value));
-  }
-  return [...models];
+export function isModelAllowedForAccount(
+  modelValue: string,
+  tier: "free" | "plus" | "pro" | "max" | null | undefined,
+  hasVerifiedPaymentMethod = false,
+): boolean {
+  return (
+    Boolean(tier && tier !== "free") || hasVerifiedPaymentMethod || isFreePlanModel(modelValue)
+  );
+}
+
+export function getModelsForPlanTier(
+  tier: "free" | "plus" | "pro" | "max" | null | undefined,
+  hasVerifiedPaymentMethod = false,
+) {
+  return models.filter((model) =>
+    isModelAllowedForAccount(model.value, tier, hasVerifiedPaymentMethod),
+  );
 }
 
 // Google Analytics

@@ -13,6 +13,12 @@ export const adCampaign = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     description: text("description").notNull(),
+    // Null for campaigns created before the default language could be selected.
+    defaultLanguage: text("default_language", { enum: ["ja", "en"] }),
+    japaneseTitle: text("japanese_title"),
+    japaneseDescription: text("japanese_description"),
+    englishTitle: text("english_title"),
+    englishDescription: text("english_description"),
     url: text("url").notNull(),
     plan: text("plan").notNull(), // cpm, cpc, fixed
     status: text("status").notNull().default("review"), // review, rejected, approved, active, paused

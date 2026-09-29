@@ -19,14 +19,18 @@ export function useAvailableModels() {
     enabled: Boolean(session.data?.user) && !isAnonymous,
   });
   const planTier = isAnonymous ? "free" : (usageQuery.data?.tier ?? "free");
+  const hasVerifiedPaymentMethod =
+    !isAnonymous && Boolean(usageQuery.data?.hasVerifiedPaymentMethod);
 
   const availableModels = useMemo<ModelOption[]>(() => {
-    const planModels = isAnonymous ? getModelsForGuest() : getModelsForPlanTier(planTier);
+    const planModels = isAnonymous
+      ? getModelsForGuest()
+      : getModelsForPlanTier(planTier, hasVerifiedPaymentMethod);
     return planModels.filter((model) => {
       const provider = model.provider ?? model.author;
       return isModelProviderAvailable(platformCapabilities, provider);
     });
-  }, [isAnonymous, planTier, platformCapabilities]);
+  }, [hasVerifiedPaymentMethod, isAnonymous, planTier, platformCapabilities]);
 
   return {
     availableModels,

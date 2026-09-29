@@ -6,7 +6,12 @@ import type { XaiResponsesProviderOptions } from "@ai-sdk/xai";
 import type { LanguageModel, ModelMessage, SystemModelMessage } from "ai";
 import { streamText } from "ai";
 import { env } from "@/env";
-import { isFreePlanModel, isGuestModel, models, resolveReasoningEffort } from "@/lib/constants";
+import {
+  isGuestModel,
+  isModelAllowedForAccount,
+  models,
+  resolveReasoningEffort,
+} from "@/lib/constants";
 import { createDeniOpenRouter } from "@/lib/openrouter-provider";
 import { isModelProviderAvailable } from "@/lib/platform-capabilities";
 import { platformCapabilities } from "@/lib/platform-capabilities.server";
@@ -168,14 +173,19 @@ export async function resolveChatModelContext({
   const isPremiumModel = Boolean(selectedModel.premium);
   // Pro mode always bills against premium quota (even when the base model is basic).
   const usageCategory: UsageCategory = isPremiumModel || useProMode ? "premium" : "basic";
-  const modelAllowedOnFreePlan = isFreePlanModel(selectedModel.value);
-
-  // Free plan / guest sessions are limited to the free-plan model allowlist.
+  // Guests stay on the guest allowlist; verified free accounts unlock the full catalog.
   // All model requests count toward platform usage.
   try {
     const usageSummary = await getUsageSummary({ userId, isAnonymous });
 
-    if (!modelAllowedOnFreePlan && (isAnonymous || usageSummary.tier === "free")) {
+    if (
+      !isAnonymous &&
+      !isModelAllowedForAccount(
+        selectedModel.value,
+        usageSummary.tier,
+        usageSummary.hasVerifiedPaymentMethod,
+      )
+    ) {
       throw new ChatRouteError(403, {
         error: "This model is not available on the Free plan. Upgrade to Plus or higher to use it.",
       });

@@ -1,19 +1,22 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { db } from "@/db/drizzle";
 import { adCampaign } from "@/db/schema";
 import { env } from "@/env";
-import { adCreativeSchema } from "@/lib/ad-creative";
+import { adCreativeSchema, hasOnlyOppositeVariant } from "@/lib/ad-creative";
+import { creativeFields, sameCreative, storedCreative } from "@/lib/ad-variants";
 import { reviewAd } from "@/lib/ad-review";
 import { isAllowedAdOrigin } from "@/lib/ad-origin";
 import { auth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-const editSchema = z.strictObject({
-  ...adCreativeSchema.shape,
-  previous: adCreativeSchema,
-});
+const editSchema = z
+  .strictObject({
+    ...adCreativeSchema.shape,
+    previous: adCreativeSchema,
+  })
+  .refine(hasOnlyOppositeVariant);
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isAllowedAdOrigin(request)) return new Response(null, { status: 403 });
@@ -37,17 +40,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     existing.status === "approved" ||
     (existing.status === "rejected" && !existing.stripeSessionId);
   if (!canEdit) return Response.json({ error: "Campaign cannot be edited" }, { status: 409 });
-  if (
-    existing.title !== previous.title ||
-    existing.description !== previous.description ||
-    existing.url !== previous.url
-  )
+  if (!sameCreative(storedCreative(existing), previous))
     return Response.json({ error: "Campaign changed; refresh and try again" }, { status: 409 });
-  if (
-    existing.title === creative.title &&
-    existing.description === creative.description &&
-    existing.url === creative.url
-  )
+  if (sameCreative(storedCreative(existing), creative))
     return Response.json({ campaign: existing }, { headers: { "Cache-Control": "no-store" } });
 
   const limit = await checkRateLimit({
@@ -71,7 +66,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const [updated] = await db
     .update(adCampaign)
     .set({
-      ...creative,
+      ...creativeFields(creative),
       ...(existing.status === "rejected" ? { status: "approved" } : {}),
       reviewReason: null,
       updatedAt: new Date(),
@@ -82,7 +77,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         eq(adCampaign.userId, session.session.userId),
         eq(adCampaign.title, previous.title),
         eq(adCampaign.description, previous.description),
+        previous.defaultLanguage
+          ? eq(adCampaign.defaultLanguage, previous.defaultLanguage)
+          : isNull(adCampaign.defaultLanguage),
         eq(adCampaign.url, previous.url),
+        previous.japaneseVariant
+          ? eq(adCampaign.japaneseTitle, previous.japaneseVariant.title)
+          : isNull(adCampaign.japaneseTitle),
+        previous.japaneseVariant
+          ? eq(adCampaign.japaneseDescription, previous.japaneseVariant.description)
+          : isNull(adCampaign.japaneseDescription),
+        previous.englishVariant
+          ? eq(adCampaign.englishTitle, previous.englishVariant.title)
+          : isNull(adCampaign.englishTitle),
+        previous.englishVariant
+          ? eq(adCampaign.englishDescription, previous.englishVariant.description)
+          : isNull(adCampaign.englishDescription),
         inArray(
           adCampaign.status,
           existing.status === "rejected" ? ["rejected"] : ["approved", "active"],

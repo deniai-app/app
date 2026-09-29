@@ -160,6 +160,18 @@ export const models: readonly ModelDefinition[] = [
     contextWindow: 1_050_000,
   },
   {
+    name: "GPT-6.1 Sol",
+    value: "gpt-6.1-sol",
+    tokenMultiplier: 1.5,
+    author: "openai",
+    description: "High-end GPT-6.1 model for demanding reasoning, coding, and agentic work.",
+    featured: true,
+    features: ["reasoning", "coding", "smart"],
+    efforts: ["low", "medium", "high", "xhigh", "max"],
+    supportsProMode: true,
+    contextWindow: 1_050_000,
+  },
+  {
     name: "GPT-6 Luna",
     value: "gpt-6-luna",
     tokenMultiplier: 1,

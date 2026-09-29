@@ -576,10 +576,8 @@ export function ChatInterface({
           webSearchAvailable={features.webSearch}
           videoMode={videoMode}
           onVideoModeChange={(enabled) => setVideoMode(enabled && features.videoGeneration)}
-          videoAvailable={features.videoGeneration && !hasPendingQuestionnaire}
           imageMode={imageMode}
           onImageModeChange={(enabled) => setImageMode(enabled && features.imageGeneration)}
-          imageAvailable={features.imageGeneration && !hasPendingQuestionnaire}
           reasoningEffort={reasoningEffort}
           onReasoningEffortChange={setReasoningEffort}
           proMode={proMode}

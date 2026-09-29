@@ -49,10 +49,8 @@ export interface ChatComposerProps {
   webSearchAvailable?: boolean;
   videoMode: boolean;
   onVideoModeChange: (enabled: boolean) => void;
-  videoAvailable?: boolean;
   imageMode: boolean;
   onImageModeChange: (enabled: boolean) => void;
-  imageAvailable?: boolean;
   reasoningEffort: ReasoningEffort;
   onReasoningEffortChange: (effort: ReasoningEffort) => void;
   proMode: boolean;
@@ -81,10 +79,8 @@ export function ChatComposer({
   webSearchAvailable = true,
   videoMode,
   onVideoModeChange,
-  videoAvailable = true,
   imageMode,
   onImageModeChange,
-  imageAvailable = true,
   reasoningEffort,
   onReasoningEffortChange,
   proMode,
@@ -204,15 +200,9 @@ export function ChatComposer({
         isSubmitDisabled={isSubmitDisabled}
         actionMenuItems={
           <ChatComposerActionMenu
-            videoMode={videoMode}
-            onVideoToggle={handleVideoToggle}
-            imageMode={imageMode}
-            onImageToggle={handleImageToggle}
             webSearch={webSearch}
             onSearchToggle={handleSearchToggle}
             webSearchAvailable={webSearchAvailable}
-            videoAvailable={videoAvailable}
-            imageAvailable={imageAvailable}
             deepResearch={deepResearch}
             onResearchToggle={handleResearchToggle}
             supportsFastMode={supportsFastMode}

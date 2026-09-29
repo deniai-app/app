@@ -254,10 +254,8 @@ export default function ChatHome() {
             webSearchAvailable={features.webSearch}
             videoMode={effectiveVideoMode}
             onVideoModeChange={(enabled) => setVideoMode(enabled && features.videoGeneration)}
-            videoAvailable={features.videoGeneration}
             imageMode={effectiveImageMode}
             onImageModeChange={(enabled) => setImageMode(enabled && features.imageGeneration)}
-            imageAvailable={features.imageGeneration}
             reasoningEffort={reasoningEffort}
             onReasoningEffortChange={setReasoningEffort}
             proMode={proMode}

@@ -4,9 +4,9 @@ import type { LucideIcon } from "lucide-react";
 import {
   BrainIcon,
   Film,
-  Gauge,
   Globe,
   Image as ImageIcon,
+  Lightbulb,
   Mic,
   Sparkle,
   Zap,
@@ -45,13 +45,16 @@ function ToolChip({ icon: Icon, label, onRemove }: ToolChipProps) {
   return (
     <Button
       variant="ghost"
-      className="group flex items-center gap-1.5 rounded-md px-2 py-1 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+      size="icon-sm"
+      className="group bg-zinc-800 text-white hover:bg-zinc-700 hover:text-white dark:bg-zinc-700 dark:hover:bg-zinc-600"
       onClick={onRemove}
       aria-label={t("Remove {label}", { label })}
     >
-      <Icon className="size-3.5 group-hover:hidden" aria-hidden="true" />
-      <XIcon className="size-3.5 hidden group-hover:block" aria-hidden="true" />
-      <span>{label}</span>
+      <Icon className="size-3.5 group-hover:hidden group-focus-visible:hidden" aria-hidden="true" />
+      <XIcon
+        className="size-3.5 hidden group-hover:block group-focus-visible:block"
+        aria-hidden="true"
+      />
     </Button>
   );
 }
@@ -91,7 +94,7 @@ function ChatComposerReasoningSelect({
       }}
       disabled={!supportsReasoningEffort}
     >
-      <PromptInputSelectTrigger className={cn(triggerClassName)}>
+      <PromptInputSelectTrigger size="sm" className={cn(triggerClassName)}>
         <PromptInputSelectValue>
           <BrainIcon className="size-4" aria-hidden="true" />
           {reasoningEffortLabel}
@@ -110,15 +113,9 @@ function ChatComposerReasoningSelect({
 }
 
 export function ChatComposerActionMenu({
-  videoMode,
-  onVideoToggle,
-  imageMode,
-  onImageToggle,
   webSearch,
   onSearchToggle,
   webSearchAvailable,
-  videoAvailable,
-  imageAvailable,
   deepResearch,
   onResearchToggle,
   supportsFastMode,
@@ -132,15 +129,9 @@ export function ChatComposerActionMenu({
   supportedEfforts,
   supportsReasoningEffort,
 }: {
-  videoMode: boolean;
-  onVideoToggle: (enabled: boolean) => void;
-  imageMode: boolean;
-  onImageToggle: (enabled: boolean) => void;
   webSearch: boolean;
   onSearchToggle: (enabled: boolean) => void;
   webSearchAvailable: boolean;
-  videoAvailable: boolean;
-  imageAvailable: boolean;
   deepResearch: boolean;
   onResearchToggle: (enabled: boolean) => void;
   supportsFastMode: boolean;
@@ -159,24 +150,6 @@ export function ChatComposerActionMenu({
   return (
     <>
       <DropdownMenuSeparator />
-      {videoAvailable && (
-        <DropdownMenuCheckboxItem
-          checked={videoMode}
-          onCheckedChange={(checked) => onVideoToggle(Boolean(checked))}
-        >
-          <Film className="size-4" aria-hidden="true" />
-          {t("Video")}
-        </DropdownMenuCheckboxItem>
-      )}
-      {imageAvailable && (
-        <DropdownMenuCheckboxItem
-          checked={imageMode}
-          onCheckedChange={(checked) => onImageToggle(Boolean(checked))}
-        >
-          <ImageIcon className="size-4" aria-hidden="true" />
-          {t("Image")}
-        </DropdownMenuCheckboxItem>
-      )}
       {webSearchAvailable && (
         <DropdownMenuCheckboxItem
           checked={webSearch}
@@ -200,7 +173,7 @@ export function ChatComposerActionMenu({
           checked={fastMode}
           onCheckedChange={(checked) => onFastModeChange(Boolean(checked))}
         >
-          <Gauge className="size-4" aria-hidden="true" />
+          <Zap className="size-4" aria-hidden="true" />
           {t("Fast")}
         </DropdownMenuCheckboxItem>
       )}
@@ -209,7 +182,7 @@ export function ChatComposerActionMenu({
           checked={proMode}
           onCheckedChange={(checked) => onProModeChange(Boolean(checked))}
         >
-          <Zap className="size-4" aria-hidden="true" />
+          <Lightbulb className="size-4" aria-hidden="true" />
           {t("Pro")}
         </DropdownMenuCheckboxItem>
       )}
@@ -285,6 +258,19 @@ export function ChatComposerTools({
 
   return (
     <>
+      <SpeechInput
+        size="icon-sm"
+        variant="ghost"
+        className="size-8 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
+        aria-label={t("Voice input")}
+        title={t("Voice input")}
+        onTranscriptionChange={(transcript) => {
+          const nextValue = value.trim() ? `${value.trim()} ${transcript}` : transcript;
+          onValueChange(nextValue.trim());
+        }}
+      >
+        <Mic className="size-4" />
+      </SpeechInput>
       {videoMode && (
         <ToolChip icon={Film} label={t("Video")} onRemove={() => onVideoToggle(false)} />
       )}
@@ -301,19 +287,6 @@ export function ChatComposerTools({
           onRemove={() => onResearchToggle(false)}
         />
       )}
-      <SpeechInput
-        size="icon-sm"
-        variant="ghost"
-        className="size-8 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
-        aria-label={t("Voice input")}
-        title={t("Voice input")}
-        onTranscriptionChange={(transcript) => {
-          const nextValue = value.trim() ? `${value.trim()} ${transcript}` : transcript;
-          onValueChange(nextValue.trim());
-        }}
-      >
-        <Mic className="size-4" />
-      </SpeechInput>
 
       <ChatComposerModelPicker
         model={model}
@@ -347,7 +320,7 @@ export function ChatComposerTools({
                   aria-label={t("Fast")}
                   onClick={() => onFastModeChange(!fastMode)}
                 >
-                  <Gauge className="size-3.5" aria-hidden="true" />
+                  <Zap className="size-3.5" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -374,7 +347,7 @@ export function ChatComposerTools({
                   aria-label={t("Pro")}
                   onClick={() => onProModeChange(!proMode)}
                 >
-                  <Zap className="size-3.5" aria-hidden="true" />
+                  <Lightbulb className="size-3.5" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>

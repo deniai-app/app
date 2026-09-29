@@ -406,7 +406,7 @@ export function ChatComposerModelPicker({
           variant="ghost"
           size="sm"
           className={cn(
-            "h-auto gap-1.5 border-none bg-transparent px-2 py-1.5 font-medium text-muted-foreground shadow-none transition-colors",
+            "h-auto gap-1.5 border-none bg-transparent px-2 py-1.5 font-medium text-muted-foreground shadow-none transition-colors dark:bg-input/30",
             "hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground",
           )}
         >

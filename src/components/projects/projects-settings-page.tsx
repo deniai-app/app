@@ -85,11 +85,14 @@ function ProjectListRow({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href={`/projects/${project.id}`}>
-            <ExternalLink className="size-3.5" />
-            {t("Open")}
-          </Link>
+        <Button
+          variant="ghost"
+          size="sm"
+          render={<Link href={`/projects/${project.id}`} />}
+          nativeButton={false}
+        >
+          <ExternalLink className="size-3.5" />
+          {t("Open")}
         </Button>
         {project.canManage && archived ? (
           <>
@@ -227,7 +230,12 @@ export function ProjectsSettingsPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {organizations.length > 0 ? (
-                <Select value={createScope} onValueChange={setCreateScope}>
+                <Select
+                  value={createScope}
+                  onValueChange={(value) => {
+                    if (value !== null) setCreateScope(value);
+                  }}
+                >
                   <SelectTrigger size="sm" className="min-w-40">
                     <SelectValue>
                       {createScope === "__personal__"

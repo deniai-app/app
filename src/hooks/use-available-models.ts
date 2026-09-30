@@ -37,5 +37,11 @@ export function useAvailableModels() {
     isAnonymous,
     planTier,
     platformCapabilities,
+    shouldVerifyCard:
+      platformCapabilities.features.billing &&
+      Boolean(session.data?.user) &&
+      !isAnonymous &&
+      usageQuery.data?.tier === "free" &&
+      usageQuery.data.hasVerifiedPaymentMethod === false,
   };
 }

@@ -91,8 +91,8 @@ export default function ErrorPage({ error, retry }: ErrorPageProps) {
           <p className="max-w-xl text-muted-foreground">{t.description}</p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Button onClick={retry}>{t.tryAgain}</Button>
-            <Button variant="secondary" asChild>
-              <Link href="/">{t.backHome}</Link>
+            <Button variant="secondary" render={<Link href="/" />} nativeButton={false}>
+              {t.backHome}
             </Button>
           </div>
         </div>

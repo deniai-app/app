@@ -186,18 +186,22 @@ function AssistantMessage({
               >
                 <TooltipProvider>
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          disabled={state.isSubmitBlocked}
-                          aria-label={t("Retry")}
-                        >
-                          <RefreshCcwIcon className="size-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
+                    <TooltipTrigger
+                      render={
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              disabled={state.isSubmitBlocked}
+                              aria-label={t("Retry")}
+                            />
+                          }
+                        />
+                      }
+                    >
+                      <RefreshCcwIcon className="size-3.5" />
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>{t("Retry")}</p>

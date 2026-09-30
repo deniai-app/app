@@ -3,29 +3,6 @@
 import * as React from "react";
 import { mergeProps } from "@base-ui/react/merge-props";
 
-type AsChildProps = {
-  asChild?: boolean;
-  children?: React.ReactNode;
-  render?: unknown;
-};
-
-function resolveRenderProps<T extends AsChildProps>(props: T): Omit<T, "asChild"> {
-  const { asChild, children, render, ...rest } = props;
-
-  if (asChild && React.isValidElement(children) && render === undefined) {
-    return {
-      ...rest,
-      render: children,
-    } as unknown as Omit<T, "asChild">;
-  }
-
-  return {
-    ...rest,
-    render,
-    children,
-  } as unknown as Omit<T, "asChild">;
-}
-
 function Slot({
   children,
   ...props
@@ -74,4 +51,4 @@ function useControllableState<T>({
   return [value, setValue] as const;
 }
 
-export { resolveRenderProps, Slot, useControllableState };
+export { Slot, useControllableState };

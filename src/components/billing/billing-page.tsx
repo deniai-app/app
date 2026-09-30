@@ -131,12 +131,12 @@ function BillingPageContent() {
         maxModeEnabled={maxModeQuery.data?.enabled}
       />
 
-      <BillingResetCard />
-
       <CardVerificationCard
         isFreeTier={usageTier === "free"}
         hasVerifiedPaymentMethod={usageQuery.data?.hasVerifiedPaymentMethod ?? false}
       />
+
+      <BillingResetCard />
 
       {statusQuery.data?.status === "active" && maxModeQuery.data?.eligible && (
         <BillingMaxModeCard

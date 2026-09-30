@@ -2,10 +2,11 @@
 
 import type { ChatStatus } from "ai";
 import { useExtracted } from "next-intl";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import {
   ChatComposerActionMenu,
   ChatComposerTools,
+  ChatComposerVoiceInput,
 } from "@/components/chat/chat-composer-controls";
 import { Composer, type ComposerMessage } from "@/components/chat/composer";
 import {
@@ -38,6 +39,7 @@ export interface ChatComposerProps {
   onStop?: () => void;
   placeholder?: string;
   className?: string;
+  bottomContent?: ReactNode;
   globalDrop?: boolean;
   status?: ChatStatus;
   isSubmitDisabled?: boolean;
@@ -68,6 +70,7 @@ export function ChatComposer({
   onStop,
   placeholder,
   className,
+  bottomContent,
   globalDrop = true,
   status,
   isSubmitDisabled,
@@ -190,6 +193,7 @@ export function ChatComposer({
         onSubmit={handleSubmit}
         onStop={onStop}
         className={className}
+        bottomContent={bottomContent}
         globalDrop={globalDrop}
         multiple
         placeholder={resolvedPlaceholder}
@@ -217,10 +221,9 @@ export function ChatComposer({
             supportsReasoningEffort={supportsReasoningEffort}
           />
         }
+        voiceInput={<ChatComposerVoiceInput value={value} onValueChange={onValueChange} />}
         tools={
           <ChatComposerTools
-            value={value}
-            onValueChange={onValueChange}
             videoMode={videoMode}
             onVideoToggle={handleVideoToggle}
             imageMode={imageMode}

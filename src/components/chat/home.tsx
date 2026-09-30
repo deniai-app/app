@@ -204,21 +204,13 @@ export default function ChatHome() {
       <div className="w-full max-w-2xl space-y-6 py-6">
         {/* Greeting */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center size-12 rounded-lg bg-secondary mb-2">
-            <MessageSquare className="size-6 text-muted-foreground" />
-          </div>
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" id="chat-home-title">
-            {t("How can I help you today?")}
+            {t("What's on your mind?")}
           </h1>
-          <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            {t(
-              "Ask me anything. I'm here to assist with your questions, creative projects, and more.",
-            )}
-          </p>
         </div>
 
         {/* Suggestions */}
-        <div className="grid grid-cols-2 gap-2">
+        {/*<div className="grid grid-cols-2 gap-2">
           {suggestions.map((suggestion) => (
             <SuggestionCard
               key={suggestion.title}
@@ -228,19 +220,20 @@ export default function ChatHome() {
               onClick={handleSuggestionClick}
             />
           ))}
-        </div>
+        </div>*/}
 
         {/* Composer */}
         <div>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <ProjectSelect
-              projects={projectsQuery.data ?? []}
-              value={projectId}
-              onValueChange={handleProjectChange}
-              onCreateClick={() => push("/settings/projects")}
-            />
-          </div>
           <ChatComposer
+            bottomContent={
+              <ProjectSelect
+                projects={projectsQuery.data ?? []}
+                value={projectId}
+                onValueChange={handleProjectChange}
+                onCreateClick={() => push("/settings/projects")}
+                className="flex-wrap"
+              />
+            }
             value={input}
             onValueChange={setInput}
             onSubmit={handleSubmit}

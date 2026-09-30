@@ -66,16 +66,18 @@ export function TeamIconButton({
       </div>
       {isAdmin && (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              size="icon"
-              variant="secondary"
-              className="absolute -bottom-1 -right-1 size-5 rounded-full border p-0 shadow-sm"
-              disabled={isSaving}
-            >
-              <Pencil className="size-3" />
-              <span className="sr-only">{t("Change team icon")}</span>
-            </Button>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                size="icon"
+                variant="secondary"
+                className="absolute -bottom-1 -right-1 size-5 rounded-full border p-0 shadow-sm"
+                disabled={isSaving}
+              />
+            }
+          >
+            <Pencil className="size-3" />
+            <span className="sr-only">{t("Change team icon")}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>

@@ -48,26 +48,24 @@ export function BillingChangePlanDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("Change plan?")}</AlertDialogTitle>
-          <AlertDialogDescription asChild>
-            <div>
-              <p>
-                {t("You will switch to {plan}. Prorations apply.", {
-                  plan: changeTarget ? getPlanIntervalLabel(changeTarget.id) : "",
+          <AlertDialogDescription render={<div />}>
+            <p>
+              {t("You will switch to {plan}. Prorations apply.", {
+                plan: changeTarget ? getPlanIntervalLabel(changeTarget.id) : "",
+              })}
+            </p>
+            {estimate.error ? (
+              <span className="block mt-2">{t("Unable to fetch estimate.")}</span>
+            ) : (
+              <span className="block mt-2">
+                {t("Estimated charge: {amount}", {
+                  amount: formatCurrencyMinor(
+                    estimate.data?.amountDue ?? 0,
+                    estimate.data?.currency,
+                  ),
                 })}
-              </p>
-              {estimate.error ? (
-                <span className="block mt-2">{t("Unable to fetch estimate.")}</span>
-              ) : (
-                <span className="block mt-2">
-                  {t("Estimated charge: {amount}", {
-                    amount: formatCurrencyMinor(
-                      estimate.data?.amountDue ?? 0,
-                      estimate.data?.currency,
-                    ),
-                  })}
-                </span>
-              )}
-            </div>
+              </span>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="flex items-start gap-x-2 py-4">
@@ -85,7 +83,6 @@ export function BillingChangePlanDialog({
           <AlertDialogCancel disabled={isPending}>{t("Cancel")}</AlertDialogCancel>
           <AlertDialogAction
             disabled={isPending || !changeTarget || estimate.error != null || !hasAgreed}
-            loading={isPending}
             onClick={() => {
               if (!changeTarget) return;
               onConfirm(changeTarget.id as IndividualPlanId);

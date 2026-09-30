@@ -125,16 +125,18 @@ export function DeleteAccount({ className }: DeleteAccountProps) {
             {deleteUserLocalization.deleteAccount}
           </AlertDialogTrigger>
 
-          <AlertDialogContent>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-              <AlertDialogHeader>
+          <AlertDialogContent className="w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto">
+            <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-6">
+              <AlertDialogHeader className="min-w-0 sm:grid-cols-[auto_minmax(0,1fr)]">
                 <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
                   <TriangleAlert />
                 </AlertDialogMedia>
 
-                <AlertDialogTitle>{deleteUserLocalization.deleteAccount}</AlertDialogTitle>
+                <AlertDialogTitle className="min-w-0 wrap-break-word">
+                  {deleteUserLocalization.deleteAccount}
+                </AlertDialogTitle>
 
-                <AlertDialogDescription>
+                <AlertDialogDescription className="min-w-0 wrap-break-word sm:col-start-2">
                   {deletionStatus.isPending
                     ? t("Checking your subscription…")
                     : deletionStatus.isError
@@ -149,17 +151,23 @@ export function DeleteAccount({ className }: DeleteAccountProps) {
                             )
                           : deletionStatus.data?.state === "cancelPending"
                             ? t(
-                                "Your subscription is set to end. Wait until it ends and return to delete your account, or delete now without a refund. Deleting now ends your remaining access immediately. Your account will not be deleted automatically.",
+                                "Your subscription is ending. Wait until it ends, or delete now without a refund (immediate loss of access). Your account will not be deleted automatically.",
                               )
                             : deleteUserLocalization.deleteAccountDescription}
                 </AlertDialogDescription>
                 {deletionStatus.data?.state === "teamOwner" && (
-                  <Link href="/settings/team" className="text-sm underline underline-offset-4">
+                  <Link
+                    href="/settings/team"
+                    className="text-sm underline underline-offset-4 sm:col-start-2"
+                  >
                     {t("Manage team")}
                   </Link>
                 )}
                 {deletionStatus.data?.state === "active" && (
-                  <Link href="/settings/billing" className="text-sm underline underline-offset-4">
+                  <Link
+                    href="/settings/billing"
+                    className="text-sm underline underline-offset-4 sm:col-start-2"
+                  >
                     {t("Manage subscription")}
                   </Link>
                 )}
@@ -185,8 +193,11 @@ export function DeleteAccount({ className }: DeleteAccountProps) {
                 </Field>
               )}
 
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={isPending}>
+              <AlertDialogFooter className="sm:flex-wrap">
+                <AlertDialogCancel
+                  disabled={isPending}
+                  className="h-auto min-h-9 min-w-0 max-w-full whitespace-normal py-2"
+                >
                   {deletionStatus.data?.state === "cancelPending"
                     ? t("Wait until the subscription ends")
                     : localization.settings.cancel}
@@ -195,6 +206,7 @@ export function DeleteAccount({ className }: DeleteAccountProps) {
                 <Button
                   type="submit"
                   variant="destructive"
+                  className="h-auto min-h-9 min-w-0 max-w-full whitespace-normal py-2"
                   disabled={
                     isPending ||
                     deletionStatus.isFetching ||

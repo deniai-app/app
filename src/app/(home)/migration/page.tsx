@@ -47,10 +47,12 @@ export default function MigrationPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              <Button variant="secondary" asChild>
-                <Link href="https://migrate.deniai.app" target="_blank" rel="noreferrer">
-                  {t("Go to migrator tool")}
-                </Link>
+              <Button
+                variant="secondary"
+                render={<Link href="https://migrate.deniai.app" target="_blank" rel="noreferrer" />}
+                nativeButton={false}
+              >
+                {t("Go to migrator tool")}
               </Button>
             </CardContent>
           </Card>
@@ -63,8 +65,8 @@ export default function MigrationPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              <Button asChild>
-                <Link href="/auth/sign-up">{t("Create account")}</Link>
+              <Button render={<Link href="/auth/sign-up" />} nativeButton={false}>
+                {t("Create account")}
               </Button>
             </CardContent>
           </Card>
@@ -77,8 +79,12 @@ export default function MigrationPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              <Button variant="outline" asChild>
-                <Link href="/settings/migration">{t("Import messages")}</Link>
+              <Button
+                variant="outline"
+                render={<Link href="/settings/migration" />}
+                nativeButton={false}
+              >
+                {t("Import messages")}
               </Button>
             </CardContent>
           </Card>

@@ -90,8 +90,13 @@ export function BillingCurrentPlanCard({
             </span>
           )}
           {isOnTeamPlan ? (
-            <Button asChild variant="outline" size="sm">
-              <Link href="/settings/team">{t("Manage Team")}</Link>
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href="/settings/team" />}
+              nativeButton={false}
+            >
+              {t("Manage Team")}
             </Button>
           ) : (
             <>

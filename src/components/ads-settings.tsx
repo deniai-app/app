@@ -388,7 +388,13 @@ export function AdsSettings() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="new-ad-plan">{t("Pricing plan")}</FieldLabel>
-                  <Select items={planOptions} value={plan} onValueChange={setPlan}>
+                  <Select
+                    items={planOptions}
+                    value={plan}
+                    onValueChange={(value) => {
+                      if (value !== null) setPlan(value);
+                    }}
+                  >
                     <SelectTrigger id="new-ad-plan" className="w-full">
                       <SelectValue>
                         {planOptions.find((option) => option.value === plan)?.label}

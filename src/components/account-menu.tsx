@@ -135,33 +135,31 @@ export function AccountMenu() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <SidebarMenuButton className="h-auto py-2">
-          <div className="flex w-full items-center gap-2">
-            <div className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground overflow-hidden">
-              {session.data?.user?.image ? (
-                <Image
-                  src={session.data.user.image}
-                  alt={session.data.user.name ?? t("User")}
-                  className="size-full object-cover"
-                  width={32}
-                  height={32}
-                  sizes="32px"
-                  unoptimized
-                />
-              ) : (
-                (session.data?.user?.name?.charAt(0).toUpperCase() ?? "U")
-              )}
-            </div>
-            <span className="flex-1 truncate text-sm">{session.data?.user?.name ?? t("User")}</span>
-            {maxModeEnabled && (
-              <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] font-medium uppercase tracking-widest text-foreground/50">
-                <Zap className="size-2.5" />
-                Max
-              </span>
+      <DropdownMenuTrigger render={<SidebarMenuButton className="h-auto py-2" />}>
+        <div className="flex w-full items-center gap-2">
+          <div className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground overflow-hidden">
+            {session.data?.user?.image ? (
+              <Image
+                src={session.data.user.image}
+                alt={session.data.user.name ?? t("User")}
+                className="size-full object-cover"
+                width={32}
+                height={32}
+                sizes="32px"
+                unoptimized
+              />
+            ) : (
+              (session.data?.user?.name?.charAt(0).toUpperCase() ?? "U")
             )}
           </div>
-        </SidebarMenuButton>
+          <span className="flex-1 truncate text-sm">{session.data?.user?.name ?? t("User")}</span>
+          {maxModeEnabled && (
+            <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] font-medium uppercase tracking-widest text-foreground/50">
+              <Zap className="size-2.5" />
+              Max
+            </span>
+          )}
+        </div>
       </DropdownMenuTrigger>
       <DropdownMenuContent side={isMobile ? "top" : "right"} align="start" className="w-64">
         <div className="flex items-center gap-2 px-2 py-1.5">
@@ -271,10 +269,10 @@ export function AccountMenu() {
         {
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="px-2 py-1.5 text-xs text-muted-foreground cursor-help">
-                  <span className="block">Deni AI {versions.version}</span>
-                </div>
+              <TooltipTrigger
+                render={<div className="px-2 py-1.5 text-xs text-muted-foreground cursor-help" />}
+              >
+                <span className="block">Deni AI {versions.version}</span>
               </TooltipTrigger>
               <TooltipContent side="left" align="start">
                 <div>
@@ -285,26 +283,29 @@ export function AccountMenu() {
             </Tooltip>
           </TooltipProvider>
         }
-        <DropdownMenuItem className="gap-2 text-sm" asChild>
-          <Link href="/account/settings" className="flex w-full">
-            <UserIcon className="size-4" />
-            <span className="flex-1">{t("Account")}</span>
-          </Link>
+        <DropdownMenuItem
+          className="gap-2 text-sm"
+          render={<Link href="/account/settings" className="flex w-full" />}
+        >
+          <UserIcon className="size-4" />
+          <span className="flex-1">{t("Account")}</span>
         </DropdownMenuItem>
         {!isAnonymous && (
-          <DropdownMenuItem className="gap-2 text-sm" asChild>
-            <Link href="/settings/appearance" className="flex w-full">
-              <Settings className="size-4" />
-              <span className="flex-1">{t("Settings")}</span>
-            </Link>
+          <DropdownMenuItem
+            className="gap-2 text-sm"
+            render={<Link href="/settings/appearance" className="flex w-full" />}
+          >
+            <Settings className="size-4" />
+            <span className="flex-1">{t("Settings")}</span>
           </DropdownMenuItem>
         )}
         {!isAnonymous && !billingDisabled && (
-          <DropdownMenuItem className="gap-2 text-sm" asChild>
-            <Link href="/settings/team" className="flex w-full">
-              <Users className="size-4" />
-              <span className="flex-1">{t("Team")}</span>
-            </Link>
+          <DropdownMenuItem
+            className="gap-2 text-sm"
+            render={<Link href="/settings/team" className="flex w-full" />}
+          >
+            <Users className="size-4" />
+            <span className="flex-1">{t("Team")}</span>
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />

@@ -76,10 +76,10 @@ function ChatComposerReasoningSelect({
   const reasoningEffortLabels: Record<ReasoningEffort, string> = {
     none: t("None"),
     minimal: t("Minimal"),
-    low: t("Low"),
+    low: t("Light"),
     medium: t("Medium"),
     high: t("High"),
-    xhigh: t("X-High"),
+    xhigh: t("Extra High"),
     max: t("Max"),
   };
   const reasoningEffortLabel = reasoningEffortLabels[reasoningEffort] ?? reasoningEffort;
@@ -88,7 +88,7 @@ function ChatComposerReasoningSelect({
     <PromptInputSelect
       value={reasoningEffort}
       onValueChange={(value) => {
-        if (isReasoningEffort(value)) {
+        if (typeof value === "string" && isReasoningEffort(value)) {
           onReasoningEffortChange(value);
         }
       }}
@@ -199,9 +199,33 @@ export function ChatComposerActionMenu({
   );
 }
 
-export function ChatComposerTools({
+export function ChatComposerVoiceInput({
   value,
   onValueChange,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+}) {
+  const t = useExtracted();
+
+  return (
+    <SpeechInput
+      size="icon-sm"
+      variant="ghost"
+      className="size-8 shrink-0 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
+      aria-label={t("Voice input")}
+      title={t("Voice input")}
+      onTranscriptionChange={(transcript) => {
+        const nextValue = value.trim() ? `${value.trim()} ${transcript}` : transcript;
+        onValueChange(nextValue.trim());
+      }}
+    >
+      <Mic className="size-4" />
+    </SpeechInput>
+  );
+}
+
+export function ChatComposerTools({
   videoMode,
   onVideoToggle,
   imageMode,
@@ -227,8 +251,6 @@ export function ChatComposerTools({
   onProModeChange,
   proModeTitle,
 }: {
-  value: string;
-  onValueChange: (value: string) => void;
   videoMode: boolean;
   onVideoToggle: (enabled: boolean) => void;
   imageMode: boolean;
@@ -258,19 +280,6 @@ export function ChatComposerTools({
 
   return (
     <>
-      <SpeechInput
-        size="icon-sm"
-        variant="ghost"
-        className="size-8 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
-        aria-label={t("Voice input")}
-        title={t("Voice input")}
-        onTranscriptionChange={(transcript) => {
-          const nextValue = value.trim() ? `${value.trim()} ${transcript}` : transcript;
-          onValueChange(nextValue.trim());
-        }}
-      >
-        <Mic className="size-4" />
-      </SpeechInput>
       {videoMode && (
         <ToolChip icon={Film} label={t("Video")} onRemove={() => onVideoToggle(false)} />
       )}
@@ -305,23 +314,25 @@ export function ChatComposerTools({
         {supportsFastMode && (
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={fastMode ? "secondary" : "ghost"}
-                  size="icon-sm"
-                  className={cn(
-                    "size-8",
-                    fastMode
-                      ? "bg-sky-500/15 text-sky-700 hover:bg-sky-500/20 dark:text-sky-400"
-                      : "text-muted-foreground",
-                  )}
-                  aria-pressed={fastMode}
-                  aria-label={t("Fast")}
-                  onClick={() => onFastModeChange(!fastMode)}
-                >
-                  <Zap className="size-3.5" aria-hidden="true" />
-                </Button>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant={fastMode ? "secondary" : "ghost"}
+                    size="icon-sm"
+                    className={cn(
+                      "size-8",
+                      fastMode
+                        ? "bg-sky-500/15 text-sky-700 hover:bg-sky-500/20 dark:text-sky-400"
+                        : "text-muted-foreground",
+                    )}
+                    aria-pressed={fastMode}
+                    aria-label={t("Fast")}
+                    onClick={() => onFastModeChange(!fastMode)}
+                  />
+                }
+              >
+                <Zap className="size-3.5" aria-hidden="true" />
               </TooltipTrigger>
               <TooltipContent>
                 <p>{fastModeTitle}</p>
@@ -332,23 +343,25 @@ export function ChatComposerTools({
         {supportsProMode && (
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={proMode ? "secondary" : "ghost"}
-                  size="icon-sm"
-                  className={cn(
-                    "size-8",
-                    proMode
-                      ? "bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
-                      : "text-muted-foreground",
-                  )}
-                  aria-pressed={proMode}
-                  aria-label={t("Pro")}
-                  onClick={() => onProModeChange(!proMode)}
-                >
-                  <Lightbulb className="size-3.5" aria-hidden="true" />
-                </Button>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant={proMode ? "secondary" : "ghost"}
+                    size="icon-sm"
+                    className={cn(
+                      "size-8",
+                      proMode
+                        ? "bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
+                        : "text-muted-foreground",
+                    )}
+                    aria-pressed={proMode}
+                    aria-label={t("Pro")}
+                    onClick={() => onProModeChange(!proMode)}
+                  />
+                }
+              >
+                <Lightbulb className="size-3.5" aria-hidden="true" />
               </TooltipTrigger>
               <TooltipContent>
                 <p>{proModeTitle}</p>

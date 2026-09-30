@@ -2,7 +2,7 @@
 
 import { GlobeIcon } from "lucide-react";
 import { useExtracted } from "next-intl";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Attachment,
   AttachmentInfo,
@@ -22,7 +22,6 @@ import {
   PromptInputActionMenu,
   PromptInputActionMenuContent,
   PromptInputActionMenuTrigger,
-  PromptInputBody,
   PromptInputButton,
   PromptInputFooter,
   PromptInputHeader,
@@ -34,6 +33,9 @@ import {
 import { cn } from "@/lib/utils";
 
 export type ComposerMessage = PromptInputMessage;
+
+const COMPOSER_POPUP_SELECTOR =
+  '[data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"], [data-slot="popover-content"]';
 
 function ComposerAttachments() {
   const attachments = usePromptInputAttachments();
@@ -75,6 +77,8 @@ type ComposerProps = Pick<PromptInputProps, "globalDrop" | "multiple"> & {
   actionMenuItems?: ReactNode;
   status?: PromptInputSubmitProps["status"];
   tools?: ReactNode;
+  voiceInput?: ReactNode;
+  bottomContent?: ReactNode;
   isSubmitDisabled?: boolean;
 };
 
@@ -93,54 +97,129 @@ export function Composer({
   actionMenuItems,
   status,
   tools,
+  voiceInput,
+  bottomContent,
   isSubmitDisabled,
   globalDrop,
   multiple,
 }: ComposerProps) {
   const t = useExtracted();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        !containerRef.current?.contains(target) &&
+        !target.closest(COMPOSER_POPUP_SELECTOR)
+      ) {
+        setIsExpanded(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    return () => document.removeEventListener("pointerdown", handleOutsidePointerDown);
+  }, []);
+
   const disabled = status === "streaming" ? false : (isSubmitDisabled ?? (!value && !status));
   const resolvedSearchLabel = searchLabel ?? t("Search");
 
   return (
-    <PromptInput
-      onSubmit={(message) => onSubmit(message)}
-      className={className}
-      globalDrop={globalDrop}
-      multiple={multiple}
+    <div
+      ref={containerRef}
+      className="w-full"
+      onBlur={() => {
+        // Portaled menus briefly move focus outside the composer while closing.
+        // Check after focus restoration rather than collapsing on that transient blur.
+        requestAnimationFrame(() => {
+          const focused = document.activeElement;
+          if (
+            focused instanceof Element &&
+            focused !== document.body &&
+            !containerRef.current?.contains(focused) &&
+            !focused.closest(COMPOSER_POPUP_SELECTOR)
+          ) {
+            setIsExpanded(false);
+          }
+        });
+      }}
     >
-      <PromptInputHeader className={cn(headerClassName)}>
-        <ComposerAttachments />
-      </PromptInputHeader>
-      <PromptInputBody>
-        <PromptInputTextarea
-          onChange={(event) => onValueChange(event.target.value)}
-          value={value}
-          placeholder={placeholder}
-          className={textareaClassName}
-        />
-      </PromptInputBody>
-      <PromptInputFooter>
-        <PromptInputTools>
+      <PromptInput
+        onSubmit={(message) => {
+          setIsExpanded(false);
+          onSubmit(message);
+        }}
+        className={cn("h-auto flex-col", className)}
+        globalDrop={globalDrop}
+        multiple={multiple}
+      >
+        <PromptInputHeader className={cn(headerClassName)}>
+          <ComposerAttachments />
+        </PromptInputHeader>
+        <div className="flex w-full min-w-0 items-center gap-1 px-2 py-1">
           <PromptInputActionMenu>
-            <PromptInputActionMenuTrigger />
+            <PromptInputActionMenuTrigger
+              className="size-8 shrink-0 text-muted-foreground"
+              onClick={() => setIsExpanded(true)}
+            />
             <PromptInputActionMenuContent>
               <PromptInputActionAddAttachments />
               {actionMenuItems}
             </PromptInputActionMenuContent>
           </PromptInputActionMenu>
-          {onToggleWebSearch ? (
-            <PromptInputButton
-              variant={webSearch ? "default" : "ghost"}
-              onClick={onToggleWebSearch}
-            >
-              <GlobeIcon size={16} />
-              {resolvedSearchLabel}
-            </PromptInputButton>
-          ) : null}
-          {tools}
-        </PromptInputTools>
-        <PromptInputSubmit disabled={disabled} status={status} onStop={onStop} />
-      </PromptInputFooter>
-    </PromptInput>
+          <PromptInputTextarea
+            onChange={(event) => onValueChange(event.target.value)}
+            onFocus={() => setIsExpanded(true)}
+            onClick={() => setIsExpanded(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setIsExpanded(false);
+                event.currentTarget.blur();
+              }
+            }}
+            value={value}
+            placeholder={placeholder}
+            className={cn("min-h-8 min-w-0 flex-1 px-1 py-1.5 leading-5", textareaClassName)}
+          />
+          {voiceInput}
+          <PromptInputSubmit
+            className="shrink-0"
+            disabled={disabled}
+            status={status}
+            onStop={onStop}
+          />
+        </div>
+        <div
+          className={cn(
+            "grid w-full transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+            isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+          )}
+          inert={!isExpanded}
+          aria-hidden={!isExpanded}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <PromptInputFooter className="flex-wrap justify-start">
+              <PromptInputTools className="flex-wrap">
+                {onToggleWebSearch ? (
+                  <PromptInputButton
+                    variant={webSearch ? "default" : "ghost"}
+                    onClick={onToggleWebSearch}
+                  >
+                    <GlobeIcon size={16} />
+                    {resolvedSearchLabel}
+                  </PromptInputButton>
+                ) : null}
+                {tools}
+              </PromptInputTools>
+            </PromptInputFooter>
+          </div>
+        </div>
+        {bottomContent ? (
+          <PromptInputFooter className="justify-start border-t">{bottomContent}</PromptInputFooter>
+        ) : null}
+      </PromptInput>
+    </div>
   );
 }

@@ -13,6 +13,34 @@ export type ChangelogEntry = {
 
 export const changelogEntries: ChangelogEntry[] = [
   {
+    version: "7.9",
+    codename: "Neon Shield",
+    date: "2026-09-30",
+    summary: "We made a major UI redesign, added ads, and fixed bugs.",
+    highlights: [
+      {
+        title: "Model Addition",
+        body: "Added GPT-6, Claude 5.5, and other models.",
+      },
+      {
+        title: "UI Update",
+        body: "We updated the design to feature rounded corners and redesigned the Composer.",
+      },
+      {
+        title: "Addition of Ads",
+        body: "You can now run ads at a low cost with Deni AI Ads.",
+      },
+      {
+        title: "Integration with OAuth applications",
+        body: "You can now log in to Deni AI from other apps.",
+      },
+      {
+        title: "Minor bug fixes",
+        body: "Includes bug fixes for minor issues",
+      },
+    ],
+  },
+  {
     version: "7.8.1",
     codename: "Golden Arrow",
     date: "2026-09-11",

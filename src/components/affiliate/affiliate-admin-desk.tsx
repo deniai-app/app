@@ -122,24 +122,26 @@ export function AffiliateAdminDesk({
                         </span>
                         {riskLevel ? (
                           <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge
-                                variant={riskLevel === "low" ? "outline" : "destructive"}
-                                className={
-                                  riskLevel === "medium"
-                                    ? "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                                    : undefined
-                                }
-                              >
-                                {riskLevel === "high"
-                                  ? t("High risk")
-                                  : riskLevel === "medium"
-                                    ? t("Medium risk")
-                                    : t("Low risk")}
-                                {typeof row.reward.riskScore === "number"
-                                  ? ` (${row.reward.riskScore})`
-                                  : null}
-                              </Badge>
+                            <TooltipTrigger
+                              render={
+                                <Badge
+                                  variant={riskLevel === "low" ? "outline" : "destructive"}
+                                  className={
+                                    riskLevel === "medium"
+                                      ? "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                      : undefined
+                                  }
+                                />
+                              }
+                            >
+                              {riskLevel === "high"
+                                ? t("High risk")
+                                : riskLevel === "medium"
+                                  ? t("Medium risk")
+                                  : t("Low risk")}
+                              {typeof row.reward.riskScore === "number"
+                                ? ` (${row.reward.riskScore})`
+                                : null}
                             </TooltipTrigger>
                             <TooltipContent>
                               {riskFlags.length > 0 ? (

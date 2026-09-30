@@ -88,7 +88,6 @@ function TeamDeleteDialogBody({
         <AlertDialogAction
           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           disabled={isDeleting || !isConfirmed}
-          loading={isDeleting}
           onClick={onConfirm}
         >
           {isDeleting && <Spinner className="size-3.5" />}

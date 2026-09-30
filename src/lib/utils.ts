@@ -1,9 +1,4 @@
-import { type ClassValue, clsx } from "cnfast";
-import { twMerge } from "cnfast";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+export { cn } from "cn";
 
 export function formatCompactUsageValue(value: number) {
   if (value >= 1_000_000) {

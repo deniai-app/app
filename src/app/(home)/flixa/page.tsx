@@ -168,21 +168,29 @@ export default function FlixaPage() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-3">
-              <Button size="lg" asChild>
-                <Link
-                  href="https://marketplace.visualstudio.com/items?itemName=deniai.flixa"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Download className="size-4" />
-                  {t("Install for VS Code")}
-                </Link>
+              <Button
+                size="lg"
+                render={
+                  <Link
+                    href="https://marketplace.visualstudio.com/items?itemName=deniai.flixa"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
+                }
+                nativeButton={false}
+              >
+                <Download className="size-4" />
+                {t("Install for VS Code")}
               </Button>
-              <Button variant="outline" size="lg" asChild className="group">
-                <Link href="#platforms">
-                  {t("View All Platforms")}
-                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-                </Link>
+              <Button
+                variant="outline"
+                size="lg"
+                className="group"
+                render={<Link href="#platforms" />}
+                nativeButton={false}
+              >
+                {t("View All Platforms")}
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
               </Button>
             </div>
 
@@ -306,21 +314,29 @@ export default function FlixaPage() {
               )}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button size="lg" asChild>
-                <Link
-                  href="https://marketplace.visualstudio.com/items?itemName=deniai.flixa"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Download className="size-4" />
-                  {t("Get Flixa for VS Code")}
-                </Link>
+              <Button
+                size="lg"
+                render={
+                  <Link
+                    href="https://marketplace.visualstudio.com/items?itemName=deniai.flixa"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
+                }
+                nativeButton={false}
+              >
+                <Download className="size-4" />
+                {t("Get Flixa for VS Code")}
               </Button>
-              <Button variant="outline" size="lg" asChild className="group">
-                <Link href="/">
-                  {t("Try Deni AI")}
-                  <ArrowRight className="size-4" />
-                </Link>
+              <Button
+                variant="outline"
+                size="lg"
+                className="group"
+                render={<Link href="/" />}
+                nativeButton={false}
+              >
+                {t("Try Deni AI")}
+                <ArrowRight className="size-4" />
               </Button>
             </div>
           </div>

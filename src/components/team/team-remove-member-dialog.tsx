@@ -49,7 +49,6 @@ export function TeamRemoveMemberDialog({
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             disabled={isRemoving}
-            loading={isRemoving}
             onClick={() => {
               if (member) onConfirm(member.id);
             }}

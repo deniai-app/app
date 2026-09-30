@@ -204,11 +204,15 @@ export function TeamMaxModeCard({
                     );
                   })}
                 </div>
-                <Button variant="ghost" size="sm" className="w-full justify-between" asChild>
-                  <Link href="/settings/team/audit-log">
-                    {t("View full audit log")}
-                    <ChevronRight className="size-3.5" />
-                  </Link>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-between"
+                  render={<Link href="/settings/team/audit-log" />}
+                  nativeButton={false}
+                >
+                  {t("View full audit log")}
+                  <ChevronRight className="size-3.5" />
                 </Button>
               </div>
             ) : null}

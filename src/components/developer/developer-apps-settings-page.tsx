@@ -887,7 +887,7 @@ export default function DeveloperAppsSettingsPage() {
             <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              loading={deleteMutation.isPending}
+              disabled={deleteMutation.isPending}
               onClick={(event) => {
                 event.preventDefault();
                 if (deleteTarget) deleteMutation.mutate(deleteTarget.client_id);
@@ -919,7 +919,7 @@ export default function DeveloperAppsSettingsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
-              loading={rotateMutation.isPending}
+              disabled={rotateMutation.isPending}
               onClick={(event) => {
                 event.preventDefault();
                 if (rotateTarget) rotateMutation.mutate(rotateTarget);

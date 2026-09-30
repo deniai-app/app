@@ -51,22 +51,23 @@ function MobileNavLink({ link }: { link: MegaMenuLink }) {
   const Icon = link.icon;
 
   return (
-    <SheetClose asChild>
-      <Button
-        variant="ghost"
-        className="h-auto w-full justify-start rounded-2xl border border-border bg-card/70 p-3 text-left text-card-foreground hover:bg-accent hover:text-accent-foreground"
-        asChild
-      >
-        <Link href={link.href}>
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted">
-            <Icon className="size-5 text-muted-foreground" />
-          </span>
-          <span className="flex min-w-0 flex-col">
-            <span className="text-sm font-medium leading-tight">{link.title}</span>
-            <span className="text-xs text-muted-foreground">{link.description}</span>
-          </span>
-        </Link>
-      </Button>
+    <SheetClose
+      render={
+        <Button
+          variant="ghost"
+          className="h-auto w-full justify-start rounded-2xl border border-border bg-card/70 p-3 text-left text-card-foreground hover:bg-accent hover:text-accent-foreground"
+          render={<Link href={link.href} />}
+          nativeButton={false}
+        />
+      }
+    >
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted">
+        <Icon className="size-5 text-muted-foreground" />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-sm font-medium leading-tight">{link.title}</span>
+        <span className="text-xs text-muted-foreground">{link.description}</span>
+      </span>
     </SheetClose>
   );
 }
@@ -233,21 +234,20 @@ export default function Header() {
                               key={link.href}
                               variant="ghost"
                               className="size-full justify-start px-2!"
-                              asChild
+                              render={<Link href={link.href} role="menuitem" />}
+                              nativeButton={false}
                             >
-                              <Link href={link.href} role="menuitem">
-                                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border">
-                                  <Icon className="size-5 text-muted-foreground" />
+                              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border">
+                                <Icon className="size-5 text-muted-foreground" />
+                              </span>
+                              <span className="flex min-w-0 flex-col gap-0.5 justify-center self-center">
+                                <span className="block text-sm font-semibold tracking-tight">
+                                  {link.title}
                                 </span>
-                                <span className="flex min-w-0 flex-col gap-0.5 justify-center self-center">
-                                  <span className="block text-sm font-semibold tracking-tight">
-                                    {link.title}
-                                  </span>
-                                  <span className="block text-xs text-muted-foreground">
-                                    {link.description}
-                                  </span>
+                                <span className="block text-xs text-muted-foreground">
+                                  {link.description}
                                 </span>
-                              </Link>
+                              </span>
                             </Button>
                           );
                         })}
@@ -272,21 +272,20 @@ export default function Header() {
                               key={link.href}
                               variant="ghost"
                               className="size-full justify-start px-2!"
-                              asChild
+                              render={<Link href={link.href} role="menuitem" />}
+                              nativeButton={false}
                             >
-                              <Link href={link.href} role="menuitem">
-                                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border">
-                                  <Icon className="size-5 text-muted-foreground" />
+                              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border">
+                                <Icon className="size-5 text-muted-foreground" />
+                              </span>
+                              <span className="flex min-w-0 flex-col gap-0.5 justify-center self-center">
+                                <span className="block text-sm font-semibold tracking-tight">
+                                  {link.title}
                                 </span>
-                                <span className="flex min-w-0 flex-col gap-0.5 justify-center self-center">
-                                  <span className="block text-sm font-semibold tracking-tight">
-                                    {link.title}
-                                  </span>
-                                  <span className="block text-xs text-muted-foreground">
-                                    {link.description}
-                                  </span>
+                                <span className="block text-xs text-muted-foreground">
+                                  {link.description}
                                 </span>
-                              </Link>
+                              </span>
                             </Button>
                           );
                         })}

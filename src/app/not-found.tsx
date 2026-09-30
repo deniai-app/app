@@ -25,8 +25,8 @@ export default function NotFound() {
             {t("The page you are looking for might have been moved or deleted.")}
           </p>
         </div>
-        <Button asChild>
-          <Link href="/">{t("Back to home")}</Link>
+        <Button render={<Link href="/" />} nativeButton={false}>
+          {t("Back to home")}
         </Button>
       </div>
     </main>

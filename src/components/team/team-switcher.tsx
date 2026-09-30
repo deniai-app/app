@@ -45,32 +45,32 @@ export function TeamSwitcher({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="w-full justify-between gap-2 px-2.5 py-5">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md bg-primary/10 text-xs font-semibold uppercase text-primary">
-                {activeOrg?.logo ? (
-                  <Image
-                    src={activeOrg.logo}
-                    alt=""
-                    className="size-full object-cover"
-                    width={24}
-                    height={24}
-                    sizes="24px"
-                    unoptimized
-                  />
-                ) : activeOrg?.name ? (
-                  activeOrg.name.charAt(0)
-                ) : (
-                  <Users className="size-3.5" />
-                )}
-              </span>
-              <span className="truncate text-sm font-medium">
-                {activeOrg?.name ?? t("Select team")}
-              </span>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" className="w-full justify-between gap-2 px-2.5 py-5" />}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md bg-primary/10 text-xs font-semibold uppercase text-primary">
+              {activeOrg?.logo ? (
+                <Image
+                  src={activeOrg.logo}
+                  alt=""
+                  className="size-full object-cover"
+                  width={24}
+                  height={24}
+                  sizes="24px"
+                  unoptimized
+                />
+              ) : activeOrg?.name ? (
+                activeOrg.name.charAt(0)
+              ) : (
+                <Users className="size-3.5" />
+              )}
             </span>
-            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-          </Button>
+            <span className="truncate text-sm font-medium">
+              {activeOrg?.name ?? t("Select team")}
+            </span>
+          </span>
+          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">
           <DropdownMenuGroup>
@@ -103,14 +103,16 @@ export function TeamSwitcher({
               <DropdownMenuGroup>
                 <DropdownMenuLabel>{t("Invitations")}</DropdownMenuLabel>
                 {pendingInvitations.map((inv) => (
-                  <DropdownMenuItem key={inv.id} className="gap-2 py-2" asChild>
-                    <Link href="/settings/team">
-                      <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-[10px] font-semibold uppercase">
-                        {inv.organizationName.charAt(0)}
-                      </span>
-                      <span className="flex-1 truncate">{inv.organizationName}</span>
-                      <span className="text-[10px] text-muted-foreground">{t("(pending)")}</span>
-                    </Link>
+                  <DropdownMenuItem
+                    key={inv.id}
+                    className="gap-2 py-2"
+                    render={<Link href="/settings/team" />}
+                  >
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-[10px] font-semibold uppercase">
+                      {inv.organizationName.charAt(0)}
+                    </span>
+                    <span className="flex-1 truncate">{inv.organizationName}</span>
+                    <span className="text-[10px] text-muted-foreground">{t("(pending)")}</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuGroup>

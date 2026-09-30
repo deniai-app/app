@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Moon, Sun, Monitor, Palette, Layers } from "lucide-react";
+import { Check, Moon, Sun, Monitor } from "lucide-react";
 import { useExtracted } from "next-intl";
 import { useTheme } from "next-themes";
 import { useSyncExternalStore } from "react";
@@ -8,7 +8,6 @@ import { LocaleSwitcher } from "@/components/locale-switcher";
 import { SettingsPageShell } from "@/components/settings-page-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { type DesignStyle, useDesignStyle } from "@/hooks/use-design-style";
 import { useThemePreset } from "@/hooks/use-theme-preset";
 import { changeLocaleAction } from "@/lib/locale-actions";
 import { type ThemeName, themePresets } from "@/lib/theme-presets";
@@ -28,7 +27,6 @@ export default function AppearancePage() {
   const hasMounted = useHasMounted();
   const { theme, setTheme } = useTheme();
   const { preset, setPreset } = useThemePreset();
-  const { style, setStyle } = useDesignStyle();
   const activeTheme = preset;
   // Avoid hydration mismatch: server always sees theme as undefined.
   const activeMode = hasMounted ? theme : undefined;
@@ -77,26 +75,6 @@ export default function AppearancePage() {
     { value: "system", label: t("System"), icon: Monitor },
   ];
 
-  const designStyles: {
-    value: DesignStyle;
-    label: string;
-    description: string;
-    icon: typeof Palette;
-  }[] = [
-    {
-      value: "modern",
-      label: t("Modern"),
-      description: t("Clean design with Inter font"),
-      icon: Palette,
-    },
-    {
-      value: "classic",
-      label: t("Classic"),
-      description: t("Clean, minimal design with neutral colors"),
-      icon: Layers,
-    },
-  ];
-
   return (
     <SettingsPageShell title={t("Appearance")} description={t("Customize your visual experience")}>
       {/* Language Section */}
@@ -107,47 +85,6 @@ export default function AppearancePage() {
         </CardHeader>
         <CardContent>
           <LocaleSwitcher changeLocaleAction={changeLocaleAction} />
-        </CardContent>
-      </Card>
-
-      {/* Design Style Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">{t("Design Style")}</CardTitle>
-          <CardDescription>{t("Choose between modern and classic look")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {designStyles.map(({ value, label, description, icon: Icon }) => {
-              const selected = style === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setStyle(value)}
-                  className={cn(
-                    "group relative flex flex-col gap-2 rounded-lg border p-3 text-left transition-colors",
-                    selected ? "border-foreground bg-accent" : "border-border hover:bg-accent/50",
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <Icon className="size-4 text-muted-foreground" />
-                      <div className="space-y-0.5">
-                        <p className="font-medium text-sm">{label}</p>
-                        <p className="text-xs text-muted-foreground">{description}</p>
-                      </div>
-                    </div>
-                    {selected && (
-                      <span className="inline-flex items-center justify-center size-5 rounded-full bg-foreground text-background shrink-0">
-                        <Check className="size-3" />
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
         </CardContent>
       </Card>
 

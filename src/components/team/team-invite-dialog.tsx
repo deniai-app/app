@@ -68,7 +68,12 @@ export function TeamInviteDialog({
           </div>
           <div className="space-y-2">
             <Label>{t("Role")}</Label>
-            <Select value={role} onValueChange={onRoleChange}>
+            <Select
+              value={role}
+              onValueChange={(value) => {
+                if (value !== null) onRoleChange(value);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

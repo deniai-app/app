@@ -331,7 +331,7 @@ export default function PrivacyPolicyPage() {
           </p>
           <p className="text-muted-foreground">
             {t(
-              "Free-tier users and signed-in anonymous guests may see Deni AI Ads in chat. Advertisers submit text ads for automated review and prepay through Stripe. We record ad views and clicks against your account to prevent duplicate billing, but do not use your conversations or Google Sign-In profile to target ads. Opening an ad takes you to the advertiser's website, which has its own privacy practices. We do not send Google Sign-In user data to advertising systems for targeting, retargeting, or profiling.",
+              "Free-tier users and signed-in anonymous guests may see Deni AI Ads in chat and on the homepage. Visitors without an account may also see homepage ads. Advertisers submit text ads for automated review and prepay through Stripe. We record ad views and clicks against your account or, for visitors without an account, a keyed hash of your IP address to prevent duplicate billing. Visitors sharing an IP address are treated as the same viewer for billing. Raw IP addresses are not stored in ad event records. We do not use your conversations or Google Sign-In profile to target ads. Opening an ad takes you to the advertiser's website, which has its own privacy practices. We do not send Google Sign-In user data to advertising systems for targeting, retargeting, or profiling.",
             )}
           </p>
           <p className="text-muted-foreground">

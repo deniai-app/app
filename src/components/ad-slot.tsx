@@ -10,6 +10,7 @@ import type { AdCreative } from "@/lib/ads";
 type AdSlotProps = {
   viewerId: string;
   chatId: string;
+  placement?: "chat" | "home";
   visible: boolean;
   requestInFlight: boolean;
   className?: string;
@@ -20,6 +21,7 @@ type AdSlotProps = {
 export function AdSlot({
   viewerId,
   chatId,
+  placement = "chat",
   visible,
   requestInFlight,
   className,
@@ -52,7 +54,7 @@ export function AdSlot({
 
   useEffect(() => {
     const controller = new AbortController();
-    const params = new URLSearchParams({ placement: "chat", locale });
+    const params = new URLSearchParams({ placement, locale });
     if (excludedId.current) params.set("exclude", excludedId.current);
     fetch(`/api/ads?${params}`, { signal: controller.signal, cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
@@ -69,10 +71,11 @@ export function AdSlot({
         if (!controller.signal.aborted) setDelivery({ viewerId, chatId, requestNumber, ad: null });
       });
     return () => controller.abort();
-  }, [chatId, locale, onAdSelected, requestNumber, viewerId]);
+  }, [chatId, locale, onAdSelected, placement, requestNumber, viewerId]);
 
   useEffect(() => {
-    if (!visible || !ad) return;
+    // Deliveries without a usable account or IP have no billing token.
+    if (!visible || !ad?.token) return;
     const element = adRef.current;
     if (!element) return;
     const observer = new IntersectionObserver(

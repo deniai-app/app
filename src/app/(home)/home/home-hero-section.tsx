@@ -14,6 +14,8 @@ import { BlurReveal } from "@/components/blur-reveal";
 import { HighlightedText } from "@/components/highlighted-text";
 import { LogosCarousel } from "@/components/logos-carousel";
 import Openai from "@/components/openai";
+import { AdSlot } from "@/components/ad-slot";
+import { authClient } from "@/lib/auth-client";
 
 // WebGL gradient is heavy — load after hydration for faster first paint
 const AnimatedGradient = dynamic(() => import("@/components/animated-gradient"), {
@@ -24,6 +26,7 @@ const AnimatedGradient = dynamic(() => import("@/components/animated-gradient"),
 export function HomeHeroSection({ featuredBadge }: { featuredBadge?: ReactNode }) {
   const t = useExtracted();
   const locale = useLocale();
+  const session = authClient.useSession();
   const hrefFor = (path: string) => localizedPath(path, locale);
 
   const aiLogos = [
@@ -108,6 +111,17 @@ export function HomeHeroSection({ featuredBadge }: { featuredBadge?: ReactNode }
                 </Link>
               </div>
             </m.div>
+
+            {!session.isPending && (
+              <AdSlot
+                viewerId={session.data?.user.id ?? "public"}
+                chatId="home"
+                placement="home"
+                visible
+                requestInFlight={false}
+                className="mt-10 max-w-xl text-left"
+              />
+            )}
 
             <m.div
               initial={{ opacity: 0 }}

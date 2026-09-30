@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import { env } from "@/env";
 import { GET } from "./route";
+import { anonymousAdViewerId } from "@/lib/ad-ip";
 
 const mocks = vi.hoisted(() => ({
   session: vi.fn(),
@@ -24,9 +25,13 @@ vi.mock("@/lib/usage", () => ({ isFreeAdViewer: mocks.freeViewer }));
 
 const id = "12345678-1234-1234-1234-123456789abc";
 const destination = "https://advertiser.example/landing";
-function clickRequest(referer = `${new URL(env.NEXT_PUBLIC_BETTER_AUTH_URL).origin}/chat`) {
-  return new Request(`http://internal-proxy:3000/api/ads/click?id=${id}&token=signed-token`, {
-    headers: { referer, "sec-fetch-site": "same-origin" },
+function clickRequest(
+  referer = `${new URL(env.NEXT_PUBLIC_BETTER_AUTH_URL).origin}/chat`,
+  ip?: string,
+  token = "signed-token",
+) {
+  return new Request(`http://internal-proxy:3000/api/ads/click?id=${id}&token=${token}`, {
+    headers: { referer, "sec-fetch-site": "same-origin", ...(ip ? { "x-forwarded-for": ip } : {}) },
   });
 }
 
@@ -56,5 +61,46 @@ test("rejects foreign referrers before accessing the session or billing", async 
 test("still rejects invalid delivery tokens without recording a click", async () => {
   mocks.verify.mockReturnValue(false);
   expect((await GET(clickRequest())).status).toBe(403);
+  expect(mocks.record).not.toHaveBeenCalled();
+});
+
+test("records a public homepage click at guest weight with an IP-bound token", async () => {
+  mocks.session.mockResolvedValue(null);
+  const req = clickRequest(`${new URL(env.NEXT_PUBLIC_BETTER_AUTH_URL).origin}/home`, "192.0.2.1");
+  const viewer = anonymousAdViewerId(req.headers)!;
+  const { signAdDelivery, verifyAdDelivery } =
+    await vi.importActual<typeof import("@/lib/ads")>("@/lib/ads");
+  mocks.verify.mockImplementation(verifyAdDelivery);
+  const token = signAdDelivery(id, viewer, destination);
+  const response = await GET(
+    clickRequest(`${new URL(env.NEXT_PUBLIC_BETTER_AUTH_URL).origin}/home`, "192.0.2.1", token),
+  );
+  expect(response.status).toBe(303);
+  expect(response.headers.get("location")).toBe(destination);
+  expect(mocks.record).toHaveBeenCalledWith(id, viewer, "click", true);
+  expect(mocks.eligible).toHaveBeenCalledWith(true);
+  expect(mocks.freeViewer).not.toHaveBeenCalled();
+});
+
+test("rejects a public click token issued for another IP", async () => {
+  mocks.session.mockResolvedValue(null);
+  const { signAdDelivery, verifyAdDelivery } =
+    await vi.importActual<typeof import("@/lib/ads")>("@/lib/ads");
+  mocks.verify.mockImplementation(verifyAdDelivery);
+  const viewer = anonymousAdViewerId(new Headers({ "x-forwarded-for": "192.0.2.1" }))!;
+  const token = signAdDelivery(id, viewer, destination);
+  expect((await GET(clickRequest(undefined, "192.0.2.2", token))).status).toBe(403);
+  expect(mocks.record).not.toHaveBeenCalled();
+});
+
+test("does not bill public clicks without an IP", async () => {
+  mocks.session.mockResolvedValue(null);
+  expect((await GET(clickRequest())).status).toBe(401);
+  expect(mocks.record).not.toHaveBeenCalled();
+});
+
+test("does not let paid accounts fall back to IP billing", async () => {
+  mocks.freeViewer.mockResolvedValue(false);
+  expect((await GET(clickRequest(undefined, "192.0.2.1"))).status).toBe(403);
   expect(mocks.record).not.toHaveBeenCalled();
 });

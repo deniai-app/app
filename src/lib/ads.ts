@@ -90,7 +90,11 @@ export function pickAd<T extends { id: string; plan: string }>(
   return alternatives.length ? alternatives[Math.floor(random() * alternatives.length)] : null;
 }
 
-export async function chooseAd(userId: string, isGuest = false, excludeId?: string | null) {
+export async function chooseAd(
+  userId: string | undefined,
+  isGuest = false,
+  excludeId?: string | null,
+) {
   const campaigns = await db.select().from(adCampaign).where(adEligible(isGuest));
   return pickAd(
     campaigns.filter((ad) => ad.userId !== userId),

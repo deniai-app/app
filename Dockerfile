@@ -26,18 +26,19 @@
 #   docker run --rm -p 3000:3000 --env-file .env.production deni-ai
 
 # ---------------------------------------------------------------------------
-# Install dependencies (Bun workspaces + bun.lock)
+# Install dependencies (pnpm workspaces + pnpm-lock.yaml)
 # ---------------------------------------------------------------------------
-FROM oven/bun:1 AS deps
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
-COPY package.json bun.lock ./
+RUN npm install --global pnpm@12.8.1
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/disposable-email-domains ./packages/disposable-email-domains
-RUN --mount=type=cache,id=deni-ai-bun,target=/root/.bun/install/cache \
-  bun install --frozen-lockfile
+RUN --mount=type=cache,id=deni-ai-pnpm,target=/pnpm/store \
+  pnpm install --frozen-lockfile --store-dir=/pnpm/store
 
 # ---------------------------------------------------------------------------
 # Build (Next.js production build)
-# Node, not Bun: Next's compiler/workers are more stable on small VPS CPUs.
+# Node.js runs Next's compiler and workers.
 # ---------------------------------------------------------------------------
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
@@ -125,7 +126,7 @@ RUN --mount=type=bind,from=deps,source=/app/node_modules,target=/app/node_module
   node ./node_modules/next/dist/bin/next build
 
 # Turbopack emits aliases for external packages under `.next/node_modules`.
-# Bun resolves those aliases through absolute paths in the builder's virtual
+# External aliases can point to absolute paths in the builder's virtual
 # store, which would be broken after only `.next/standalone` is copied to the
 # runtime image. Re-home the aliases to the traced virtual store that
 # standalone already contains.
@@ -136,36 +137,21 @@ RUN set -eu; \
       [ -L "$alias" ] || continue; \
       target="$(readlink "$alias")"; \
       case "$target" in \
-        /app/node_modules/.bun/*) \
-          store_path="${target#/app/node_modules/.bun/}"; \
-          traced_path=".next/standalone/node_modules/.bun/$store_path"; \
+        /app/node_modules/.pnpm/*) \
+          store_path="${target#/app/node_modules/.pnpm/}"; \
+          traced_path=".next/standalone/node_modules/.pnpm/$store_path"; \
           [ -e "$traced_path" ] || { echo "Missing traced external package: $traced_path" >&2; exit 1; }; \
           rm "$alias"; \
-          ln -s "../../node_modules/.bun/$store_path" "$alias"; \
+          ln -s "../../node_modules/.pnpm/$store_path" "$alias"; \
           ;; \
       esac; \
     done; \
   fi
 
-# Temporary disabled (runtime is now bun)
-# # Next's standalone tracer can copy only the CJS side of Bun's virtual-store
-# # @swc/helpers package. Node 22 resolves its `module-sync` condition to ESM,
-# # so preserve the ESM files in every traced helper package as well.
-# RUN set -eux; \
-#   for standalone_helpers in \
-#     .next/standalone/node_modules/.bun/*/node_modules/@swc/helpers \
-#     .next/standalone/node_modules/@swc/helpers; do \
-#     [ -d "$standalone_helpers" ] || continue; \
-#     source_helpers="${standalone_helpers#.next/standalone/}"; \
-#     [ -d "$source_helpers/esm" ] || continue; \
-#     mkdir -p "$standalone_helpers/esm"; \
-#     cp -a "$source_helpers/esm/." "$standalone_helpers/esm/"; \
-#   done
-
 # ---------------------------------------------------------------------------
-# Runtime (Next.js standalone + Bun)
+# Runtime (Next.js standalone + Node.js)
 # ---------------------------------------------------------------------------
-FROM oven/bun:1 AS runner
+FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 
 # Dokploy / Traefik reach the container on this port.
@@ -177,15 +163,15 @@ ENV PORT=3000 \
   NEXT_TELEMETRY_DISABLED=1 \
   NODE_ENV=production
 
-# oven/bun images already ship a non-root `bun` user/group and omit adduser/usermod.
-COPY --from=builder --chown=bun:bun /app/public ./public
-COPY --from=builder --chown=bun:bun /app/.next/standalone ./
-COPY --from=builder --chown=bun:bun /app/.next/static ./.next/static
+# Official Node.js images include a non-root `node` user/group.
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 
-USER bun
+USER node
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD bun -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["bun", "server.js"]
+CMD ["node", "server.js"]

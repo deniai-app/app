@@ -2,8 +2,8 @@
  * Delete high-confidence Gmail/Googlemail bot-farm accounts.
  *
  * Usage:
- *   bun run scripts/cleanup-spam-gmail.ts --production           # dry-run
- *   bun run scripts/cleanup-spam-gmail.ts --production --apply   # delete
+ *   pnpm exec tsx --env-file-if-exists=.env.local scripts/cleanup-spam-gmail.ts --production           # dry-run
+ *   pnpm exec tsx --env-file-if-exists=.env.local scripts/cleanup-spam-gmail.ts --production --apply   # delete
  *
  * Skips users with an active personal paid plan.
  */

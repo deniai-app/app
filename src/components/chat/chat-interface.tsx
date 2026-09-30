@@ -153,8 +153,6 @@ async function submitComposerMessage(params: {
   options: {
     model: string;
     webSearch: boolean;
-    videoMode: boolean;
-    imageMode: boolean;
     reasoningEffort: ReasoningEffort;
     proMode: boolean;
     fastMode: boolean;
@@ -205,8 +203,6 @@ async function submitComposerMessage(params: {
             proMode: params.options.proMode,
             fastMode: params.options.fastMode,
             deepResearch: params.options.deepResearch,
-            video: params.options.videoMode,
-            image: params.options.imageMode,
             id: params.id,
           },
         },
@@ -235,8 +231,6 @@ export function ChatInterface({
   const [input, setInput] = useState("");
   const [modelOverride, setModel] = useState<string | null>(null);
   const [webSearchOverride, setWebSearch] = useState<boolean | null>(null);
-  const [videoModeOverride, setVideoMode] = useState<boolean | null>(null);
-  const [imageModeOverride, setImageMode] = useState<boolean | null>(null);
   const [reasoningEffortOverride, setReasoningEffort] = useState<ReasoningEffort | null>(null);
   const [proModeOverride, setProMode] = useState<boolean | null>(null);
   const [fastModeOverride, setFastMode] = useState<boolean | null>(null);
@@ -320,8 +314,6 @@ export function ChatInterface({
 
   const model = modelOverride ?? seed?.model ?? projectDefaultModel ?? fallbackModel;
   const webSearch = features.webSearch && (webSearchOverride ?? seed?.webSearch ?? false);
-  const videoMode = features.videoGeneration && (videoModeOverride ?? seed?.videoMode ?? false);
-  const imageMode = features.imageGeneration && (imageModeOverride ?? seed?.imageMode ?? false);
   const reasoningEffort =
     reasoningEffortOverride ??
     seed?.reasoningEffort ??
@@ -353,11 +345,9 @@ export function ChatInterface({
       proMode,
       fastMode,
       deepResearch,
-      video: videoMode,
-      image: imageMode,
       id,
     }),
-    [model, webSearch, reasoningEffort, proMode, fastMode, deepResearch, videoMode, imageMode, id],
+    [model, webSearch, reasoningEffort, proMode, fastMode, deepResearch, id],
   );
 
   const { handleRegenerate, groupedMessages } = useChatBranches({
@@ -416,8 +406,6 @@ export function ChatInterface({
     options: {
       model: string;
       webSearch: boolean;
-      videoMode: boolean;
-      imageMode: boolean;
       reasoningEffort: ReasoningEffort;
       proMode: boolean;
       fastMode: boolean;
@@ -574,10 +562,6 @@ export function ChatInterface({
           webSearch={webSearch}
           onWebSearchChange={(enabled) => setWebSearch(enabled && features.webSearch)}
           webSearchAvailable={features.webSearch}
-          videoMode={videoMode}
-          onVideoModeChange={(enabled) => setVideoMode(enabled && features.videoGeneration)}
-          imageMode={imageMode}
-          onImageModeChange={(enabled) => setImageMode(enabled && features.imageGeneration)}
           reasoningEffort={reasoningEffort}
           onReasoningEffortChange={setReasoningEffort}
           proMode={proMode}

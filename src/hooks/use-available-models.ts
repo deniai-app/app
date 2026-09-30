@@ -36,6 +36,8 @@ export function useAvailableModels() {
     availableModels,
     isAnonymous,
     planTier,
+    // Do not load ad SDKs until the viewer's free tier is confirmed.
+    canShowAds: Boolean(session.data?.user) && (isAnonymous || usageQuery.data?.tier === "free"),
     platformCapabilities,
     shouldVerifyCard:
       platformCapabilities.features.billing &&

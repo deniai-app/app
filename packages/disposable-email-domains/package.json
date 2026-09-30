@@ -11,6 +11,6 @@
     "./domains.json": "./data/domains.json"
   },
   "scripts": {
-    "refresh": "bun run scripts/refresh.ts"
+    "refresh": "tsx scripts/refresh.ts"
   }
 }

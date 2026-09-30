@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import { adCreativeSchema } from "./ad-creative";
 import { creativeFields, localizedCreative, sameCreative, storedCreative } from "./ad-variants";
 

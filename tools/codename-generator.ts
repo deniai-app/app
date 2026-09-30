@@ -143,7 +143,7 @@ if (isMain) {
       console.log(`Remaining codenames: ${getRemainingCount()}`);
       break;
     default:
-      console.log("Usage: bun tools/codename-generator.ts <command>");
+      console.log("Usage: pnpm run tools:codename <command>");
       console.log("Commands: generate, list, reset, remaining");
   }
 }

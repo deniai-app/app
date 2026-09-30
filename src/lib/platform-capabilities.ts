@@ -5,8 +5,6 @@ export type PlatformCapabilities = {
   models: Record<PlatformModelProvider, boolean>;
   features: {
     webSearch: boolean;
-    imageGeneration: boolean;
-    videoGeneration: boolean;
     memory: boolean;
     billing: boolean;
   };

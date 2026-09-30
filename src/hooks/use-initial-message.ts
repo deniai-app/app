@@ -17,8 +17,6 @@ type StoredInitialMessage = {
   }>;
   webSearch: boolean;
   model?: string;
-  videoMode?: boolean;
-  imageMode?: boolean;
   reasoningEffort?: string;
   proMode?: boolean;
   fastMode?: boolean;
@@ -29,8 +27,6 @@ type StoredInitialMessage = {
 export type InitialComposerSeed = {
   webSearch: boolean;
   model?: string;
-  videoMode: boolean;
-  imageMode: boolean;
   reasoningEffort: ReasoningEffort;
   proMode: boolean;
   fastMode: boolean;
@@ -99,8 +95,6 @@ function seedFromStored(
   return {
     webSearch: Boolean(stored.webSearch),
     model: stored.model,
-    videoMode: Boolean(stored.videoMode),
-    imageMode: Boolean(stored.imageMode),
     reasoningEffort:
       resolveReasoningEffort(selectedModel?.efforts ?? false, stored.reasoningEffort) ?? "high",
     proMode: Boolean(stored.proMode && selectedModel?.supportsProMode),
@@ -159,8 +153,6 @@ export function useInitialMessage(params: {
     : queryMessage
       ? {
           webSearch: queryWebSearch,
-          videoMode: false,
-          imageMode: false,
           reasoningEffort: "high" as const,
           proMode: false,
           fastMode: false,
@@ -217,8 +209,6 @@ export function useInitialMessage(params: {
               reasoningEffort: parsedReasoningEffort,
               proMode: parsedProMode,
               fastMode: parsedFastMode,
-              video: storedData.videoMode ?? false,
-              image: storedData.imageMode ?? false,
               deepResearch: storedData.deepResearch ?? false,
               id,
             },
@@ -242,8 +232,6 @@ export function useInitialMessage(params: {
       id,
       seed: {
         webSearch: initialWebSearch,
-        videoMode: false,
-        imageMode: false,
         reasoningEffort: "high",
         proMode: false,
         fastMode: false,
@@ -262,7 +250,6 @@ export function useInitialMessage(params: {
             model: modelRef.current,
             webSearch: initialWebSearch,
             reasoningEffort: "high",
-            video: false,
             id,
           },
         },

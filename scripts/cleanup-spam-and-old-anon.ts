@@ -5,9 +5,9 @@
  *  2) Old anonymous guest accounts (is_anonymous + temp@…), older than N days
  *
  * Usage:
- *   bun run scripts/cleanup-spam-and-old-anon.ts              # dry-run
- *   bun run scripts/cleanup-spam-and-old-anon.ts --apply      # delete
- *   bun run scripts/cleanup-spam-and-old-anon.ts --anon-days=7
+ *   pnpm exec tsx --env-file-if-exists=.env.local scripts/cleanup-spam-and-old-anon.ts              # dry-run
+ *   pnpm exec tsx --env-file-if-exists=.env.local scripts/cleanup-spam-and-old-anon.ts --apply      # delete
+ *   pnpm exec tsx --env-file-if-exists=.env.local scripts/cleanup-spam-and-old-anon.ts --anon-days=7
  *
  * Cascades handle dependent rows. Stripe customers are NOT touched.
  */

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { apiKey } from "@/db/schema";
 import { generateApiKey, getKeyPrefix, hashApiKey } from "@/lib/api-key-utils";
+import { MAX_API_KEYS, withApiKeyLock } from "@/lib/api-key-quota";
 
 import { protectedProcedure, router } from "../trpc";
 
@@ -36,15 +37,14 @@ export const apiKeysRouter = router({
       const keyHash = await hashApiKey(raw);
       const keyPrefix = getKeyPrefix(raw);
 
-      // A single INSERT ... SELECT with a count predicate is the quota
-      // authority, so concurrent creates cannot both pass a check-then-insert
-      // window.
-      const inserted = await ctx.db.execute<{ id: string }>(sql`
-        INSERT INTO api_key (user_id, name, key_hash, key_prefix)
-        SELECT ${ctx.userId}, ${input.name}, ${keyHash}, ${keyPrefix}
-        WHERE (SELECT count(*) FROM api_key WHERE user_id = ${ctx.userId}) < 5
-        RETURNING id
-      `);
+      const inserted = await withApiKeyLock(ctx.db, ctx.userId, (transaction) =>
+        transaction.execute<{ id: string }>(sql`
+          INSERT INTO api_key (user_id, name, key_hash, key_prefix)
+          SELECT ${ctx.userId}, ${input.name}, ${keyHash}, ${keyPrefix}
+          WHERE (SELECT count(*) FROM api_key WHERE user_id = ${ctx.userId}) < ${MAX_API_KEYS}
+          RETURNING id
+        `),
+      );
       const insertedId = Array.isArray(inserted)
         ? inserted[0]?.id
         : (inserted as { rows?: { id: string }[] }).rows?.[0]?.id;
@@ -62,10 +62,12 @@ export const apiKeysRouter = router({
   revoke: protectedProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const deleted = await ctx.db
-        .delete(apiKey)
-        .where(and(eq(apiKey.id, input.id), eq(apiKey.userId, ctx.userId)))
-        .returning({ id: apiKey.id });
+      const deleted = await withApiKeyLock(ctx.db, ctx.userId, (transaction) =>
+        transaction
+          .delete(apiKey)
+          .where(and(eq(apiKey.id, input.id), eq(apiKey.userId, ctx.userId)))
+          .returning({ id: apiKey.id }),
+      );
 
       if (deleted.length === 0) {
         throw new TRPCError({

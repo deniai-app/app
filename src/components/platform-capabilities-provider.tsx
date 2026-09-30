@@ -14,8 +14,6 @@ const defaultCapabilities: PlatformCapabilities = {
   },
   features: {
     webSearch: true,
-    imageGeneration: true,
-    videoGeneration: true,
     memory: true,
     billing: true,
   },

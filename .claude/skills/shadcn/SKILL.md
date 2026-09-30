@@ -8,7 +8,7 @@ allowed-tools: Bash(npx shadcn@latest *), Bash(pnpm dlx shadcn@latest *), Bash(b
 # shadcn/ui
 
 Use installed components and project conventions first. Inspect components.json
-and the affected source; use the project's runner (Bun here) for CLI operations.
+and the affected source; use the project's runner (pnpm here) for CLI operations.
 Run shadcn info when aliases, primitive base, or registry configuration are unclear.
 
 Preserve local component customizations. Preview registry updates with add

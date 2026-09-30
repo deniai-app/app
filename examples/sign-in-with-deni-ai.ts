@@ -5,11 +5,13 @@
  *
  *   DENI_AI_OAUTH_CLIENT_ID=... \
  *   DENI_AI_OAUTH_CLIENT_SECRET=... \
- *   bun examples/sign-in-with-deni-ai.ts
+ *   pnpm run oauth:example
  *
  * Public clients omit DENI_AI_OAUTH_CLIENT_SECRET. The example uses an exact
  * loopback callback and S256 PKCE, then calls UserInfo with the access token.
  */
+
+import { createServer } from "node:http";
 
 const origin = new URL(process.env.DENI_AI_ORIGIN ?? "http://localhost:3000");
 origin.pathname = origin.pathname.replace(/\/$/, "");
@@ -101,47 +103,62 @@ const resultPromise = new Promise<Awaited<ReturnType<typeof exchangeCode>>>((res
 });
 
 const callbackPath = new URL(redirectUri).pathname;
-const server = Bun.serve({
-  port: callbackPort,
-  async fetch(request) {
-    const url = new URL(request.url);
-    if (url.pathname !== callbackPath) return new Response("Not found", { status: 404 });
+async function handleCallback(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  if (url.pathname !== callbackPath) return new Response("Not found", { status: 404 });
 
-    const returnedState = url.searchParams.get("state");
-    if (returnedState !== state) {
-      const error = new Error("OAuth state validation failed");
-      rejectResult(error);
-      return new Response(error.message, { status: 400 });
-    }
+  const returnedState = url.searchParams.get("state");
+  if (returnedState !== state) {
+    const error = new Error("OAuth state validation failed");
+    rejectResult(error);
+    return new Response(error.message, { status: 400 });
+  }
 
-    const providerError = url.searchParams.get("error");
-    if (providerError) {
-      const description = url.searchParams.get("error_description");
-      const error = new Error(
-        `Authorization failed: ${providerError}${description ? ` (${description})` : ""}`,
-      );
-      rejectResult(error);
-      return new Response(error.message, { status: 400 });
-    }
+  const providerError = url.searchParams.get("error");
+  if (providerError) {
+    const description = url.searchParams.get("error_description");
+    const error = new Error(
+      `Authorization failed: ${providerError}${description ? ` (${description})` : ""}`,
+    );
+    rejectResult(error);
+    return new Response(error.message, { status: 400 });
+  }
 
-    const code = url.searchParams.get("code");
-    if (!code) {
-      const error = new Error("Authorization response did not include a code");
-      rejectResult(error);
-      return new Response(error.message, { status: 400 });
-    }
+  const code = url.searchParams.get("code");
+  if (!code) {
+    const error = new Error("Authorization response did not include a code");
+    rejectResult(error);
+    return new Response(error.message, { status: 400 });
+  }
 
-    try {
-      resolveResult(await exchangeCode(code, verifier));
-      return new Response("Sign in complete. You can close this tab.", {
-        headers: { "content-type": "text/plain; charset=utf-8" },
-      });
-    } catch (error) {
-      const normalized = error instanceof Error ? error : new Error(String(error));
-      rejectResult(normalized);
-      return new Response(normalized.message, { status: 502 });
-    }
-  },
+  try {
+    resolveResult(await exchangeCode(code, verifier));
+    return new Response("Sign in complete. You can close this tab.", {
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  } catch (error) {
+    const normalized = error instanceof Error ? error : new Error(String(error));
+    rejectResult(normalized);
+    return new Response(normalized.message, { status: 502 });
+  }
+}
+
+const server = createServer((request, response) => {
+  const url = new URL(request.url ?? "/", `http://127.0.0.1:${callbackPort}`);
+  void handleCallback(new Request(url))
+    .then(async (result) => {
+      response.writeHead(result.status, Object.fromEntries(result.headers));
+      response.end(await result.text());
+    })
+    .catch((error: unknown) => {
+      response.writeHead(500);
+      response.end("OAuth callback failed");
+      rejectResult(error instanceof Error ? error : new Error(String(error)));
+    });
+});
+await new Promise<void>((resolve, reject) => {
+  server.once("error", reject);
+  server.listen(callbackPort, "127.0.0.1", resolve);
 });
 
 console.log(`Listening for the OAuth callback on ${redirectUri}`);
@@ -162,5 +179,5 @@ try {
     ),
   );
 } finally {
-  server.stop();
+  server.close();
 }

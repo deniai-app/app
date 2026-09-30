@@ -44,8 +44,6 @@ interface RequestBody {
   reasoningEffort: ReasoningEffort;
   proMode?: boolean;
   fastMode?: boolean;
-  video: boolean;
-  image: boolean;
   id: string;
   deepResearch?: boolean;
   responseStyle?: "retry" | "detailed" | "concise";

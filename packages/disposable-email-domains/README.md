@@ -22,10 +22,10 @@ Also exported: `isDisposableDomain(domain)` and the `disposableDomains` set.
 
 ```bash
 # from the repo root
-bun run disposable:refresh
+pnpm run disposable:refresh
 
 # or from this package
-bun run refresh
+pnpm run refresh
 ```
 
 This re-fetches the latest lists from the upstream repo and rewrites

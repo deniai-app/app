@@ -6,7 +6,7 @@ Source of truth for validated env vars: [`src/env.ts`](src/env.ts). Starter temp
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) (recommended) or [Node.js 20+](https://nodejs.org/)
+- [Node.js 22.18+](https://nodejs.org/) and [pnpm 12.8.1](https://pnpm.io/installation)
 - [PostgreSQL](https://neon.tech/) (Neon serverless recommended for self-hosting)
 - Core environment values (`DATABASE_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, and a 32-character `BETTER_AUTH_SECRET`)
 - Optional API keys for AI providers (Google AI, Anthropic, Groq, OpenRouter)
@@ -27,9 +27,8 @@ cd deni-ai
 ### 2. Install dependencies
 
 ```bash
-bun install
-# or
-npm install
+npm install --global pnpm@12.8.1
+pnpm install --frozen-lockfile
 ```
 
 ### 3. Set up environment variables
@@ -118,9 +117,12 @@ Notes:
 - Remove old `NEXT_PUBLIC_ADSENSE_*` configuration from deployments; AdSense and `ads.txt` are no longer used.
 
 - Empty optional vars are treated as unset (`emptyStringAsUndefined` in `src/env.ts`), which helps Docker / Dokploy builds that inject `""` for missing keys.
-- Provider keys are capability switches: missing `ANTHROPIC_API_KEY` falls back to OpenRouter, missing `GOOGLE_GENERATIVE_AI_API_KEY` disables image/video/memory, missing `EXA_API_KEY` disables web search, and missing Stripe keys disables billing.
+- Provider keys are capability switches: missing `ANTHROPIC_API_KEY` falls back to OpenRouter, missing `GOOGLE_GENERATIVE_AI_API_KEY` disables memory, missing `EXA_API_KEY` disables web search, and missing Stripe keys disables billing.
 - Guest sessions use only `gpt-5.6-luna` and have twice the basic request allowance of the standard guest limit (40 requests).
-- Each web `search` tool call consumes 10,000 basic tokens (1 basic request for guests). Failed searches are refunded. Browse/image/video tools are unchanged.
+- Each web `search` tool call consumes 10,000 basic tokens (1 basic request for guests). Failed searches are refunded. Browse does not consume a separate search charge. Image and video generation have been removed.
+- Browse validates every redirect and pins direct HTTP(S) connections to validated public DNS answers. Direct and reader responses are limited to 2,000,000 bytes while streaming. The direct path uses Node HTTP(S), so it requires the Node.js runtime.
+- API key creation and device authorization share an account-row lock inside a PostgreSQL transaction; the five-key cap applies across instances. No schema migration is needed for this lock.
+- `pnpm test` includes both `tools/*.test.ts` and `src/**/*.test.ts`.
 - When adding or changing supported models, update `src/lib/constants.ts`.
 - `OPENROUTER_API_KEY` routes OpenAI-family and other OpenRouter models when voids mode is off. It also serves as the Anthropic fallback when `ANTHROPIC_API_KEY` is absent.
 - Optional voids.top mode: set `VOIDS_MODE=true` (or `1`) and provide **`VOIDS_API_KEY`** to send OpenAI and Anthropic traffic through the OpenAI-compatible voids.top gateway. Without the key, normal provider routing is used. Optional `VOIDS_BASE_URL` (default `https://capi.voids.top/v2`). When `VOIDS_MODE` is off, OpenAI uses OpenRouter and Anthropic uses its native key when present, otherwise OpenRouter.
@@ -207,37 +209,37 @@ Run this only in a trusted server-side maintenance context. Store the returned c
 
 For a public client, use `token_endpoint_auth_method: "none"` and PKCE. For a confidential web application, use a client authentication method supported by the token endpoint and keep PKCE enabled. The OAuth consent screen validates the signed request before showing the requested scopes, and the user's decision is returned to the registered callback URL.
 
-The hosted interactive playground is available at `{NEXT_PUBLIC_BETTER_AUTH_URL}/oauth/example`. The repository also includes a small Bun client example at [`examples/sign-in-with-deni-ai.ts`](examples/sign-in-with-deni-ai.ts). Register its loopback callback (`http://127.0.0.1:8787/callback`) on a public client, then run:
+The hosted interactive playground is available at `{NEXT_PUBLIC_BETTER_AUTH_URL}/oauth/example`. The repository also includes a small Node.js client example at [`examples/sign-in-with-deni-ai.ts`](examples/sign-in-with-deni-ai.ts). Register its loopback callback (`http://127.0.0.1:8787/callback`) on a public client, then run:
 
 ```bash
-DENI_AI_OAUTH_CLIENT_ID=your-client-id bun run oauth:example
+DENI_AI_OAUTH_CLIENT_ID=your-client-id pnpm run oauth:example
 ```
 
 Add `DENI_AI_OAUTH_CLIENT_SECRET` for a confidential client, or set `DENI_AI_ORIGIN` when the provider is not running at `http://localhost:3000`. The example prints a PKCE authorization URL, waits for the callback, exchanges the code, and calls UserInfo.
 
-To exercise the complete flow against the local development database, start `bun dev` in another terminal and run `bun run oauth:test`. The test creates temporary records, validates authorization, consent, authorization-code exchange, refresh-token exchange, and UserInfo, then removes the temporary user and cascaded OAuth records.
+To exercise the complete flow against the local development database, start `pnpm dev` in another terminal and run `pnpm run oauth:test`. The test creates temporary records, validates authorization, consent, authorization-code exchange, refresh-token exchange, and UserInfo, then removes the temporary user and cascaded OAuth records.
 
 ### 4. Set up the database
 
 ```bash
 # Generate migration files after schema edits
-bun run db:generate
+pnpm run db:generate
 
 # Apply migrations
 # Production-style (.env.production):
-bun run db:migrate
+pnpm run db:migrate
 
 # Local development (.env.local):
-bun run db:migrate:dev
+pnpm run db:migrate:dev
 
 # Or push schema directly (dev only)
-bun run db:push
+pnpm run db:push
 ```
 
 Regenerate better-auth tables into `src/db/schema/auth-schema.ts` (overwrites that file):
 
 ```bash
-bun run auth:generate
+pnpm run auth:generate
 ```
 
 Better Auth 1.7 keys linked accounts by `(issuer, accountId)`. After upgrading, apply the generated migration (adds `account.issuer`, backfills Google / GitHub / credential rows, then creates the unique index) before OAuth sign-in will work.
@@ -245,34 +247,38 @@ Better Auth 1.7 keys linked accounts by `(issuer, accountId)`. After upgrading, 
 ### 5. Run the development server
 
 ```bash
-bun dev
-# or
-npm run dev
+pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
 ## Available scripts
 
-| Command                      | Description                          |
-| ---------------------------- | ------------------------------------ |
-| `bun dev`                    | Start Next.js dev server             |
-| `bun run build`              | Typecheck + production build         |
-| `bun start`                  | Start production server              |
-| `bun run lint`               | oxlint                               |
-| `bun run lint:fix`           | oxlint with auto-fix                 |
-| `bun run format`             | Format with oxfmt                    |
-| `bun run typecheck`          | TypeScript check (`tsgo --noEmit`)   |
-| `bun run db:generate`        | Generate Drizzle migrations          |
-| `bun run db:migrate`         | Migrate using `.env.production`      |
-| `bun run db:migrate:dev`     | Migrate using `.env.local`           |
-| `bun run db:push`            | Push schema (dev)                    |
-| `bun run auth:generate`      | Regenerate better-auth schema        |
-| `bun run disposable:refresh` | Refresh disposable-email domain list |
-| `bun run tools:codename`     | Generate version codenames           |
-| `bun run tools:update-types` | Add missing Lucide type exports      |
-| `bun run tools:commit`       | AI-assisted conventional commits     |
-| `bun run doctor`             | Run react-doctor diagnostics         |
+| Command                       | Description                          |
+| ----------------------------- | ------------------------------------ |
+| `pnpm dev`                    | Start Next.js dev server             |
+| `pnpm run build`              | Typecheck + production build         |
+| `pnpm start`                  | Start production server              |
+| `pnpm run lint`               | oxlint                               |
+| `pnpm run lint:fix`           | oxlint with auto-fix                 |
+| `pnpm run format`             | Format with oxfmt                    |
+| `pnpm run typecheck`          | TypeScript check (`tsc --noEmit`)    |
+| `pnpm run db:generate`        | Generate Drizzle migrations          |
+| `pnpm run db:migrate`         | Migrate using `.env.production`      |
+| `pnpm run db:migrate:dev`     | Migrate using `.env.local`           |
+| `pnpm run db:push`            | Push schema (dev)                    |
+| `pnpm run auth:generate`      | Regenerate better-auth schema        |
+| `pnpm run disposable:refresh` | Refresh disposable-email domain list |
+| `pnpm run tools:codename`     | Generate version codenames           |
+| `pnpm run tools:update-types` | Add missing Lucide type exports      |
+| `pnpm run tools:commit`       | AI-assisted conventional commits     |
+| `pnpm run doctor`             | Run react-doctor diagnostics         |
+| `pnpm test`                   | Run local regression tests (Vitest)  |
+
+TypeScript scripts run through `tsx`. Unlike Bun, Node.js does not automatically load
+root environment files: the package scripts explicitly load `.env.local` when appropriate,
+and production migrations/maintenance use `.env.production`. For ad-hoc scripts, use
+`pnpm exec tsx --env-file=.env.local path/to/script.ts`.
 
 ## Stripe billing
 
@@ -322,7 +328,7 @@ Max Mode overage is billed **monthly** through [Stripe Billing Meters](https://d
 Create the meters and prices once (idempotent):
 
 ```bash
-bun --env-file=.env.local ./tools/stripe-max-mode-setup.ts
+pnpm exec tsx --env-file=.env.local ./tools/stripe-max-mode-setup.ts
 ```
 
 That script creates:
@@ -357,8 +363,8 @@ Schemas live under `src/db/schema/`. Main domains:
 Schema change workflow:
 
 1. Edit files in `src/db/schema/`
-2. `bun run db:generate`
-3. `bun run db:migrate` or `bun run db:migrate:dev` (or `db:push` in dev)
+2. `pnpm run db:generate`
+3. `pnpm run db:migrate` or `pnpm run db:migrate:dev` (or `db:push` in dev)
 
 ## Deployment
 
@@ -367,16 +373,16 @@ Schema change workflow:
 1. Push the repo to GitHub
 2. Import the project in [Vercel](https://vercel.com)
 3. Set the core environment variables and any optional provider keys you want to enable
-4. Deploy (build uses `bun run build` / `next build` per project settings)
+4. Deploy (build uses `pnpm run build` / `next build` per project settings)
 
 ### Docker / Dokploy
 
 A multi-stage `Dockerfile` is included for self-hosting (e.g. Dokploy):
 
-- **Install:** Bun (`bun.lock`)
-- **Build:** Node 22 runs `next build` (standalone output). Typecheck is skipped in the image (`SKIP_TYPECHECK=1`) so tsc does not fight Turbopack on small VPS CPUs — run `bun run typecheck` locally or in CI.
-- The Node builder mounts the Bun-installed dependencies from the install stage instead of copying `node_modules`, avoiding a large per-deploy file copy.
-- **Run:** Bun serves `.next/standalone` on port **3000**
+- **Install:** pnpm 12.8.1 (`pnpm-lock.yaml`, `pnpm-workspace.yaml`), with a frozen lockfile.
+- **Build:** Node 22 runs `next build` (standalone output). Typecheck is skipped in the image (`SKIP_TYPECHECK=1`) so tsc does not fight Turbopack on small VPS CPUs — run `pnpm run typecheck` locally or in CI.
+- The Node builder mounts pnpm-installed dependencies from the install stage instead of copying `node_modules`, avoiding a large per-deploy file copy.
+- **Run:** Node 22 serves `.next/standalone` on port **3000**
 - Turbopack's `.next/cache` is stored in a BuildKit cache mount, so later deploys on the **same Dokploy host** compile incrementally. Do not enable “disable cache” / `--no-cache` in the service settings.
 - `NEXT_PUBLIC_*` values must be present at **build time** (inlined into the client bundle)
 - Server secrets should also be available at build time for `@t3-oss/env-nextjs` validation / prerender; optional provider keys can be omitted and disable their features
@@ -410,8 +416,8 @@ Any host that can run a Next.js standalone Node server (Railway, Render, Fly.io,
 
 - Set the core environment variables and any optional provider keys you want to enable
 - Use PostgreSQL (Neon recommended)
-- Build: `bun run build` (or the Docker image)
-- Start: `bun start` / `node server.js` (standalone) / container CMD
+- Build: `pnpm run build` (or the Docker image)
+- Start: `pnpm start` / `node server.js` (standalone) / container CMD
 
 ## Troubleshooting
 

@@ -3,8 +3,8 @@
  * heuristics from email-domain-policy (plus tags, fragmented dots, random blobs).
  *
  * Usage:
- *   bun run scripts/cleanup-spam-outlook.ts --production           # dry-run
- *   bun run scripts/cleanup-spam-outlook.ts --production --apply   # delete
+ *   pnpm exec tsx --env-file-if-exists=.env.local scripts/cleanup-spam-outlook.ts --production           # dry-run
+ *   pnpm exec tsx --env-file-if-exists=.env.local scripts/cleanup-spam-outlook.ts --production --apply   # delete
  *
  * Skips users with an active personal paid plan. Stripe customers are not touched.
  */

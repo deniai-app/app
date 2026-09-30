@@ -10,13 +10,14 @@ Deni AI is a multi-model AI chat app for people who want strong model choice wit
 
 - **Multi-model chat** — switch between OpenAI, Claude, Gemini, Groq, xAI, and other routed models
 - **Chat history** — the sidebar includes all conversation summaries, including older pinned and filed chats; message bodies load separately. Retry instructions apply only to explicit regeneration requests.
-- **Tools** — web search (Exa) is available on every chat and used when current information is needed; each search call consumes a fixed amount of basic usage (Search mode forces a lookup). Page browse and agent-led interactive questionnaires for clarifications; image generation and video (Veo) are available where enabled
+- **Tools** — web search (Exa) is available on every chat and used when current information is needed; each search call consumes a fixed amount of basic usage (Search mode forces a lookup). Page browse and agent-led interactive questionnaires for clarifications. Image and video generation are not supported; historical tool results still render in chat history, but retired Veo download URLs are no longer served
 - **Memory & projects** — personalization memories and project-scoped context; projects can be shared with a team
 - **Teams** — organizations, seats, shared Pro or Max access (per-seat billing), and team projects
 - **Billing** — Stripe subscriptions (personal and team) plus Max Mode metered overage; scheduled cancellations keep the current paid plan through the period end, with an animated cancellation receipt. Enabling Max Mode requires an active subscription; cancellation, trial, and past-due states are not eligible. Optional self-host disable via `NEXT_PUBLIC_BILLING_DISABLED`
 - **Affiliate referrals** — shareable invite links, QR codes, milestone reset credits, and selectable paid-plan rewards (three resets or a manually sent 30% OFF coupon)
 - **Auth** — Google / GitHub sign-in, Deni AI OAuth 2.1 / OpenID Connect provider, magic link, anonymous guest, passkeys, and 2FA (better-auth)
 - **History APIs** — security and team audit logs use `{ createdAt, id }` cursors to preserve events with identical timestamps. Pass `nextCursor` unchanged when requesting another page.
+- **Ads** — Chat Home shows a 300×250 Meax ad below the composer only for confirmed Free users (including anonymous guests). Paid users and users whose plan is still loading do not load the ad SDK. The React component comes from [Meax App Ads](https://maa-sdk.dstk.jp/react/MeaxAdUnit.tsx).
 - **i18n** — English and Japanese (`next-intl`)
 - **Public guides & blog** — original articles on model choice, verification, and practical AI use, available without an account
 - **PWA** — installable progressive web app assets and service worker
@@ -27,7 +28,7 @@ Deni AI is a multi-model AI chat app for people who want strong model choice wit
 | --------- | ------------------------------------------------- |
 | Framework | Next.js 16 (App Router, React 19, React Compiler) |
 | Language  | TypeScript (strict)                               |
-| Runtime   | Bun (preferred) or Node.js 20+                    |
+| Runtime   | Node.js 22.18+ (pnpm 12.8.1)                      |
 | UI        | Tailwind CSS v4, shadcn/ui (Base UI)              |
 | API       | tRPC + TanStack Query                             |
 | DB        | PostgreSQL (Neon recommended) + Drizzle ORM       |
@@ -43,17 +44,17 @@ git clone https://github.com/deniaiapp/app.git
 cd deni-ai
 
 # Install
-bun install
+pnpm install
 
 # Configure (copy example and fill the core values plus any optional features)
-cp .env.example .env
+cp .env.example .env.local
 
 # Database
-bun run db:migrate:dev   # local: uses .env.local
-# or: bun run db:push
+pnpm run db:migrate:dev   # local: uses .env.local
+# or: pnpm run db:push
 
 # Dev server → http://localhost:3000
-bun dev
+pnpm dev
 ```
 
 Full prerequisites, environment variables, Stripe, OAuth, and deployment steps: **[SETUP.md](SETUP.md)**.
@@ -89,11 +90,11 @@ packages/        # Workspace packages (e.g. disposable-email-domains)
 See [CONTRIBUTING.md](CONTRIBUTING.md). Day-to-day development targets the **`canary`** branch; **`master`** is the release/promotion target.
 
 ```bash
-bun run lint
-bun run format
-bun run typecheck
-bun test tools/chat-regressions.test.ts
-bun run build
+pnpm run lint
+pnpm run format
+pnpm run typecheck
+pnpm test
+pnpm run build
 ```
 
 ## License

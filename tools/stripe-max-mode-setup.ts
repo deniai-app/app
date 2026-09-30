@@ -1,7 +1,7 @@
 /**
  * Idempotently create Stripe Billing Meters and metered prices for Max Mode.
  *
- * Usage: bun --env-file=.env.local ./tools/stripe-max-mode-setup.ts
+ * Usage: pnpm exec tsx --env-file=.env.local ./tools/stripe-max-mode-setup.ts
  */
 import Stripe from "stripe";
 

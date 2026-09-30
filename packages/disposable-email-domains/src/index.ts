@@ -3,7 +3,7 @@ import domains from "../data/domains.json";
 /**
  * Set of disposable email domains, sourced from
  * https://github.com/disposable-email-domains/disposable-email-domains
- * (blocklist minus allowlist). Refresh with `bun run refresh` in this package.
+ * (blocklist minus allowlist). Refresh with `pnpm run refresh` in this package.
  */
 export const disposableDomains: ReadonlySet<string> = new Set(domains as string[]);
 

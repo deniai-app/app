@@ -1,5 +1,5 @@
 import { load } from "cheerio";
-import { assertSafePublicHttpUrl } from "@/lib/network-security";
+import { assertSafePublicHttpUrl, fetchSafePublicHttpUrl } from "@/lib/network-security";
 import { createAbortError, fetchWithAbortHandling } from "./helpers";
 
 export const DEFAULT_PAGE_FETCH_TIMEOUT_MS = 12_000;
@@ -8,6 +8,38 @@ export const MIN_BROWSE_MAX_CHARS = 1_000;
 export const MAX_BROWSE_MAX_CHARS = 50_000;
 /** Cap raw HTML before parsing to avoid pathological pages. */
 const MAX_RAW_HTML_CHARS = 2_000_000;
+export const MAX_PAGE_RESPONSE_BYTES = 2_000_000;
+
+/** Limit decoded response bytes, including chunked or compressed responses. */
+export async function readBoundedResponseText(response: Response): Promise<string> {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength && Number(contentLength) > MAX_PAGE_RESPONSE_BYTES) {
+    await response.body?.cancel();
+    throw new Error("Page response is too large.");
+  }
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
+  let totalBytes = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_PAGE_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new Error("Page response is too large.");
+      }
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+    chunks.push(decoder.decode());
+    return chunks.join("");
+  } finally {
+    reader.releaseLock();
+  }
+}
 const MAX_REDIRECTS = 5;
 const READER_TIMEOUT_MS = 20_000;
 
@@ -200,15 +232,14 @@ async function fetchWithSafeRedirects(
   let current = await assertSafePublicHttpUrl(url);
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const response = await fetchWithAbortHandling(current.toString(), {
+    const response = await fetchSafePublicHttpUrl(current.toString(), {
       headers: BROWSER_HEADERS,
       signal,
-      redirect: "manual",
     });
     if (!response.ok) {
       if (REDIRECT_STATUSES.has(response.status)) {
         const location = response.headers.get("location");
-        void response.arrayBuffer().catch(() => undefined);
+        await response.body?.cancel();
 
         if (!location) {
           throw new Error(`Redirect without Location header (${response.status}).`);
@@ -225,12 +256,17 @@ async function fetchWithSafeRedirects(
         continue;
       }
 
-      void response.arrayBuffer().catch(() => undefined);
+      await response.body?.cancel();
       throw new Error(statusErrorMessage(response.status));
     }
 
     const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-    const raw = await response.text();
+    const encoding = response.headers.get("content-encoding");
+    if (encoding && encoding !== "identity") {
+      await response.body?.cancel();
+      throw new Error("Unsupported page content encoding.");
+    }
+    const raw = await readBoundedResponseText(response);
     return {
       raw,
       contentType,
@@ -333,10 +369,11 @@ async function fetchViaReader(
   });
 
   if (!response.ok) {
+    await response.body?.cancel();
     throw new Error(`Reader fallback failed (${response.status}).`);
   }
 
-  const raw = await response.text();
+  const raw = await readBoundedResponseText(response);
   if (looksLikeBlockedOrEmptyPage("reader", raw) || raw.includes("Just a moment...")) {
     throw new Error("Reader fallback returned a challenge page.");
   }

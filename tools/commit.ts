@@ -34,7 +34,7 @@ function printHelp() {
   console.log(`Commit tool
 
 Usage:
-  bun ./tools/commit.ts [options]
+  pnpm run tools:commit [options]
 
 Options:
   --it                 Alias for --all --generate-description --commit
@@ -52,12 +52,12 @@ Options:
   --help               Show this help
 
 Examples:
-  bun ./tools/commit.ts --it
-  bun ./tools/commit.ts --check
-  bun ./tools/commit.ts --all
-  bun ./tools/commit.ts --all --commit
-  bun ./tools/commit.ts --all --generate-description --commit
-  bun ./tools/commit.ts --prompt "Focus on billing checkout changes"
+  pnpm run tools:commit --it
+  pnpm run tools:commit --check
+  pnpm run tools:commit --all
+  pnpm run tools:commit --all --commit
+  pnpm run tools:commit --all --generate-description --commit
+  pnpm run tools:commit --prompt "Focus on billing checkout changes"
 `);
 }
 

@@ -2,8 +2,8 @@
  * Fetches the latest disposable-email domain lists from the upstream repo and
  * writes the deduplicated, allowlist-filtered result to `data/domains.json`.
  *
- * Usage (from this package): bun run refresh
- * Usage (from repo root):    bun run disposable:refresh
+ * Usage (from this package): pnpm run refresh
+ * Usage (from repo root):    pnpm run disposable:refresh
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";

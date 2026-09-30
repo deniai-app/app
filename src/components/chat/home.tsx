@@ -6,6 +6,7 @@ import { useExtracted } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ChatComposer, type ComposerMessage } from "@/components/chat/chat-composer";
+import { MeaxAdUnit } from "@/components/meax-ad-unit";
 import { ProjectSelect } from "@/components/projects/project-select";
 import { useAvailableModels } from "@/hooks/use-available-models";
 import { useNewChat } from "@/hooks/use-new-chat";
@@ -25,8 +26,6 @@ export type InitialMessageData = {
   }>;
   webSearch: boolean;
   model: string;
-  videoMode: boolean;
-  imageMode: boolean;
   reasoningEffort: ReasoningEffort;
   proMode: boolean;
   fastMode: boolean;
@@ -61,13 +60,11 @@ export default function ChatHome() {
   const t = useExtracted();
   const { push } = useRouter();
   const startNewChat = useNewChat();
-  const { availableModels, platformCapabilities } = useAvailableModels();
+  const { availableModels, platformCapabilities, canShowAds } = useAvailableModels();
   const { features } = platformCapabilities;
   const [input, setInput] = useState("");
   const [model, setModel] = useState(defaultModel.value);
   const [webSearch, setWebSearch] = useState(false);
-  const [videoMode, setVideoMode] = useState(false);
-  const [imageMode, setImageMode] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(() =>
     getPreferredReasoningEffort(defaultModel.efforts),
   );
@@ -80,8 +77,6 @@ export default function ChatHome() {
   const projectsQuery = trpc.projects.list.useQuery();
   const selectedModel = availableModels.find((entry) => entry.value === model);
   const effectiveWebSearch = features.webSearch && webSearch;
-  const effectiveVideoMode = features.videoGeneration && videoMode;
-  const effectiveImageMode = features.imageGeneration && imageMode;
   const effectiveDeepResearch = features.webSearch && deepResearch;
 
   // Fall back when the current selection is not allowed on this plan.
@@ -107,8 +102,6 @@ export default function ChatHome() {
     options: {
       model: string;
       webSearch: boolean;
-      videoMode: boolean;
-      imageMode: boolean;
       reasoningEffort: ReasoningEffort;
       proMode: boolean;
       fastMode: boolean;
@@ -132,8 +125,6 @@ export default function ChatHome() {
         })),
         webSearch: options.webSearch,
         model: options.model,
-        videoMode: options.videoMode,
-        imageMode: options.imageMode,
         reasoningEffort: options.reasoningEffort,
         proMode: options.proMode,
         fastMode: options.fastMode,
@@ -245,10 +236,6 @@ export default function ChatHome() {
             webSearch={effectiveWebSearch}
             onWebSearchChange={(enabled) => setWebSearch(enabled && features.webSearch)}
             webSearchAvailable={features.webSearch}
-            videoMode={effectiveVideoMode}
-            onVideoModeChange={(enabled) => setVideoMode(enabled && features.videoGeneration)}
-            imageMode={effectiveImageMode}
-            onImageModeChange={(enabled) => setImageMode(enabled && features.imageGeneration)}
             reasoningEffort={reasoningEffort}
             onReasoningEffortChange={setReasoningEffort}
             proMode={proMode}
@@ -259,6 +246,12 @@ export default function ChatHome() {
             onDeepResearchChange={(enabled) => setDeepResearch(enabled && features.webSearch)}
           />
         </div>
+
+        {canShowAds && (
+          <aside aria-label={t("Advertisement")} className="flex justify-center">
+            <MeaxAdUnit appId="app-23f69d025b5b" unitId="unit-0125557542ea" size="300x250" />
+          </aside>
+        )}
       </div>
     </section>
   );

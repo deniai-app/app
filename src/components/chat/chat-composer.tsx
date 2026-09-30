@@ -28,8 +28,6 @@ export interface ChatComposerProps {
     options: {
       model: string;
       webSearch: boolean;
-      videoMode: boolean;
-      imageMode: boolean;
       reasoningEffort: ReasoningEffort;
       proMode: boolean;
       fastMode: boolean;
@@ -49,10 +47,6 @@ export interface ChatComposerProps {
   webSearch: boolean;
   onWebSearchChange: (enabled: boolean) => void;
   webSearchAvailable?: boolean;
-  videoMode: boolean;
-  onVideoModeChange: (enabled: boolean) => void;
-  imageMode: boolean;
-  onImageModeChange: (enabled: boolean) => void;
   reasoningEffort: ReasoningEffort;
   onReasoningEffortChange: (effort: ReasoningEffort) => void;
   proMode: boolean;
@@ -80,10 +74,6 @@ export function ChatComposer({
   webSearch,
   onWebSearchChange,
   webSearchAvailable = true,
-  videoMode,
-  onVideoModeChange,
-  imageMode,
-  onImageModeChange,
   reasoningEffort,
   onReasoningEffortChange,
   proMode,
@@ -117,28 +107,8 @@ export function ChatComposer({
     return () => window.removeEventListener("deni:focus-composer", handleFocusComposer);
   }, [globalDrop]);
 
-  const handleVideoToggle = (enabled: boolean) => {
-    onVideoModeChange(enabled);
-    if (enabled) {
-      onWebSearchChange(false);
-      onImageModeChange(false);
-    }
-  };
-
-  const handleImageToggle = (enabled: boolean) => {
-    onImageModeChange(enabled);
-    if (enabled) {
-      onWebSearchChange(false);
-      onVideoModeChange(false);
-    }
-  };
-
   const handleSearchToggle = (enabled: boolean) => {
     onWebSearchChange(enabled);
-    if (enabled) {
-      onVideoModeChange(false);
-      onImageModeChange(false);
-    }
     if (!enabled) {
       onDeepResearchChange(false);
     }
@@ -148,8 +118,6 @@ export function ChatComposer({
     onDeepResearchChange(enabled);
     if (enabled) {
       onWebSearchChange(true);
-      onVideoModeChange(false);
-      onImageModeChange(false);
     }
   };
 
@@ -157,8 +125,6 @@ export function ChatComposer({
     onSubmit(message, {
       model,
       webSearch,
-      videoMode,
-      imageMode,
       reasoningEffort,
       proMode: supportsProMode && proMode,
       fastMode: supportsFastMode && fastMode,
@@ -179,14 +145,6 @@ export function ChatComposer({
     },
   );
 
-  const resolvedPlaceholder =
-    placeholder ??
-    (videoMode
-      ? t("Describe the video scene, style, motion, and lighting.")
-      : imageMode
-        ? t("Describe the image you want to generate.")
-        : undefined);
-
   return (
     <div ref={composerRef}>
       <Composer
@@ -196,7 +154,7 @@ export function ChatComposer({
         bottomContent={bottomContent}
         globalDrop={globalDrop}
         multiple
-        placeholder={resolvedPlaceholder}
+        placeholder={placeholder}
         headerClassName="py-0.5!"
         value={value}
         onValueChange={onValueChange}
@@ -224,10 +182,6 @@ export function ChatComposer({
         voiceInput={<ChatComposerVoiceInput value={value} onValueChange={onValueChange} />}
         tools={
           <ChatComposerTools
-            videoMode={videoMode}
-            onVideoToggle={handleVideoToggle}
-            imageMode={imageMode}
-            onImageToggle={handleImageToggle}
             webSearch={webSearch}
             onSearchToggle={handleSearchToggle}
             deepResearch={deepResearch}

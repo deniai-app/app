@@ -1,9 +1,10 @@
-import { and, eq, isNull, lt } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db/drizzle";
 import { apiKey, deviceAuthCode } from "@/db/schema";
+import { MAX_API_KEYS, withApiKeyLock, type ApiKeyTransaction } from "@/lib/api-key-quota";
 import { generateApiKey, getKeyPrefix, hashApiKey } from "@/lib/api-key-utils";
 import { auth } from "@/lib/auth";
 import { decryptFromB64 } from "@/lib/crypto";
@@ -23,8 +24,8 @@ function generateDeviceCode(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function listUserApiKeys(userId: string) {
-  return db
+async function listUserApiKeys(userId: string, database: ApiKeyTransaction) {
+  return database
     .select({
       id: apiKey.id,
       name: apiKey.name,
@@ -37,12 +38,12 @@ async function listUserApiKeys(userId: string) {
     .orderBy(apiKey.createdAt);
 }
 
-async function apiKeyLimitResponse(userId: string, status: 403 | 409) {
+async function apiKeyLimitResponse(userId: string, status: 403 | 409, database: ApiKeyTransaction) {
   return NextResponse.json(
     {
       code: "API_KEY_LIMIT_REACHED",
       error: "Maximum of 5 API keys allowed. Revoke an existing key first.",
-      apiKeys: await listUserApiKeys(userId),
+      apiKeys: await listUserApiKeys(userId, database),
     },
     { status },
   );
@@ -56,12 +57,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const action = z
-    .object({
-      action: z.enum(["initiate", "approve", "poll"]),
-    })
-    .safeParse(body);
-
+  const action = z.object({ action: z.enum(["initiate", "approve", "poll"]) }).safeParse(body);
   if (!action.success) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
@@ -76,7 +72,7 @@ export async function POST(req: Request) {
   }
 }
 
-/** Extension calls this to start the flow. Returns userCode (shown to user) and deviceCode (for polling). */
+/** Extension starts the flow; the separate deviceCode is its polling secret. */
 async function handleInitiate(req: Request) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const rateCheck = await checkRateLimit({
@@ -91,23 +87,15 @@ async function handleInitiate(req: Request) {
     );
   }
 
-  // Clean up expired codes to prevent DB bloat
   await db.delete(deviceAuthCode).where(lt(deviceAuthCode.expiresAt, new Date()));
-
   const userCode = generateUserCode();
   const deviceCode = generateDeviceCode();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-  await db.insert(deviceAuthCode).values({
-    userCode,
-    deviceCode,
-    expiresAt,
-  });
-
+  await db.insert(deviceAuthCode).values({ userCode, deviceCode, expiresAt });
   return NextResponse.json({ userCode, deviceCode, expiresIn: 900 });
 }
 
-/** User clicks "Approve" on the web page. Requires session. */
+/** Approval and any requested key revocation either both commit or both roll back. */
 async function handleApprove(body: unknown) {
   const parsed = z
     .object({
@@ -124,8 +112,7 @@ async function handleApprove(body: unknown) {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  if (session?.user?.isAnonymous) {
+  if (session.user.isAnonymous) {
     return NextResponse.json(
       {
         error:
@@ -136,86 +123,51 @@ async function handleApprove(body: unknown) {
     );
   }
 
-  const [row] = await db
-    .select()
-    .from(deviceAuthCode)
-    .where(eq(deviceAuthCode.userCode, parsed.data.userCode))
-    .limit(1);
-
-  if (!row) {
-    return NextResponse.json({ error: "Invalid code" }, { status: 404 });
-  }
-
-  if (row.expiresAt < new Date()) {
-    return NextResponse.json({ error: "Code expired" }, { status: 410 });
-  }
-
-  if (row.approved) {
-    return NextResponse.json({ error: "Already approved" }, { status: 409 });
-  }
-
-  const existingKeys = await listUserApiKeys(userId);
-
-  if (existingKeys.length >= 5) {
-    const revokeKeyId = parsed.data.revokeKeyId;
-
-    if (!revokeKeyId) {
-      return apiKeyLimitResponse(userId, 409);
+  return withApiKeyLock(db, userId, async (transaction) => {
+    const [row] = await transaction
+      .select()
+      .from(deviceAuthCode)
+      .where(eq(deviceAuthCode.userCode, parsed.data.userCode))
+      .limit(1)
+      .for("update");
+    if (!row) {
+      return NextResponse.json({ error: "Invalid code" }, { status: 404 });
     }
-
-    const deletedKeys = await db
-      .delete(apiKey)
-      .where(and(eq(apiKey.id, revokeKeyId), eq(apiKey.userId, userId)))
-      .returning({
-        id: apiKey.id,
-        userId: apiKey.userId,
-        name: apiKey.name,
-        keyHash: apiKey.keyHash,
-        keyPrefix: apiKey.keyPrefix,
-        lastUsedAt: apiKey.lastUsedAt,
-        expiresAt: apiKey.expiresAt,
-        createdAt: apiKey.createdAt,
-      });
-
-    const deletedKey = deletedKeys[0];
-
-    if (!deletedKey) {
-      return NextResponse.json({ error: "API key not found." }, { status: 404 });
+    if (row.expiresAt < new Date()) {
+      return NextResponse.json({ error: "Code expired" }, { status: 410 });
     }
-
-    const approved = await db
-      .update(deviceAuthCode)
-      .set({ approved: true, userId })
-      .where(and(eq(deviceAuthCode.id, row.id), eq(deviceAuthCode.approved, false)))
-      .returning({ id: deviceAuthCode.id });
-
-    if (approved.length === 0) {
-      await db.insert(apiKey).values(deletedKey);
+    if (row.approved) {
       return NextResponse.json({ error: "Already approved" }, { status: 409 });
     }
-  } else {
-    const approved = await db
+
+    const existingKeys = await listUserApiKeys(userId, transaction);
+    if (existingKeys.length >= MAX_API_KEYS) {
+      if (!parsed.data.revokeKeyId) {
+        return apiKeyLimitResponse(userId, 409, transaction);
+      }
+      const deleted = await transaction
+        .delete(apiKey)
+        .where(and(eq(apiKey.id, parsed.data.revokeKeyId), eq(apiKey.userId, userId)))
+        .returning({ id: apiKey.id });
+      if (!deleted[0]) {
+        return NextResponse.json({ error: "API key not found." }, { status: 404 });
+      }
+    }
+
+    await transaction
       .update(deviceAuthCode)
       .set({ approved: true, userId })
-      .where(and(eq(deviceAuthCode.id, row.id), eq(deviceAuthCode.approved, false)))
-      .returning({ id: deviceAuthCode.id });
-
-    if (approved.length === 0) {
-      return NextResponse.json({ error: "Already approved" }, { status: 409 });
-    }
-  }
-
-  return NextResponse.json({ success: true });
+      .where(eq(deviceAuthCode.id, row.id));
+    return NextResponse.json({ success: true });
+  });
 }
 
-/** Extension polls with deviceCode. Once approved, generates API key and returns it once. */
+/** Issue at most one key per device code while sharing the account quota lock. */
 async function handlePoll(body: unknown) {
   const parsed = z.object({ deviceCode: z.string().min(1) }).safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-
-  // Rate limit poll requests per deviceCode
   const rateCheck = await checkRateLimit({
     key: `device-poll:${parsed.data.deviceCode}`,
     windowMs: 10_000,
@@ -228,84 +180,68 @@ async function handlePoll(body: unknown) {
     );
   }
 
-  const [row] = await db
+  const [initialRow] = await db
     .select()
     .from(deviceAuthCode)
     .where(eq(deviceAuthCode.deviceCode, parsed.data.deviceCode))
     .limit(1);
-
-  if (!row) {
+  if (!initialRow) {
     return NextResponse.json({ error: "Invalid device code" }, { status: 404 });
   }
-
-  if (row.expiresAt < new Date()) {
-    await db.delete(deviceAuthCode).where(eq(deviceAuthCode.id, row.id));
+  if (initialRow.expiresAt < new Date()) {
+    await db.delete(deviceAuthCode).where(eq(deviceAuthCode.id, initialRow.id));
     return NextResponse.json({ error: "Code expired" }, { status: 410 });
   }
-
-  if (!row.approved || !row.userId) {
+  if (!initialRow.approved || !initialRow.userId) {
     return NextResponse.json({ approved: false });
   }
+  const userId = initialRow.userId;
 
-  if (row.issuedApiKeyEnc) {
-    const claimed = await db
-      .update(deviceAuthCode)
-      .set({
-        issuedApiKeyEnc: null,
-      })
-      .where(
-        and(eq(deviceAuthCode.id, row.id), eq(deviceAuthCode.issuedApiKeyEnc, row.issuedApiKeyEnc)),
-      )
-      .returning({ id: deviceAuthCode.id });
-
-    if (!claimed[0]) {
+  return withApiKeyLock(db, userId, async (transaction) => {
+    // Re-read after acquiring the account lock: a concurrent poll may have issued it.
+    const [row] = await transaction
+      .select()
+      .from(deviceAuthCode)
+      .where(eq(deviceAuthCode.id, initialRow.id))
+      .limit(1)
+      .for("update");
+    if (!row) {
+      return NextResponse.json({ error: "Invalid device code" }, { status: 404 });
+    }
+    if (row.expiresAt < new Date()) {
+      await transaction.delete(deviceAuthCode).where(eq(deviceAuthCode.id, row.id));
+      return NextResponse.json({ error: "Code expired" }, { status: 410 });
+    }
+    if (row.issuedApiKeyEnc) {
+      const raw = await decryptFromB64(row.issuedApiKeyEnc);
+      await transaction
+        .update(deviceAuthCode)
+        .set({ issuedApiKeyEnc: null })
+        .where(eq(deviceAuthCode.id, row.id));
+      return NextResponse.json({ approved: true, apiKey: raw });
+    }
+    if (row.issuedApiKeyId) {
       return NextResponse.json({ approved: true, apiKeyUnavailable: true });
     }
+    const existingKeys = await listUserApiKeys(userId, transaction);
+    if (existingKeys.length >= MAX_API_KEYS) {
+      return apiKeyLimitResponse(userId, 403, transaction);
+    }
 
-    return NextResponse.json({
-      approved: true,
-      apiKey: await decryptFromB64(row.issuedApiKeyEnc),
-    });
-  }
-
-  const existingKeys = await listUserApiKeys(row.userId);
-
-  if (existingKeys.length >= 5) {
-    return apiKeyLimitResponse(row.userId, 403);
-  }
-
-  if (row.issuedApiKeyId) {
-    return NextResponse.json({ approved: true, apiKeyUnavailable: true });
-  }
-
-  const raw = generateApiKey();
-  const keyHash = await hashApiKey(raw);
-  const keyPrefix = getKeyPrefix(raw);
-
-  const [inserted] = await db
-    .insert(apiKey)
-    .values({
-      userId: row.userId,
-      name: "Flixa Extension",
-      keyHash,
-      keyPrefix,
-    })
-    .returning({ id: apiKey.id });
-
-  const issued = await db
-    .update(deviceAuthCode)
-    .set({
-      issuedApiKeyId: inserted.id,
-      issuedAt: new Date(),
-    })
-    .where(and(eq(deviceAuthCode.id, row.id), isNull(deviceAuthCode.issuedApiKeyId)))
-    .returning({ id: deviceAuthCode.id });
-
-  if (issued.length === 0) {
-    await db.delete(apiKey).where(eq(apiKey.id, inserted.id));
-
-    return NextResponse.json({ approved: true, apiKeyUnavailable: true });
-  }
-
-  return NextResponse.json({ approved: true, apiKey: raw, apiKeyId: inserted.id });
+    const raw = generateApiKey();
+    const [inserted] = await transaction
+      .insert(apiKey)
+      .values({
+        userId,
+        name: "Flixa Extension",
+        keyHash: await hashApiKey(raw),
+        keyPrefix: getKeyPrefix(raw),
+      })
+      .returning({ id: apiKey.id });
+    await transaction
+      .update(deviceAuthCode)
+      .set({ issuedApiKeyId: inserted.id, issuedAt: new Date() })
+      .where(eq(deviceAuthCode.id, row.id));
+    return NextResponse.json({ approved: true, apiKey: raw, apiKeyId: inserted.id });
+  });
 }

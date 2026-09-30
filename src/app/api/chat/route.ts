@@ -186,8 +186,6 @@ export async function POST(req: Request) {
     reasoningEffort = "high",
     proMode: requestedProMode = false,
     fastMode: requestedFastMode = false,
-    video: videoMode = false,
-    image: imageMode = false,
     deepResearch = false,
     responseStyle,
     forceWebSearch = false,
@@ -251,10 +249,7 @@ export async function POST(req: Request) {
     usesOpenRouter,
   );
 
-  const videoModeEnabled = platformCapabilities.features.videoGeneration && videoMode;
-  const imageModeEnabled = platformCapabilities.features.imageGeneration && imageMode;
-  const webSearchEnabled =
-    platformCapabilities.features.webSearch && !videoModeEnabled && !imageModeEnabled;
+  const webSearchEnabled = platformCapabilities.features.webSearch;
   const deepResearchEnabled = webSearchEnabled && deepResearch;
   // Explicit Search (or a retry that requests search) still forces at least one lookup.
   const forceWebSearchEnabled = webSearchEnabled && (forceWebSearch || webSearch);
@@ -262,9 +257,6 @@ export async function POST(req: Request) {
   // Reported to Stripe once after reconciliation; meter events cannot be reduced.
   let pendingMaxModeAmount = 0;
   const tools = createChatTools({
-    userId,
-    videoMode: videoModeEnabled,
-    imageMode: imageModeEnabled,
     webSearch: webSearchEnabled,
     usage: {
       userId,
@@ -484,8 +476,6 @@ export async function POST(req: Request) {
     webSearchEnabled,
     deepResearch: deepResearchEnabled,
     forceWebSearch: forceWebSearchEnabled,
-    videoMode: videoModeEnabled,
-    imageMode: imageModeEnabled,
   });
 
   let requestMessages: ModelMessage[] = modelMessages;
@@ -505,7 +495,7 @@ export async function POST(req: Request) {
     });
   }, 1000);
 
-  let result: ReturnType<typeof streamText>;
+  let result: ReturnType<typeof streamText<typeof tools>>;
 
   try {
     if (usageUnit === "tokens") {
@@ -533,11 +523,6 @@ export async function POST(req: Request) {
       abortSignal: generationAbortController.signal,
       stopWhen: stepCountIs(50),
       tools,
-      toolChoice: videoModeEnabled
-        ? { type: "tool", toolName: "video" }
-        : imageModeEnabled
-          ? { type: "tool", toolName: "image" }
-          : undefined,
       onFinish: ({ totalUsage }) => {
         const { weighted, breakdown } = computeWeightedUsageFromLanguageModelUsage(totalUsage);
         const inputTokens = getUsageInputTokens(totalUsage, breakdown);

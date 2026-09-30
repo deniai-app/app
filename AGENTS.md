@@ -1,6 +1,6 @@
 # Agent guide for deni-ai
 
-Bun, Next.js App Router, React Compiler, strict TypeScript, Tailwind v4,
+pnpm, Node.js 22.18+, Next.js App Router, React Compiler, strict TypeScript, Tailwind v4,
 shadcn/ui, Drizzle/Postgres, and better-auth.
 
 ## Task boundaries
@@ -18,14 +18,14 @@ requested; see the Git policy below.
 
 Read these when relevant rather than loading the whole project:
 
-- Commands and dependency versions: `package.json` (Bun preferred).
+- Commands and dependency versions: `package.json` (pnpm required).
 - Environment validation: `src/env.ts`; setup: `.env.example` and `SETUP.md`.
   Optional empty strings are treated as unset. Never hardcode secrets.
 - Database: `src/db/schema/`, `src/db/schema/index.ts`, `drizzle.config.ts`;
   generated SQL: `migrations/`. Runtime uses a pooled Postgres URL.
 - Auth: `src/lib/auth.ts` and `src/lib/auth-client.ts`.
   Change the client baseURL only when requested.
-  `bun run auth:generate` overwrites `src/db/schema/auth-schema.ts`.
+  `pnpm run auth:generate` overwrites `src/db/schema/auth-schema.ts`.
 - Task-specific workflows: `.agents/skills/`; load only the applicable skill and
   references.
 
@@ -50,11 +50,11 @@ Choose checks that establish the changed behavior:
 
 - Documentation/skill-only edits: check formatting, links, and instruction
   consistency; no app build or dev server is needed.
-- Code changes: `bun run lint`, `bun run format`, and `bun run typecheck`.
+- Code changes: `pnpm run lint`, `pnpm run format`, and `pnpm run typecheck`.
   Review formatter changes for unrelated edits.
-- Runtime/UI changes: use an existing dev server or `bun dev` and exercise the
-  affected route. Use `bun run build` for build/prerender/configuration changes.
-- Schema changes: `bun run db:generate`, then inspect the generated SQL.
+- Runtime/UI changes: use an existing dev server or `pnpm dev` and exercise the
+  affected route. Use `pnpm run build` for build/prerender/configuration changes.
+- Schema changes: `pnpm run db:generate`, then inspect the generated SQL.
   Apply migrations only when requested for the target environment:
   `db:migrate:dev` loads `.env.local`; `db:migrate` loads `.env.production`.
   Do not infer permission to apply migrations or use `db:push` from schema edits.

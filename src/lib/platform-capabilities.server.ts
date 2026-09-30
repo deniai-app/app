@@ -30,7 +30,7 @@ export const platformCapabilities = {
     openai: hasOpenRouter || hasVoids,
     anthropic: hasAnthropic || hasOpenRouter || hasVoids,
     // Platform Gemini chat models are routed through OpenRouter; the Google
-    // key gates native image, video, and memory features below.
+    // key gates memory below.
     google: hasOpenRouter,
     xai: hasOpenRouter,
     groq: hasGroq,
@@ -38,8 +38,6 @@ export const platformCapabilities = {
   },
   features: {
     webSearch: hasValue(env.EXA_API_KEY),
-    imageGeneration: hasGoogle,
-    videoGeneration: hasGoogle,
     memory: hasGoogle,
     billing: hasStripeSecret && hasStripePublishableKey && !billingExplicitlyDisabled,
   },

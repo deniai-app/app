@@ -5,7 +5,7 @@ description: Synchronize English and Japanese message catalogs when updating tra
 
 Sync translations between `messages/en.json` and `messages/ja.json`.
 
-1. Run `bun run build` before reading the translation files so extracted messages are current.
+1. Run `pnpm run build` before reading the translation files so extracted messages are current.
 2. Read `messages/en.json` and `messages/ja.json`.
 3. Add any keys present in `en.json` but missing in `ja.json`.
 4. Fill any `ja.json` values that are empty strings using natural Japanese.

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { billingPlans, getPlanTier, isIndividualPlanId, isTeamPlanId } from "../src/lib/billing";
 
 describe("billing plan ID guards", () => {

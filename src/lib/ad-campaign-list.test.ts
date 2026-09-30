@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import { campaignGroup, paginateCampaigns } from "./ad-campaign-list";
 
 const now = Date.parse("2026-01-15T00:00:00Z");

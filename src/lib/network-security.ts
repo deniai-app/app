@@ -1,8 +1,11 @@
 import { lookup } from "node:dns/promises";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
+import { Readable } from "node:stream";
 
-function normalizeIpAddress(address: string) {
-  return address.toLowerCase().startsWith("::ffff:") ? address.slice(7) : address;
+function unbracketHostname(hostname: string) {
+  return hostname.replace(/^\[|\]$/g, "");
 }
 
 /**
@@ -65,25 +68,36 @@ function isPrivateIpv4(address: string) {
 }
 
 function isPrivateIpv6(address: string) {
-  const normalized = address.toLowerCase();
+  // URL canonicalization converts dotted mapped addresses and expanded forms
+  // into the same hexadecimal representation before range checks.
+  const normalized = unbracketHostname(new URL(`http://[${address}]/`).hostname);
+  const [left, right] = normalized.split("::");
+  const head = left ? left.split(":") : [];
+  const tail = right ? right.split(":") : [];
+  const blocks = (
+    right !== undefined
+      ? [...head, ...Array<string>(8 - head.length - tail.length).fill("0"), ...tail]
+      : head
+  ).map((part) => Number.parseInt(part, 16));
+
+  if (blocks.slice(0, 5).every((part) => part === 0) && blocks[5] === 0xffff) {
+    const ipv4 = [blocks[6] >> 8, blocks[6] & 255, blocks[7] >> 8, blocks[7] & 255].join(".");
+    return isPrivateIpv4(ipv4);
+  }
+
+  // Only global unicast (2000::/3). Exclude special assignments, documentation,
+  // and transition mechanisms that can embed a non-public IPv4 destination.
   return (
-    normalized === "::" ||
-    normalized === "::1" ||
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd") ||
-    normalized.startsWith("fe8") ||
-    normalized.startsWith("fe9") ||
-    normalized.startsWith("fea") ||
-    normalized.startsWith("feb") ||
-    normalized.startsWith("::ffff:127.") ||
-    normalized.startsWith("::ffff:10.") ||
-    normalized.startsWith("::ffff:192.168.") ||
-    normalized.startsWith("::ffff:169.254.")
+    (blocks[0] & 0xe000) !== 0x2000 ||
+    (blocks[0] === 0x2001 && blocks[1] < 0x0200) ||
+    (blocks[0] === 0x2001 && blocks[1] === 0x0db8) ||
+    blocks[0] === 0x2002 ||
+    (blocks[0] === 0x3fff && (blocks[1] & 0xf000) === 0)
   );
 }
 
 export function isPrivateIpAddress(address: string) {
-  const normalized = normalizeIpAddress(address);
+  const normalized = unbracketHostname(address).toLowerCase();
   const version = isIP(normalized);
 
   if (version === 4) {
@@ -94,16 +108,17 @@ export function isPrivateIpAddress(address: string) {
     return isPrivateIpv6(normalized);
   }
 
-  return false;
+  return true; // Invalid DNS answers must fail closed.
 }
 
 export function isBlockedHostnameLiteral(hostname: string) {
-  const normalized = hostname.trim().toLowerCase();
+  const normalized = unbracketHostname(hostname.trim().toLowerCase()).replace(/\.$/, "");
   return (
     normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
     normalized.endsWith(".internal") ||
     normalized.endsWith(".local") ||
-    isPrivateIpAddress(normalized)
+    (isIP(normalized) !== 0 && isPrivateIpAddress(normalized))
   );
 }
 
@@ -140,8 +155,8 @@ export async function resolvesToPrivateNetwork(hostname: string) {
   }
 
   try {
-    const addresses = await lookup(hostname, { all: true, verbatim: true });
-    return addresses.some((entry) => isPrivateIpAddress(entry.address));
+    const addresses = await lookup(unbracketHostname(hostname), { all: true, verbatim: true });
+    return addresses.length === 0 || addresses.some((entry) => isPrivateIpAddress(entry.address));
   } catch {
     return true;
   }
@@ -169,4 +184,62 @@ export async function assertSafePublicHttpUrl(url: string) {
   }
 
   return parsed;
+}
+
+/** A GET whose socket uses only the DNS answers that were validated here. */
+export async function fetchSafePublicHttpUrl(
+  url: string,
+  options: { headers?: HeadersInit; signal?: AbortSignal } = {},
+): Promise<Response> {
+  const parsed = await assertSafePublicHttpUrl(url);
+  const hostname = unbracketHostname(parsed.hostname);
+  const addresses = await lookup(hostname, { all: true, verbatim: true });
+  if (addresses.length === 0 || addresses.some((entry) => isPrivateIpAddress(entry.address))) {
+    throw new Error("Private network URLs are not allowed.");
+  }
+  const address = addresses[0];
+  const headers = Object.fromEntries(new Headers(options.headers));
+  headers["accept-encoding"] = "identity";
+
+  return new Promise((resolve, reject) => {
+    const request = parsed.protocol === "https:" ? httpsRequest : httpRequest;
+    const outgoing = request(
+      parsed,
+      {
+        headers,
+        signal: options.signal,
+        // No pooled socket or second DNS lookup can escape the validated set.
+        agent: false,
+        lookup: (_hostname, lookupOptions, callback) =>
+          callback(null, lookupOptions.all ? addresses : address.address, address.family),
+      },
+      (incoming) => {
+        const responseHeaders = new Headers();
+        for (const [name, value] of Object.entries(incoming.headers)) {
+          if (value !== undefined) {
+            responseHeaders.set(name, Array.isArray(value) ? value.join(", ") : value);
+          }
+        }
+        const status = incoming.statusCode ?? 502;
+        if (status === 204 || status === 205 || status === 304) {
+          incoming.resume();
+          resolve(new Response(null, { status, headers: responseHeaders }));
+          return;
+        }
+        resolve(
+          new Response(
+            Readable.toWeb(incoming, {
+              strategy: { highWaterMark: 64 * 1024, size: (chunk: Uint8Array) => chunk.byteLength },
+            }) as ReadableStream<Uint8Array>,
+            {
+              status,
+              headers: responseHeaders,
+            },
+          ),
+        );
+      },
+    );
+    outgoing.on("error", reject);
+    outgoing.end();
+  });
 }

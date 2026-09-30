@@ -14,11 +14,11 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   poweredByHeader: false,
   // Docker / Dokploy sets SKIP_TYPECHECK=1 so tsc does not contend with Turbopack
-  // on small VPS CPUs. Run `bun run typecheck` locally or in CI instead.
+  // on small VPS CPUs. Run `pnpm run typecheck` locally or in CI instead.
   typescript: {
     ignoreBuildErrors: skipTypecheck,
   },
-  // Keep server dependencies inside the standalone bundle. Bun's isolated
+  // Keep server dependencies inside the standalone bundle. An isolated
   // virtual store can otherwise leave Turbopack external aliases unresolved
   // after the standalone output is copied into the runtime image.
   transpilePackages: [
@@ -59,7 +59,7 @@ const nextConfig: NextConfig = {
       {
         key: "Content-Security-Policy",
         value:
-          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://www.googletagmanager.com https://js.stripe.com https://*.js.stripe.com https://pagead2.googlesyndication.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss: https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net; frame-src https://challenges.cloudflare.com https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; object-src 'none'; base-uri 'self'",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://www.googletagmanager.com https://js.stripe.com https://*.js.stripe.com https://pagead2.googlesyndication.com https://static.cloudflareinsights.com https://maa-sdk.dstk.jp; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss: https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net; frame-src https://challenges.cloudflare.com https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; object-src 'none'; base-uri 'self'",
       },
     ];
 

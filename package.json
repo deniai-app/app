@@ -2,9 +2,7 @@
   "name": "deni-ai",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "packages/*"
-  ],
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,18 +13,19 @@
     "typecheck": "tsc --noEmit",
     "auth:generate": "auth generate --output src/db/schema/auth-schema.ts --yes",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "bun run --env-file=.env.production drizzle-kit migrate",
-    "db:migrate:dev": "bun run --env-file=.env.local drizzle-kit migrate",
-    "oauth:example": "bun examples/sign-in-with-deni-ai.ts",
-    "oauth:test": "bun run --env-file=.env.local tools/test-deni-ai-oauth.ts",
+    "db:migrate": "node --env-file=.env.production ./node_modules/drizzle-kit/bin.cjs migrate",
+    "db:migrate:dev": "node --env-file=.env.local ./node_modules/drizzle-kit/bin.cjs migrate",
+    "oauth:example": "tsx --env-file-if-exists=.env.local examples/sign-in-with-deni-ai.ts",
+    "oauth:test": "tsx --env-file=.env.local tools/test-deni-ai-oauth.ts",
     "db:push": "drizzle-kit push",
-    "tools:codename": "bun ./tools/codename-generator.ts",
-    "tools:update-types": "bun ./tools/update-types.ts",
-    "tools:stripe-max-mode": "bun ./tools/stripe-max-mode-setup.ts",
-    "tools:commit": "bun ./tools/commit.ts",
-    "tools:purge-anonymous": "bun --env-file=.env.production ./tools/purge-anonymous.ts",
-    "disposable:refresh": "bun run --filter @deni-ai/disposable-email-domains refresh",
-    "doctor": "npx react-doctor@latest"
+    "tools:codename": "tsx --env-file-if-exists=.env.local ./tools/codename-generator.ts",
+    "tools:update-types": "tsx ./tools/update-types.ts",
+    "tools:stripe-max-mode": "tsx --env-file-if-exists=.env.local ./tools/stripe-max-mode-setup.ts",
+    "tools:commit": "tsx --env-file-if-exists=.env.local ./tools/commit.ts",
+    "tools:purge-anonymous": "tsx --env-file=.env.production ./tools/purge-anonymous.ts",
+    "disposable:refresh": "pnpm --filter @deni-ai/disposable-email-domains refresh",
+    "test": "vitest run",
+    "doctor": "react-doctor"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.69",
@@ -112,15 +111,13 @@
     "oxlint": "^1.86.0",
     "react-doctor": "^0.9.14",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
     "tw-animate-css": "^1.4.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   },
-  "overrides": {
-    "@tanstack/query-core": "5.102.8"
+  "engines": {
+    "node": ">=22.18.0"
   },
-  "trustedDependencies": [
-    "@parcel/watcher",
-    "@swc/core",
-    "core-js"
-  ]
+  "packageManager": "pnpm@12.8.1"
 }

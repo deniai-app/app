@@ -3,8 +3,8 @@
  * domain is on the disposable-email blocklist.
  *
  * Usage:
- *   bun run scripts/cleanup-disposable-users.ts          # dry-run
- *   bun run scripts/cleanup-disposable-users.ts --apply  # actually delete
+ *   pnpm exec tsx --env-file-if-exists=.env.local scripts/cleanup-disposable-users.ts          # dry-run
+ *   pnpm exec tsx --env-file-if-exists=.env.local scripts/cleanup-disposable-users.ts --apply  # actually delete
  *
  * Reads DATABASE_URL directly to avoid pulling the full @/env Zod schema
  * (which requires the whole server runtime to be configured).

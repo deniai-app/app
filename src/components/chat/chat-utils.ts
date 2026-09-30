@@ -1,9 +1,5 @@
 // Common types, type guards, and utility functions for chat interfaces
 import type { ToolUIPart, UIDataTypes, UIMessagePart, UITools } from "ai";
-import {
-  imageModelValues,
-  resolveImageModelLabel as resolveKnownImageModelLabel,
-} from "@/lib/image";
 
 export type SearchResult = {
   title: string;
@@ -118,13 +114,8 @@ export function resolveImageModelLabel(
   if (modelLabel) {
     return modelLabel;
   }
-  if (imageModel && imageModelValues.includes(imageModel as (typeof imageModelValues)[number])) {
-    return resolveKnownImageModelLabel(imageModel as (typeof imageModelValues)[number]);
-  }
-  switch (imageModel) {
-    default:
-      return imageModel ?? null;
-  }
+  // Keep labels for historical results without retaining generation models.
+  return imageModel === "gemini-2.5-flash-image" ? "Nano Banana" : (imageModel ?? null);
 }
 
 export function resolveVeoModelLabel(

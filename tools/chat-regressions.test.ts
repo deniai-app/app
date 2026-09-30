@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, vi, test } from "vitest";
 import { getTableColumns } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pg-proxy";
 import { buildChatSystemPrompt } from "../src/app/api/chat/_lib/prompt";
@@ -9,10 +9,10 @@ import {
 } from "../src/server/api/history-pagination";
 
 // Keep these regression tests entirely local: no real auth, database, or exports.
-mock.module("../src/db/drizzle", () => ({ db: {} }));
-mock.module("../src/lib/auth", () => ({ auth: {} }));
-mock.module("../src/lib/account-export", () => ({ buildAccountExport: mock() }));
-mock.module("../src/lib/security-activity", () => ({ recordSecurityActivity: mock() }));
+vi.mock("../src/db/drizzle", () => ({ db: {} }));
+vi.mock("../src/lib/auth", () => ({ auth: {} }));
+vi.mock("../src/lib/account-export", () => ({ buildAccountExport: vi.fn() }));
+vi.mock("../src/lib/security-activity", () => ({ recordSecurityActivity: vi.fn() }));
 
 const { chatRouter } = await import("../src/server/api/routers/chat");
 const { accountRouter } = await import("../src/server/api/routers/account");
@@ -103,7 +103,7 @@ describe("project access on chat writes", () => {
   test("personal chat creation and removing a project remain allowed", async () => {
     const caller = chatRouter.createCaller(
       context((query) => {
-        expect(query).not.toStartWith("select");
+        expect(query.startsWith("select")).toBe(false);
         return [["chat-id"]];
       }),
     );
@@ -115,7 +115,7 @@ describe("project access on chat writes", () => {
 test("project creation persists the requested default model", async () => {
   const caller = projectsRouter.createCaller(
     context((query, params) => {
-      expect(query).toStartWith("insert");
+      expect(query.startsWith("insert")).toBe(true);
       expect(params).toContain("chosen-model");
       return [];
     }),

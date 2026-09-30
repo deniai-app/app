@@ -31,7 +31,7 @@ Day-to-day development targets **`canary`**. **`master`** is the promotion/relea
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) (preferred) or Node.js 20+
+- [Node.js 22.18+](https://nodejs.org/) and [pnpm 12.8.1](https://pnpm.io/installation)
 - PostgreSQL (we recommend [Neon](https://neon.tech/) for serverless PostgreSQL)
 - API keys and OAuth credentials as described in [SETUP.md](SETUP.md)
 
@@ -47,18 +47,18 @@ git checkout canary
 git pull origin canary
 
 # Install dependencies
-bun install
+pnpm install
 
 # Environment
 cp .env.example .env
 # Edit .env with your configuration (see SETUP.md / src/env.ts)
 
 # Database (local)
-bun run db:migrate:dev
-# or: bun run db:push
+pnpm run db:migrate:dev
+# or: pnpm run db:push
 
 # Dev server → http://localhost:3000
-bun dev
+pnpm dev
 ```
 
 ### Environment variables
@@ -84,9 +84,9 @@ Details: [SETUP.md](SETUP.md).
 4. Run checks:
 
    ```bash
-   bun run lint
-   bun run format
-   bun run typecheck
+   pnpm run lint
+   pnpm run format
+   pnpm run typecheck
    ```
 
 5. Commit with [Conventional Commits](https://www.conventionalcommits.org/)
@@ -113,10 +113,10 @@ Details: [SETUP.md](SETUP.md).
 2. **Validate**
 
    ```bash
-   bun run lint
-   bun run format
-   bun run typecheck
-   bun run build
+   pnpm run lint
+   pnpm run format
+   pnpm run typecheck
+   pnpm run build
    ```
 
 3. **Commit messages**
@@ -145,7 +145,7 @@ Details: [SETUP.md](SETUP.md).
 ### Code style
 
 - [oxlint](https://oxc.rs/docs/guide/usage/linter) + [oxfmt](https://oxc.rs/docs/guide/usage/formatter)
-- Run `bun run lint` and `bun run format` before committing
+- Run `pnpm run lint` and `pnpm run format` before committing
 - Match existing patterns; prefer named exports where the codebase does
 
 ### File naming
@@ -193,7 +193,7 @@ See [AGENTS.md](AGENTS.md) for the full i18n rules.
 shadcn/ui (Base UI). Add components with:
 
 ```bash
-bunx shadcn@latest add [component-name]
+pnpm dlx shadcn@latest add [component-name]
 ```
 
 Prefer not to hand-edit generated files under `src/components/ui/` unless necessary.
@@ -221,7 +221,7 @@ Include:
 
 - Clear title and steps to reproduce
 - Expected vs actual behavior
-- Environment (OS, browser, Bun/Node version)
+- Environment (OS, browser, Node.js/pnpm version)
 - Logs or screenshots when useful
 
 ### Feature requests

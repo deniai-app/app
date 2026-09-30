@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { buildChatSystemPrompt } from "../src/app/api/chat/_lib/prompt";
 import {
   createQuestionnaireTool,
@@ -69,9 +69,8 @@ describe("questionnaire chat tool", () => {
   });
 });
 
-test("the assistant only advertises questionnaires when the tool is available", () => {
+test("the assistant advertises questionnaires without removed generation modes", () => {
   const base = { currentDate: "2026-09-20", persistentMemory: null, projectPrompt: null };
   expect(buildChatSystemPrompt(base)).toContain("questionnaire` tool");
-  expect(buildChatSystemPrompt({ ...base, imageMode: true })).not.toContain("questionnaire` tool");
-  expect(buildChatSystemPrompt({ ...base, videoMode: true })).not.toContain("questionnaire` tool");
+  expect(buildChatSystemPrompt(base)).not.toContain("Video mode");
 });

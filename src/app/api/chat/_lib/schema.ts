@@ -12,8 +12,9 @@ export const ChatRequestSchema = z.object({
   reasoningEffort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
   proMode: z.boolean().optional(),
   fastMode: z.boolean().optional(),
-  video: z.boolean().optional(),
-  image: z.boolean().optional(),
+  // Reject stale clients instead of silently turning generation into ordinary chat.
+  video: z.literal(false).optional(),
+  image: z.literal(false).optional(),
   deepResearch: z.boolean().optional(),
   responseStyle: z.enum(["retry", "detailed", "concise"]).optional(),
   forceWebSearch: z.boolean().optional(),

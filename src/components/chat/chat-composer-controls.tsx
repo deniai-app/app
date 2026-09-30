@@ -1,17 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import {
-  BrainIcon,
-  Film,
-  Globe,
-  Image as ImageIcon,
-  Lightbulb,
-  Mic,
-  Sparkle,
-  Zap,
-  XIcon,
-} from "lucide-react";
+import { BrainIcon, Globe, Lightbulb, Mic, Sparkle, Zap, XIcon } from "lucide-react";
 import { useExtracted } from "next-intl";
 import {
   PromptInputSelect,
@@ -226,10 +216,6 @@ export function ChatComposerVoiceInput({
 }
 
 export function ChatComposerTools({
-  videoMode,
-  onVideoToggle,
-  imageMode,
-  onImageToggle,
   webSearch,
   onSearchToggle,
   deepResearch,
@@ -251,10 +237,6 @@ export function ChatComposerTools({
   onProModeChange,
   proModeTitle,
 }: {
-  videoMode: boolean;
-  onVideoToggle: (enabled: boolean) => void;
-  imageMode: boolean;
-  onImageToggle: (enabled: boolean) => void;
   webSearch: boolean;
   onSearchToggle: (enabled: boolean) => void;
   deepResearch: boolean;
@@ -280,12 +262,6 @@ export function ChatComposerTools({
 
   return (
     <>
-      {videoMode && (
-        <ToolChip icon={Film} label={t("Video")} onRemove={() => onVideoToggle(false)} />
-      )}
-      {imageMode && (
-        <ToolChip icon={ImageIcon} label={t("Image")} onRemove={() => onImageToggle(false)} />
-      )}
       {webSearch && (
         <ToolChip icon={Globe} label={t("Search")} onRemove={() => onSearchToggle(false)} />
       )}

@@ -7,8 +7,6 @@ type BuildSystemPromptParams = {
   webSearchEnabled?: boolean;
   deepResearch?: boolean;
   forceWebSearch?: boolean;
-  videoMode?: boolean;
-  imageMode?: boolean;
 };
 
 export function buildChatSystemPrompt({
@@ -20,8 +18,6 @@ export function buildChatSystemPrompt({
   webSearchEnabled = false,
   deepResearch = false,
   forceWebSearch = false,
-  videoMode = false,
-  imageMode = false,
 }: BuildSystemPromptParams): string {
   const responseStyleInstruction =
     responseStyle === "detailed"
@@ -31,20 +27,18 @@ export function buildChatSystemPrompt({
         : responseStyle === "retry"
           ? "The user asked for a fresh retry of the previous answer. Preserve the intent, but vary the phrasing and structure while keeping the response accurate and useful."
           : null;
-  const forceWebSearchInstruction =
-    forceWebSearch && !videoMode && !imageMode
-      ? "Web search is required for this response. Use the search tool at least once before answering, then cite the sources you used. Use the browse tool when a specific page needs a full read."
-      : null;
-  const researchInstruction =
-    deepResearch && !videoMode && !imageMode
-      ? [
-          "Deep research mode is enabled.",
-          "Use the search tool multiple times when helpful.",
-          "Use the browse tool to open important URLs and read their full page content when snippets are insufficient.",
-          "Cross-check claims before concluding.",
-          "Return a structured report with: Summary, Key Findings, Risks or Unknowns, and Sources.",
-        ].join(" ")
-      : null;
+  const forceWebSearchInstruction = forceWebSearch
+    ? "Web search is required for this response. Use the search tool at least once before answering, then cite the sources you used. Use the browse tool when a specific page needs a full read."
+    : null;
+  const researchInstruction = deepResearch
+    ? [
+        "Deep research mode is enabled.",
+        "Use the search tool multiple times when helpful.",
+        "Use the browse tool to open important URLs and read their full page content when snippets are insufficient.",
+        "Cross-check claims before concluding.",
+        "Return a structured report with: Summary, Key Findings, Risks or Unknowns, and Sources.",
+      ].join(" ")
+    : null;
   const additionalInstructionPrompt = additionalInstruction
     ? `Additional regeneration instruction from the user: ${additionalInstruction}`
     : null;
@@ -57,16 +51,6 @@ export function buildChatSystemPrompt({
       ]
     : [];
 
-  const videoSystemPromptParts = [
-    "You are a helpful AI assistant.",
-    `Current date: ${currentDate}.`,
-    persistentMemory,
-    projectPrompt,
-    additionalInstructionPrompt,
-    "Video mode is enabled. Always call the `video` tool exactly once using the user's message as the prompt.",
-    "Do not call other tools. After the tool returns, provide a short caption for the video.",
-  ].filter((value): value is string => value != null);
-
   const defaultSystemPromptParts = [
     "You are a helpful AI assistant.",
     `Current date: ${currentDate}.`,
@@ -74,9 +58,7 @@ export function buildChatSystemPrompt({
     projectPrompt,
     "Guidelines:",
     "- Provide accurate, helpful, and concise responses.",
-    !imageMode
-      ? "- Use the `questionnaire` tool when several structured clarifications or selectable answers will help more than a prose question. Keep it short, mark genuinely optional questions optional, and continue using the user's answers after submission. A skipped answer is intentionally unanswered."
-      : null,
+    "- Use the `questionnaire` tool when several structured clarifications or selectable answers will help more than a prose question. Keep it short, mark genuinely optional questions optional, and continue using the user's answers after submission. A skipped answer is intentionally unanswered.",
     ...webSearchInstructions,
     webSearchEnabled
       ? "- If you're unsure about something that can be checked on the web, use the search tool rather than guessing. Otherwise acknowledge the uncertainty."
@@ -89,5 +71,5 @@ export function buildChatSystemPrompt({
     forceWebSearchInstruction,
   ].filter((value): value is string => value != null);
 
-  return videoMode ? videoSystemPromptParts.join(" ") : defaultSystemPromptParts.join(" ");
+  return defaultSystemPromptParts.join(" ");
 }

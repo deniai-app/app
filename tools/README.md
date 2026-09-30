@@ -1,24 +1,24 @@
 # tools
 
-Internal scripts for maintainers. Run from the **repository root** so Bun loads root env files.
+Internal scripts for maintainers. Run from the **repository root** with pnpm. Package scripts explicitly load `.env.local` when present; production maintenance uses `.env.production`.
 
-| Script                  | npm script                      | Purpose                                        |
-| ----------------------- | ------------------------------- | ---------------------------------------------- |
-| `codename-generator.ts` | `bun run tools:codename`        | Generate Deni AI version codenames             |
-| `commit.ts`             | `bun run tools:commit`          | Conventional commit messages via OpenRouter    |
-| `purge-anonymous.ts`    | `bun run tools:purge-anonymous` | Purge anonymous users (uses `.env.production`) |
+| Script                  | npm script                       | Purpose                                        |
+| ----------------------- | -------------------------------- | ---------------------------------------------- |
+| `codename-generator.ts` | `pnpm run tools:codename`        | Generate Deni AI version codenames             |
+| `commit.ts`             | `pnpm run tools:commit`          | Conventional commit messages via OpenRouter    |
+| `purge-anonymous.ts`    | `pnpm run tools:purge-anonymous` | Purge anonymous users (uses `.env.production`) |
 
 ## Commit helper
 
 Requires `OPENROUTER_API_KEY`. Generates a conventional commit message from the staged (or selected) diff. Creates a commit only when `--commit` is passed.
 
 ```sh
-bun run tools:commit --it
-bun run tools:commit --check
-bun run tools:commit --all
-bun run tools:commit --all --commit
-bun run tools:commit --all --generate-description --commit
-bun run tools:commit --all --description "Explain the checkout flow changes" --commit
+pnpm run tools:commit --it
+pnpm run tools:commit --check
+pnpm run tools:commit --all
+pnpm run tools:commit --all --commit
+pnpm run tools:commit --all --generate-description --commit
+pnpm run tools:commit --all --description "Explain the checkout flow changes" --commit
 ```
 
 - `--it` → `--all --generate-description --commit`
@@ -28,7 +28,7 @@ bun run tools:commit --all --description "Explain the checkout flow changes" --c
 ## Codename generator
 
 ```sh
-bun run tools:codename
+pnpm run tools:codename
 ```
 
 ## Purge anonymous users
@@ -36,5 +36,5 @@ bun run tools:codename
 Production maintenance. Loads `.env.production` via the package script. Prefer reviewing the script before running against live data.
 
 ```sh
-bun run tools:purge-anonymous
+pnpm run tools:purge-anonymous
 ```

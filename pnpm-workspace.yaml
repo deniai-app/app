@@ -1,0 +1,50 @@
+packages:
+  - packages/*
+
+overrides:
+  "@tanstack/query-core": 5.102.8
+  "@esbuild-kit/core-utils>esbuild": ^0.25.0
+  "uploadthing>effect": ^3.20.0
+  "@uploadthing/shared>effect": ^3.20.0
+  "@effect/platform>effect": ^3.20.0
+
+allowBuilds:
+  "@parcel/watcher": true
+  "@swc/core": true
+  core-js: true
+  esbuild: true
+  sharp: true
+  msgpackr-extract: false
+
+minimumReleaseAgeExclude:
+  - "@ai-sdk/anthropic@4.0.69"
+  - "@ai-sdk/gateway@4.0.101"
+  - "@ai-sdk/google@4.0.86"
+  - "@ai-sdk/groq@4.0.53"
+  - "@ai-sdk/mcp@2.0.63"
+  - "@ai-sdk/openai@4.0.82"
+  - "@ai-sdk/provider-utils@5.0.52"
+  - "@ai-sdk/provider@4.0.20"
+  - "@ai-sdk/react@4.0.126"
+  - "@ai-sdk/xai@5.0.13"
+  - "@eloqnt/config@0.1.1"
+  - "@eloqnt/format-po@0.1.1"
+  - "@next/env@16.3.7"
+  - "@next/swc-darwin-arm64@16.3.7"
+  - "@next/swc-darwin-x64@16.3.7"
+  - "@next/swc-linux-arm64-gnu@16.3.7"
+  - "@next/swc-linux-arm64-musl@16.3.7"
+  - "@next/swc-linux-x64-gnu@16.3.7"
+  - "@next/swc-linux-x64-musl@16.3.7"
+  - "@next/swc-win32-arm64-msvc@16.3.7"
+  - "@next/swc-win32-x64-msvc@16.3.7"
+  - "@next/third-parties@16.3.7"
+  - ai@7.0.123
+  - framer-motion@13.4.6
+  - icu-minify@4.14.8
+  - lucide-react@1.49.0
+  - motion@13.4.6
+  - next-intl-swc-plugin-extractor@4.14.8
+  - next-intl@4.14.8
+  - next@16.3.7
+  - use-intl@4.14.8

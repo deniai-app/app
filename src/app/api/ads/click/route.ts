@@ -2,17 +2,14 @@ import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { db } from "@/db/drizzle";
 import { adCampaign } from "@/db/schema";
+import { isAllowedAdClickOrigin } from "@/lib/ad-origin";
 import { auth } from "@/lib/auth";
 import { adEligible, recordAdEvent, verifyAdDelivery } from "@/lib/ads";
 import { isFreeAdViewer } from "@/lib/usage";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  if (
-    request.headers.get("sec-fetch-site") !== "same-origin" ||
-    !request.headers.get("referer")?.startsWith(url.origin + "/")
-  )
-    return new Response(null, { status: 403 });
+  if (!isAllowedAdClickOrigin(request)) return new Response(null, { status: 403 });
   const id = url.searchParams.get("id");
   if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return new Response(null, { status: 404 });
   const session = await auth.api.getSession({ headers: await headers() });

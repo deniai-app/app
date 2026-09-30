@@ -36,7 +36,7 @@ export function TeamMaxModeDefaultPolicySection({
   const t = useExtracted();
 
   return (
-    <div className="rounded-lg border bg-muted/20 p-3">
+    <div className="rounded-xl border bg-muted/20 p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium">{t("Default member policy")}</p>

@@ -173,10 +173,39 @@ function deviceRequest(action: string, fields: Record<string, string>) {
   return POST(
     new Request("http://localhost/api/device-auth", {
       method: "POST",
+      headers: { origin: "http://localhost:3000", "content-type": "application/json" },
       body: JSON.stringify({ action, ...fields }),
     }),
   );
 }
+
+test.each([null, "http://sibling.localhost:3000", "https://attacker.example"])(
+  "device approval rejects untrusted origin %s without modifying keys",
+  async (origin) => {
+    const response = await POST(
+      new Request("http://localhost/api/device-auth", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(origin ? { origin } : {}) },
+        body: JSON.stringify({ action: "approve", userCode: "first" }),
+      }),
+    );
+    expect(response.status).toBe(403);
+    expect(lockCount).toBe(0);
+    expect(devices[0].approved).toBe(true);
+  },
+);
+
+test("device approval rejects simple-request media types", async () => {
+  const response = await POST(
+    new Request("http://localhost/api/device-auth", {
+      method: "POST",
+      headers: { origin: "http://localhost:3000", "content-type": "text/plain" },
+      body: JSON.stringify({ action: "approve", userCode: "first" }),
+    }),
+  );
+  expect(response.status).toBe(415);
+  expect(lockCount).toBe(0);
+});
 
 test("concurrent tRPC creates stop at five and all acquire the account lock", async () => {
   const results = await Promise.allSettled(

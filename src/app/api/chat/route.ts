@@ -317,7 +317,10 @@ export async function POST(req: Request) {
         userId,
         category: usageCategory,
         amount: consumedUsageAmount,
+        isAnonymous,
       });
+      usageConsumed = false;
+      consumedUsageAmount = 0;
       pendingMaxModeAmount = Math.max(pendingMaxModeAmount - refunded.maxModeRefunded, 0);
     } catch (error) {
       console.error("Failed to refund chat usage", error);
@@ -368,6 +371,7 @@ export async function POST(req: Request) {
         userId,
         category: usageCategory,
         amount: Math.abs(delta),
+        isAnonymous,
       });
       pendingMaxModeAmount = Math.max(pendingMaxModeAmount - refunded.maxModeRefunded, 0);
     }
@@ -375,6 +379,17 @@ export async function POST(req: Request) {
     consumedUsageAmount = normalizedTargetAmount;
     usageConsumed = normalizedTargetAmount > 0;
     usageRefunded = normalizedTargetAmount === 0;
+  };
+
+  let usageSettlement: Promise<void> | undefined;
+  const settleUsage = () => {
+    usageSettlement ??=
+      usageUnit === "tokens"
+        ? reconcileConsumedUsage(finalUsageAmount)
+        : !hasAssistantOutput
+          ? refundConsumedUsage()
+          : Promise.resolve();
+    return usageSettlement;
   };
 
   /**
@@ -523,6 +538,15 @@ export async function POST(req: Request) {
       abortSignal: generationAbortController.signal,
       stopWhen: stepCountIs(50),
       tools,
+      // onFinish is not called by the SDK after an abort. Keep the usage of
+      // completed steps so stopped/replaced generations still get reconciled.
+      onStepFinish: ({ usage }) => {
+        const { weighted, breakdown } = computeWeightedUsageFromLanguageModelUsage(usage);
+        const inputTokens = getUsageInputTokens(usage, breakdown);
+        finalUsageAmount += Math.ceil(
+          weighted * getEffectiveTokenMultiplier(baseModel, inputTokens, { proMode, fastMode }),
+        );
+      },
       onFinish: ({ totalUsage }) => {
         const { weighted, breakdown } = computeWeightedUsageFromLanguageModelUsage(totalUsage);
         const inputTokens = getUsageInputTokens(totalUsage, breakdown);
@@ -650,6 +674,12 @@ export async function POST(req: Request) {
     onFinish: async ({ messages: updatedMessages, isAborted }) => {
       try {
         await partialPersistPromise;
+        hasAssistantOutput ||= updatedMessages.some(
+          (message) => message.id === responseMessageId && message.parts.length > 0,
+        );
+        // Accounting belongs to this request, not to the current chat-row owner.
+        // Stopping/replacing the generation must only suppress transcript writes.
+        await settleUsage();
 
         if (!(await ownsCurrentGeneration())) {
           pendingStateRolledBack = true;
@@ -684,17 +714,8 @@ export async function POST(req: Request) {
 
         pendingStateRolledBack = true;
 
-        if (isAborted) {
-          if (!hasAssistantOutput) {
-            await refundConsumedUsage();
-          } else if (usageUnit === "tokens") {
-            await reconcileConsumedUsage(finalUsageAmount);
-          }
+        if (isAborted || generationAbortController?.signal.aborted) {
           return;
-        }
-
-        if (usageUnit === "tokens") {
-          await reconcileConsumedUsage(finalUsageAmount);
         }
 
         // Memory extraction can take seconds and must not keep the chat SSE

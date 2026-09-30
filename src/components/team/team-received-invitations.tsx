@@ -38,7 +38,7 @@ export function TeamReceivedInvitations({
             return (
               <div
                 key={inv.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3"
               >
                 <div className="flex items-center gap-3">
                   <div className="flex size-8 items-center justify-center rounded-full bg-muted">

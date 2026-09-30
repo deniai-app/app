@@ -109,7 +109,7 @@ export function TeamAuditLogPage() {
                     const changes = formatChanges(entry.action, entry.metadata);
 
                     return (
-                      <div key={entry.id} className="flex gap-3 rounded-lg border p-3">
+                      <div key={entry.id} className="flex gap-3 rounded-xl border p-3">
                         <Avatar className="size-8 shrink-0">
                           <AvatarImage
                             src={entry.actorImage ?? undefined}

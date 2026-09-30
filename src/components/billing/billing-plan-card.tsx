@@ -150,7 +150,7 @@ export function PlanCard({
               value={interval}
               onValueChange={(v) => onIntervalChange?.(v as "monthly" | "yearly")}
             >
-              <TabsList className="h-8 rounded-lg">
+              <TabsList className="h-8 rounded-xl">
                 <TabsTrigger value="monthly" className="h-6 px-3 text-xs rounded-md">
                   {t("Monthly")}
                 </TabsTrigger>

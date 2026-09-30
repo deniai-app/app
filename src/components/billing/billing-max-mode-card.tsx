@@ -64,7 +64,7 @@ export function BillingMaxModeCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-lg border border-border p-4">
+          <div className="rounded-xl border border-border p-4">
             <div className="text-sm text-muted-foreground">{t("Basic model tokens")}</div>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="text-2xl font-semibold">
@@ -78,7 +78,7 @@ export function BillingMaxModeCard({
               </span>
             </div>
           </div>
-          <div className="rounded-lg border border-border p-4">
+          <div className="rounded-xl border border-border p-4">
             <div className="text-sm text-muted-foreground">{t("Premium model tokens")}</div>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="text-2xl font-semibold">
@@ -93,7 +93,7 @@ export function BillingMaxModeCard({
             </div>
           </div>
         </div>
-        <div className="flex items-center justify-between rounded-lg bg-muted/50 p-4">
+        <div className="flex items-center justify-between rounded-xl bg-muted/50 p-4">
           <div className="text-sm text-muted-foreground">{t("Estimated cost this period")}</div>
           <div className="text-lg font-semibold">
             {formatMaxModeCurrency(data.estimatedCost ?? 0)}

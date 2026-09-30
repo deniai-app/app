@@ -53,7 +53,7 @@ function VariantFields({
   const t = useExtracted();
   const [enabled, setEnabled] = useState(Boolean(title && description));
   return (
-    <fieldset className="flex flex-col gap-3 rounded-lg border p-4">
+    <fieldset className="flex flex-col gap-3 rounded-xl border p-4">
       <label className="flex items-center gap-2 text-sm font-medium">
         <input
           type="checkbox"
@@ -547,7 +547,7 @@ export function AdsSettings() {
             {editingCampaign?.id === ad.id && (
               <form
                 onSubmit={saveEdit}
-                className="mt-2 flex flex-col gap-4 rounded-lg border border-border bg-muted/30 p-4"
+                className="mt-2 flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4"
               >
                 <FieldDescription>
                   {t(

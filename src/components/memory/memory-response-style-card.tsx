@@ -120,7 +120,7 @@ export function MemoryResponseStyleCard({
             <Spinner />
           </div>
         ) : status === "error" ? (
-          <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+          <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
             {t("Unable to load personalization right now.")}
           </div>
         ) : (
@@ -183,7 +183,7 @@ export function MemoryResponseStyleCard({
               />
             </div>
 
-            <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="flex items-center justify-between rounded-xl border p-4">
               <div className="space-y-1">
                 <div className="text-sm font-medium">{t("Auto-save memories")}</div>
                 <div className="text-xs text-muted-foreground">

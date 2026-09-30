@@ -35,6 +35,7 @@ import {
   recordSecurityActivity,
   securityActionForAuthPath,
 } from "@/lib/security-activity";
+import { teamMemberAuditHooks } from "@/lib/team-member-audit";
 import {
   cancelPersonalSubscription,
   cancelTeamSubscriptionForDeletion,
@@ -240,7 +241,7 @@ export const auth = betterAuth({
         },
         afterAcceptInvitation: async ({ organization, member, user }) => {
           await updateTeamSeatCount(organization.id);
-          await cancelPersonalSubscription(member.userId);
+          await cancelPersonalSubscription(member.userId, organization.id);
           await recordTeamAuditEvent({
             organizationId: organization.id,
             actorUserId: user.id,
@@ -249,9 +250,7 @@ export const auth = betterAuth({
             metadata: { role: member.role },
           });
         },
-        afterRemoveMember: async ({ organization }) => {
-          await updateTeamSeatCount(organization.id);
-        },
+        ...teamMemberAuditHooks,
         afterCreateInvitation: async ({ invitation, inviter, organization }) => {
           await recordTeamAuditEvent({
             organizationId: organization.id,

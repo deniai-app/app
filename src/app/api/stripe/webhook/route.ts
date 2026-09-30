@@ -10,6 +10,7 @@ import { getBillingFingerprintUpdates } from "@/lib/billing-card-usage";
 import { isAffiliatePaidStatus, processAffiliatePurchase } from "@/lib/affiliate";
 import { resetMaxModeUsage } from "@/lib/max-mode";
 import { stripe } from "@/lib/stripe";
+import { saveTeamBillingRecord } from "@/lib/team-billing-record";
 import {
   handleChargeDisputeClosed,
   handleChargeDisputeCreated,
@@ -47,7 +48,7 @@ async function saveSubscription(payload: SubscriptionPayload) {
   });
 
   const whereClause = organizationId
-    ? and(eq(billing.userId, payload.userId), eq(billing.organizationId, organizationId))
+    ? eq(billing.organizationId, organizationId)
     : and(eq(billing.userId, payload.userId), isNull(billing.organizationId));
 
   const [existingRecord] = await db
@@ -86,20 +87,25 @@ async function saveSubscription(payload: SubscriptionPayload) {
     existingRecord.currentPeriodEnd.getTime() !== updates.currentPeriodEnd.getTime() &&
     updates.currentPeriodEnd.getTime() > existingRecord.currentPeriodEnd.getTime();
 
-  await db
-    .insert(billing)
-    .values({
-      userId: payload.userId,
-      ...updates,
-    })
-    .onConflictDoUpdate({
-      target: organizationId ? [billing.userId, billing.organizationId] : billing.userId,
-      targetWhere: organizationId ? sql`organization_id IS NOT NULL` : sql`organization_id IS NULL`,
-      set: {
+  if (organizationId) {
+    await saveTeamBillingRecord(db, payload.userId, organizationId, updates);
+  } else
+    await db
+      .insert(billing)
+      .values({
+        userId: payload.userId,
         ...updates,
-        updatedAt: new Date(),
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: organizationId ? [billing.userId, billing.organizationId] : billing.userId,
+        targetWhere: organizationId
+          ? sql`organization_id IS NOT NULL`
+          : sql`organization_id IS NULL`,
+        set: {
+          ...updates,
+          updatedAt: new Date(),
+        },
+      });
 
   if (!organizationId && plan?.id && isAffiliatePaidStatus(payload.status)) {
     await processAffiliatePurchase({
@@ -126,6 +132,20 @@ async function clearPlanData({
   organizationId?: string | null;
 }) {
   const orgId = organizationId ?? null;
+  if (orgId) {
+    await saveTeamBillingRecord(db, userId, orgId, {
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: null,
+      priceId: null,
+      planId: null,
+      status: "inactive",
+      mode: null,
+      currentPeriodEnd: null,
+      checkoutSessionId: null,
+      cancelAt: null,
+    });
+    return;
+  }
 
   await db
     .insert(billing)
@@ -301,7 +321,12 @@ export async function POST(req: Request) {
           subscription.status === "canceled" ||
           subscription.cancel_at_period_end === true ||
           Boolean(subscription.cancel_at);
-        const computedStatus = isCanceled ? "canceled" : (subscription.status ?? null);
+        const computedStatus =
+          subscription.status === "canceled"
+            ? "inactive"
+            : isCanceled
+              ? "canceled"
+              : (subscription.status ?? null);
 
         if (!userId) {
           console.warn("[stripe:webhook] missing userId for subscription", {

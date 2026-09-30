@@ -48,8 +48,8 @@ function ValueCard({
   description: string;
 }) {
   return (
-    <div className="p-6 rounded-lg border border-border bg-card">
-      <div className="inline-flex items-center justify-center size-10 rounded-lg bg-secondary text-foreground mb-4">
+    <div className="p-6 rounded-xl border border-border bg-card">
+      <div className="inline-flex items-center justify-center size-10 rounded-xl bg-secondary text-foreground mb-4">
         <Icon className="size-5" />
       </div>
       <h3 className="text-base font-semibold mb-2">{title}</h3>
@@ -137,7 +137,7 @@ export default function AboutPage() {
       {/* Mission */}
       <section className="relative px-4 pb-16 md:pb-24">
         <div className="mx-auto max-w-3xl">
-          <div className="rounded-lg border border-border bg-card p-8 md:p-10">
+          <div className="rounded-xl border border-border bg-card p-8 md:p-10">
             <h2 className="text-xl md:text-2xl font-semibold tracking-tight mb-4">
               {t("Our Mission")}
             </h2>
@@ -160,7 +160,7 @@ export default function AboutPage() {
       <section className="relative border-y border-border/50 bg-secondary/20 px-4 py-16 md:py-24">
         <div className="mx-auto max-w-5xl">
           <div className="max-w-3xl">
-            <div className="mb-4 inline-flex size-10 items-center justify-center rounded-lg bg-secondary">
+            <div className="mb-4 inline-flex size-10 items-center justify-center rounded-xl bg-secondary">
               <ClipboardCheck className="size-5" />
             </div>
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight">
@@ -322,7 +322,7 @@ export default function AboutPage() {
       {/* CTA */}
       <section className="relative px-4 py-16 md:py-24">
         <div className="mx-auto max-w-2xl">
-          <div className="flex flex-col items-center rounded-lg border border-border bg-card p-8 md:p-10 text-center">
+          <div className="flex flex-col items-center rounded-xl border border-border bg-card p-8 md:p-10 text-center">
             <h2 className="text-xl md:text-2xl font-semibold tracking-tight mb-3">
               {t("Ready to Get Started?")}
             </h2>

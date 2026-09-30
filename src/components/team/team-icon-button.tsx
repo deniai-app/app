@@ -44,7 +44,7 @@ export function TeamIconButton({
         className="hidden"
         onChange={handleFileChange}
       />
-      <div className="relative flex size-10 items-center justify-center overflow-hidden rounded-lg bg-primary/10">
+      <div className="relative flex size-10 items-center justify-center overflow-hidden rounded-xl bg-primary/10">
         {logo ? (
           <Image
             src={logo}

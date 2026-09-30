@@ -13,7 +13,7 @@ import {
 } from "@/lib/billing";
 import {
   type CardFunding,
-  checkCardEligibility,
+  claimCardVerification,
   getBillingFingerprintUpdates,
   getCustomerPrimaryCardInfo,
   isTrialFingerprintEligible,
@@ -859,6 +859,7 @@ export const billingRouter = router({
         items: [{ id: item.id, price: price.id }],
         metadata: { userId: ctx.userId, planId: plan.id },
         proration_behavior: "always_invoice",
+        payment_behavior: "error_if_incomplete",
       });
 
       const updates: Partial<BillingRecord> = {
@@ -1142,7 +1143,13 @@ export const billingRouter = router({
         expand: ["payment_method"],
       });
 
-      if (intent.metadata?.userId && intent.metadata.userId !== ctx.userId) {
+      const intentCustomerId =
+        typeof intent.customer === "string" ? intent.customer : intent.customer?.id;
+      if (
+        intent.metadata?.userId !== ctx.userId ||
+        intent.metadata?.purpose !== "free_tier_verification" ||
+        intentCustomerId !== billingRecord.stripeCustomerId
+      ) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Verification intent does not belong to you.",
@@ -1179,10 +1186,11 @@ export const billingRouter = router({
           ? pm.card.funding
           : "unknown";
 
-      const eligibility = await checkCardEligibility({
+      const eligibility = await claimCardVerification(ctx.db, {
         fingerprint,
         funding,
         userId: ctx.userId,
+        customerId: billingRecord.stripeCustomerId,
       });
       if (!eligibility.eligible) {
         // Always release the $1 USD hold first.
@@ -1224,26 +1232,7 @@ export const billingRouter = router({
         console.warn("[billing] Failed to set default payment method", err);
       }
 
-      const [saved] = await ctx.db
-        .insert(billing)
-        .values({
-          userId: ctx.userId,
-          stripeCustomerId: billingRecord.stripeCustomerId,
-          paymentMethodFingerprint: fingerprint,
-          cardFunding: funding,
-          cardVerifiedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: billing.userId,
-          targetWhere: sql`organization_id IS NULL`,
-          set: {
-            paymentMethodFingerprint: fingerprint,
-            cardFunding: funding,
-            cardVerifiedAt: new Date(),
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
+      const saved = eligibility.record;
 
       return {
         verified: true,

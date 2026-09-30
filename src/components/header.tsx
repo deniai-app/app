@@ -237,7 +237,7 @@ export default function Header() {
                               render={<Link href={link.href} role="menuitem" />}
                               nativeButton={false}
                             >
-                              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border">
+                              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border">
                                 <Icon className="size-5 text-muted-foreground" />
                               </span>
                               <span className="flex min-w-0 flex-col gap-0.5 justify-center self-center">
@@ -275,7 +275,7 @@ export default function Header() {
                               render={<Link href={link.href} role="menuitem" />}
                               nativeButton={false}
                             >
-                              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border">
+                              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border">
                                 <Icon className="size-5 text-muted-foreground" />
                               </span>
                               <span className="flex min-w-0 flex-col gap-0.5 justify-center self-center">

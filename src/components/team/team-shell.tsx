@@ -69,7 +69,7 @@ export function TeamShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium text-foreground/70 hover:bg-muted hover:text-foreground",
+                  "flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium text-foreground/70 hover:bg-muted hover:text-foreground",
                   isActive && "bg-muted text-foreground",
                 )}
               >

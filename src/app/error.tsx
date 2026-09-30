@@ -98,7 +98,7 @@ export default function ErrorPage({ error, retry }: ErrorPageProps) {
         </div>
         <section className="w-full max-w-2xl rounded-xl border border-border/60 bg-card/70 p-6 text-left shadow-sm">
           <div className="text-xs font-semibold text-muted-foreground">{t.report}</div>
-          <pre className="mt-4 whitespace-pre-wrap break-words rounded-lg bg-muted/60 p-4 font-mono text-xs text-foreground">
+          <pre className="mt-4 whitespace-pre-wrap break-words rounded-xl bg-muted/60 p-4 font-mono text-xs text-foreground">
             {reportText}
           </pre>
           <p className="mt-3 text-xs text-muted-foreground">{t.includeReport}</p>

@@ -110,7 +110,7 @@ export default function ApiKeysSettingsPage() {
         <CardContent>
           {isAnonymous ? (
             <div className="text-center py-12 text-muted-foreground">
-              <div className="inline-flex items-center justify-center size-10 rounded-lg bg-secondary mb-3">
+              <div className="inline-flex items-center justify-center size-10 rounded-xl bg-secondary mb-3">
                 <Key className="size-5 text-muted-foreground" />
               </div>
               <p className="font-medium text-sm">{t("Sign in to create API keys.")}</p>
@@ -124,7 +124,7 @@ export default function ApiKeysSettingsPage() {
             </div>
           ) : keysQuery.data?.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <div className="inline-flex items-center justify-center size-10 rounded-lg bg-secondary mb-3">
+              <div className="inline-flex items-center justify-center size-10 rounded-xl bg-secondary mb-3">
                 <Key className="size-5 text-muted-foreground" />
               </div>
               <p className="font-medium text-sm">{t("No API keys yet.")}</p>
@@ -135,7 +135,7 @@ export default function ApiKeysSettingsPage() {
               {keysQuery.data?.map((k) => (
                 <div
                   key={k.id}
-                  className="flex items-center justify-between rounded-lg border border-border p-4"
+                  className="flex items-center justify-between rounded-xl border border-border p-4"
                 >
                   <div className="flex-1 min-w-0">
                     <span className="font-medium text-sm">{k.name}</span>

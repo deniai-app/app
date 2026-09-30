@@ -45,7 +45,7 @@ function SuggestionCard({ icon: Icon, title, prompt, onClick }: SuggestionCardPr
     <button
       type="button"
       onClick={() => onClick(prompt)}
-      className="group flex flex-col gap-1.5 p-3 rounded-lg border border-border bg-card text-left transition-colors hover:bg-accent"
+      className="group flex flex-col gap-1.5 p-3 rounded-xl border border-border bg-card text-left transition-colors hover:bg-accent"
     >
       <div className="flex items-center gap-2">
         <Icon className="size-4 text-muted-foreground" />
@@ -249,7 +249,7 @@ export default function ChatHome() {
 
         {canShowAds && (
           <aside aria-label={t("Advertisement")} className="flex justify-center">
-            <MeaxAdUnit appId="app-23f69d025b5b" unitId="unit-0125557542ea" size="300x250" />
+            <MeaxAdUnit appId="app-23f69d025b5b" unitId="unit-0125557542ea" size="728x90" />
           </aside>
         )}
       </div>

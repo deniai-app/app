@@ -92,8 +92,8 @@ export default function ImportSettingsPage() {
             className="hidden"
             onChange={handleFileChange}
           />
-          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border p-8 text-center">
-            <div className="inline-flex items-center justify-center size-10 rounded-lg bg-secondary">
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border p-8 text-center">
+            <div className="inline-flex items-center justify-center size-10 rounded-xl bg-secondary">
               <FileJson className="size-5 text-muted-foreground" />
             </div>
             <div>
@@ -111,7 +111,7 @@ export default function ImportSettingsPage() {
           </div>
 
           {lastResult ? (
-            <div className="rounded-lg border border-border p-4 space-y-2">
+            <div className="rounded-xl border border-border p-4 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 {lastResult.success ? (
                   <>

@@ -136,7 +136,7 @@ export function AdSlot({
           href={ad.url}
           target="_blank"
           rel="sponsored noopener"
-          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 self-start rounded-lg bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:self-center"
+          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 self-start rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:self-center"
         >
           {t("Learn more")}
           <ArrowUpRight aria-hidden="true" className="size-4" />

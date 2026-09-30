@@ -46,8 +46,8 @@ export function useBillingPlanCopy(planId: BillingPlanId | null): BillingPlanCop
             multiplier: String(PLAN_USAGE_MULTIPLIERS.plus.premium),
             plan: PLAN_USAGE_MULTIPLIERS.plus.vs,
           }),
-          t("With priority support"),
-          t("Deni AI Flixa - Plus access"),
+          t("No ads experience"),
+          t("Get more models in Deni AI Flixa"),
           t("For trying Deni AI"),
         ],
       };

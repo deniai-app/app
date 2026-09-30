@@ -35,7 +35,7 @@ export function ReceiptPrinterCard({
         className={cn("relative z-10 p-3.5", receiptDeviceCardClassName, outlet ? "pb-2" : "pb-3")}
       >
         <div className="flex items-center justify-between gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/10 text-white">
+          <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/10 text-white">
             <DeniAIIcon className="size-6" />
           </div>
           <Link

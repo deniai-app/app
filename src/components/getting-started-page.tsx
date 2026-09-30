@@ -543,7 +543,7 @@ function _PreferenceToggle({
   defaultChecked?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/40 px-4 py-3">
+    <div className="flex items-center justify-between gap-4 rounded-xl border bg-muted/40 px-4 py-3">
       <div className="flex-1 text-left">
         <p className="text-sm font-medium">{title}</p>
         <p className="text-xs text-muted-foreground">{description}</p>

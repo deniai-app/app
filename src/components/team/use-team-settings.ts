@@ -98,8 +98,6 @@ export function useTeamSettings() {
   const updateTeamMaxModeDefaultPolicy =
     trpc.organization.updateTeamMaxModeDefaultPolicy.useMutation();
   const updateMemberMaxModePolicy = trpc.organization.updateTeamMemberMaxModePolicy.useMutation();
-  const recordMemberRoleChanged = trpc.organization.recordMemberRoleChanged.useMutation();
-  const recordMemberRemoved = trpc.organization.recordMemberRemoved.useMutation();
   const utils = trpc.useUtils();
   const members = (orgDetailsData?.members ?? []).filter(isMember);
   const invitations = (orgDetailsData?.invitations ?? []).filter(isInvitation);
@@ -218,26 +216,15 @@ export function useTeamSettings() {
     if (!activeOrg) return;
     await runWithLoading(setIsRemovingMember, async () => {
       try {
-        await authClient.organization.removeMember({
+        const result = await authClient.organization.removeMember({
           memberIdOrEmail: memberId,
           organizationId: activeOrg.id,
         });
-        toast.success(t("Member removed"));
-        if (memberToRemove) {
-          // Best-effort: better-auth's afterRemoveMember hook has no way to know
-          // who performed the removal, so this is recorded from the client using
-          // the actor's own authenticated session. A failure here shouldn't block
-          // the (already successful) removal or surface as a user-facing error.
-          recordMemberRemoved
-            .mutateAsync({
-              organizationId: activeOrg.id,
-              targetUserId: memberToRemove.userId,
-              role: memberToRemove.role,
-            })
-            .catch((error) => {
-              console.error("Failed to record member removal audit log", error);
-            });
+        if (result.error) {
+          toast.error(result.error.message || t("Failed to remove member"));
+          return;
         }
+        toast.success(t("Member removed"));
         await queryClient.invalidateQueries({
           queryKey: ["team", "organization", currentUserId, activeOrg.id],
         });
@@ -265,19 +252,6 @@ export function useTeamSettings() {
             return;
           }
           toast.success(t("Role updated"));
-          // Best-effort: better-auth's afterUpdateMemberRole hook only exposes the
-          // target member, not the admin/owner performing the change, so the audit
-          // entry is recorded here from the actor's own authenticated session.
-          recordMemberRoleChanged
-            .mutateAsync({
-              organizationId: activeOrg.id,
-              targetUserId: member.userId,
-              previousRole: member.role,
-              newRole: role,
-            })
-            .catch((error) => {
-              console.error("Failed to record member role change audit log", error);
-            });
           await queryClient.invalidateQueries({
             queryKey: ["team", "organization", currentUserId, activeOrg.id],
           });

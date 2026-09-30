@@ -9,6 +9,7 @@ import { generateApiKey, getKeyPrefix, hashApiKey } from "@/lib/api-key-utils";
 import { auth } from "@/lib/auth";
 import { decryptFromB64 } from "@/lib/crypto";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { env } from "@/env";
 
 function generateUserCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -65,8 +66,19 @@ export async function POST(req: Request) {
   switch (action.data.action) {
     case "initiate":
       return handleInitiate(req);
-    case "approve":
+    case "approve": {
+      const contentType = req.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+      if (
+        req.headers.get("origin") !== new URL(env.NEXT_PUBLIC_BETTER_AUTH_URL).origin ||
+        req.headers.get("sec-fetch-site") === "cross-site"
+      ) {
+        return NextResponse.json({ error: "Forbidden origin" }, { status: 403 });
+      }
+      if (contentType !== "application/json") {
+        return NextResponse.json({ error: "JSON content type required" }, { status: 415 });
+      }
       return handleApprove(body);
+    }
     case "poll":
       return handlePoll(body);
   }

@@ -9,6 +9,7 @@ import { RESERVED_BLOG_SLUGS } from "@/lib/blog/posts";
 import { BLOG_CACHE_TAG } from "@/lib/blog/queries";
 import { blogSlugSchema, slugifyBlogTitle } from "@/lib/blog/slug";
 import { protectedProcedure, router } from "../trpc";
+import { isVerifiedAdmin, type AdminUser } from "@/lib/verified-admin";
 
 const postInputSchema = z.object({
   slug: z
@@ -26,8 +27,8 @@ const postInputSchema = z.object({
   author: z.string().trim().min(1).max(80),
 });
 
-function requireBlogAdmin(email: string | null | undefined) {
-  if (!isBlogAdmin(email)) {
+function requireBlogAdmin(user: AdminUser) {
+  if (!isVerifiedAdmin(user, isBlogAdmin)) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Blog administration is not enabled for this account.",
@@ -72,18 +73,18 @@ async function assertSlugAvailable(slug: string, currentId?: string) {
 
 export const blogRouter = router({
   canManage: protectedProcedure.query(({ ctx }) => {
-    return isBlogAdmin(ctx.session?.user?.email);
+    return isVerifiedAdmin(ctx.session?.user, isBlogAdmin);
   }),
 
   list: protectedProcedure.query(async ({ ctx }) => {
-    requireBlogAdmin(ctx.session?.user?.email);
+    requireBlogAdmin(ctx.session?.user);
     return ctx.db.select().from(blogPost).orderBy(desc(blogPost.updatedAt));
   }),
 
   get: protectedProcedure
     .input(z.object({ id: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
-      requireBlogAdmin(ctx.session?.user?.email);
+      requireBlogAdmin(ctx.session?.user);
       const [post] = await ctx.db.select().from(blogPost).where(eq(blogPost.id, input.id)).limit(1);
       if (!post) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Post not found." });
@@ -92,7 +93,7 @@ export const blogRouter = router({
     }),
 
   create: protectedProcedure.input(postInputSchema).mutation(async ({ ctx, input }) => {
-    requireBlogAdmin(ctx.session?.user?.email);
+    requireBlogAdmin(ctx.session?.user);
     const slug = slugifyBlogTitle(input.slug) || input.slug;
     await assertSlugAvailable(slug);
 
@@ -115,7 +116,7 @@ export const blogRouter = router({
   update: protectedProcedure
     .input(postInputSchema.extend({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      requireBlogAdmin(ctx.session?.user?.email);
+      requireBlogAdmin(ctx.session?.user);
       const slug = slugifyBlogTitle(input.slug) || input.slug;
       await assertSlugAvailable(slug, input.id);
 
@@ -157,7 +158,7 @@ export const blogRouter = router({
   publish: protectedProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      requireBlogAdmin(ctx.session?.user?.email);
+      requireBlogAdmin(ctx.session?.user);
       const [existing] = await ctx.db
         .select()
         .from(blogPost)
@@ -196,7 +197,7 @@ export const blogRouter = router({
   unpublish: protectedProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      requireBlogAdmin(ctx.session?.user?.email);
+      requireBlogAdmin(ctx.session?.user);
       const [existing] = await ctx.db
         .select()
         .from(blogPost)
@@ -226,7 +227,7 @@ export const blogRouter = router({
   setFeatured: protectedProcedure
     .input(z.object({ id: z.string().min(1), featured: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
-      requireBlogAdmin(ctx.session?.user?.email);
+      requireBlogAdmin(ctx.session?.user);
       const [existing] = await ctx.db
         .select()
         .from(blogPost)
@@ -266,7 +267,7 @@ export const blogRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      requireBlogAdmin(ctx.session?.user?.email);
+      requireBlogAdmin(ctx.session?.user);
       const [existing] = await ctx.db
         .select()
         .from(blogPost)

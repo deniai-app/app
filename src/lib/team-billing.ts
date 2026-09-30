@@ -1,20 +1,17 @@
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db/drizzle";
 import { billing, member, teamUsageAuditLog } from "@/db/schema";
 import { isBillingDisabled } from "@/lib/billing-config";
+import { isTeamPlan } from "@/lib/billing";
 import { stripe } from "@/lib/stripe";
 import { getLicensedSubscriptionItem } from "@/lib/stripe-subscriptions";
+import { findTeamBillingRecord } from "@/lib/team-billing-record";
 
 const ACTIVE_SUB_STATUSES = new Set(["trialing", "active", "past_due"]);
 
 export async function getTeamBilling(organizationId: string) {
-  const [record] = await db
-    .select()
-    .from(billing)
-    .where(and(eq(billing.organizationId, organizationId), isNotNull(billing.organizationId)))
-    .limit(1);
-  return record ?? null;
+  return (await findTeamBillingRecord(db, organizationId)) ?? null;
 }
 
 export async function getOrgMemberCount(organizationId: string): Promise<number> {
@@ -55,8 +52,18 @@ export async function updateTeamSeatCount(organizationId: string) {
  * Cancel a user's personal Stripe subscription (if active) immediately with proration.
  * Called when the user joins an org with an active team plan so they don't get double-billed.
  */
-export async function cancelPersonalSubscription(userId: string) {
+export async function cancelPersonalSubscription(userId: string, organizationId: string) {
   if (isBillingDisabled) return;
+
+  // Joining a free/unpaid organization must never cancel a personal plan.
+  const teamBilling = await getTeamBilling(organizationId);
+  if (!teamBilling?.stripeSubscriptionId || !isTeamPlan(teamBilling.planId)) return;
+  const [membership] = await db
+    .select({ id: member.id })
+    .from(member)
+    .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)))
+    .limit(1);
+  if (!membership) return;
 
   const [record] = await db
     .select()
@@ -67,8 +74,15 @@ export async function cancelPersonalSubscription(userId: string) {
   if (!record?.stripeSubscriptionId) return;
 
   try {
-    const subscription = await stripe.subscriptions.retrieve(record.stripeSubscriptionId);
+    // Verify live Stripe state, not only a potentially stale local billing row.
+    const teamSubscription = await stripe.subscriptions.retrieve(teamBilling.stripeSubscriptionId);
+    if (
+      !ACTIVE_SUB_STATUSES.has(teamSubscription.status) ||
+      !getLicensedSubscriptionItem(teamSubscription)
+    )
+      return;
 
+    const subscription = await stripe.subscriptions.retrieve(record.stripeSubscriptionId);
     if (!ACTIVE_SUB_STATUSES.has(subscription.status)) return;
 
     await stripe.subscriptions.cancel(record.stripeSubscriptionId, {
@@ -100,7 +114,9 @@ export async function cancelOrgMembersPersonalSubscriptions(organizationId: stri
     .from(member)
     .where(eq(member.organizationId, organizationId));
 
-  await Promise.allSettled(members.map((m) => cancelPersonalSubscription(m.userId)));
+  await Promise.allSettled(
+    members.map((m) => cancelPersonalSubscription(m.userId, organizationId)),
+  );
 }
 
 /**
@@ -114,17 +130,17 @@ export async function cancelOrgMembersPersonalSubscriptions(organizationId: stri
 export async function cancelTeamSubscriptionForDeletion(organizationId: string) {
   if (isBillingDisabled) return;
 
-  const record = await getTeamBilling(organizationId);
-  if (!record?.stripeSubscriptionId) return;
-
-  const subscription = await stripe.subscriptions.retrieve(record.stripeSubscriptionId);
-  if (ACTIVE_SUB_STATUSES.has(subscription.status)) {
-    await stripe.subscriptions.cancel(record.stripeSubscriptionId, {
-      prorate: true,
-    });
+  const records = await db.select().from(billing).where(eq(billing.organizationId, organizationId));
+  const subscriptionIds = new Set(
+    records.flatMap((record) => (record.stripeSubscriptionId ? [record.stripeSubscriptionId] : [])),
+  );
+  for (const subscriptionId of subscriptionIds) {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    if (ACTIVE_SUB_STATUSES.has(subscription.status)) {
+      await stripe.subscriptions.cancel(subscriptionId, { prorate: true });
+    }
   }
-
-  await db.delete(billing).where(eq(billing.id, record.id));
+  await db.delete(billing).where(eq(billing.organizationId, organizationId));
 }
 
 /**

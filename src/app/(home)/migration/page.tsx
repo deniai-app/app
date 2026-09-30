@@ -34,7 +34,7 @@ export default function MigrationPage() {
           </p>
         </div>
 
-        <aside className="rounded-lg border border-border/70 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+        <aside className="rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
           {t("Create a new account on this site to continue the migration.")}
         </aside>
 

@@ -25,7 +25,7 @@ export function MemoryOptionGroup<T extends string>({
               type="button"
               onClick={() => onChange(option.value)}
               className={cn(
-                "rounded-lg border p-3 text-left transition-colors",
+                "rounded-xl border p-3 text-left transition-colors",
                 selected ? "border-foreground bg-accent" : "border-border hover:bg-accent/50",
               )}
             >

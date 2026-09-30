@@ -83,7 +83,7 @@ export function TeamMembersList({
       <CardContent>
         <div className="space-y-2">
           {members.map((m) => (
-            <div key={m.id} className="flex items-center justify-between rounded-lg border p-3">
+            <div key={m.id} className="flex items-center justify-between rounded-full border p-3">
               <div className="flex items-center gap-3">
                 <div className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-medium uppercase">
                   {m.user.name?.charAt(0) ?? m.user.email?.charAt(0) ?? "?"}

@@ -67,7 +67,7 @@ function ProjectChatList({
             <li key={chat.id}>
               <Link
                 href={`/chat/${chat.id}`}
-                className="block truncate rounded-lg px-2 py-1.5 text-sm hover:bg-muted/60 transition-colors"
+                className="block truncate rounded-xl px-2 py-1.5 text-sm hover:bg-muted/60 transition-colors"
               >
                 {chat.title ?? "Untitled chat"}
               </Link>

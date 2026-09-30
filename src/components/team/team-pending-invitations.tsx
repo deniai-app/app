@@ -32,7 +32,7 @@ export function TeamPendingInvitations({
       <CardContent>
         <div className="space-y-2">
           {invitations.map((inv) => (
-            <div key={inv.id} className="flex items-center justify-between rounded-lg border p-3">
+            <div key={inv.id} className="flex items-center justify-between rounded-xl border p-3">
               <div className="flex items-center gap-3">
                 <div className="flex size-8 items-center justify-center rounded-full bg-muted">
                   <Mail className="size-4 text-muted-foreground" />

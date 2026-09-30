@@ -135,12 +135,12 @@ export function MemorySavedListCard({
             <Spinner />
           </div>
         ) : status === "error" ? (
-          <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+          <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
             {t("Unable to load saved memories right now.")}
           </div>
         ) : items.length ? (
           visibleItems.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
               {t("No memories match this search.")}
             </div>
           ) : (
@@ -148,7 +148,7 @@ export function MemorySavedListCard({
               {visibleItems.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                  className="flex items-center justify-between gap-3 rounded-xl border p-3"
                 >
                   <div className="min-w-0 space-y-1">
                     <div className="break-words text-sm">{item.content}</div>
@@ -169,7 +169,7 @@ export function MemorySavedListCard({
             </div>
           )
         ) : (
-          <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+          <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
             {t("No saved memories yet. Add one manually or let AI learn from your chats.")}
           </div>
         )}

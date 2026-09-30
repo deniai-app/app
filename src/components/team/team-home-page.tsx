@@ -118,11 +118,11 @@ export function TeamHomePage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border p-3">
+            <div className="rounded-xl border p-3">
               <p className="text-xs text-muted-foreground">{t("Members")}</p>
               <p className="mt-1 text-sm font-medium">{members.length}</p>
             </div>
-            <div className="rounded-lg border p-3">
+            <div className="rounded-xl border p-3">
               <p className="text-xs text-muted-foreground">{t("Created")}</p>
               <p className="mt-1 text-sm font-medium">
                 {monthDayYearFormatter.format(new Date(activeOrg.createdAt))}

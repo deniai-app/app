@@ -163,12 +163,13 @@ export async function getCustomerPrimaryCardFingerprint(
 export async function countCardUsesByFingerprint(
   fingerprint: string,
   options: { excludeUserId?: string } = {},
+  database: Pick<typeof db, "select"> = db,
 ) {
   const whereClause = options.excludeUserId
     ? sql`${billing.paymentMethodFingerprint} = ${fingerprint} AND ${billing.userId} <> ${options.excludeUserId}`
     : eq(billing.paymentMethodFingerprint, fingerprint);
 
-  const [result] = await db
+  const [result] = await database
     .select({ count: sql<number>`count(distinct ${billing.userId})::int` })
     .from(billing)
     .where(whereClause);
@@ -193,18 +194,24 @@ export async function checkCardEligibility({
   fingerprint,
   funding,
   userId,
+  database = db,
 }: {
   fingerprint: string | null;
   funding: CardFunding;
   userId: string;
+  database?: Pick<typeof db, "select">;
 }): Promise<CardEligibilityResult> {
   if (!fingerprint) {
     return { eligible: false, reason: "missing_fingerprint", usedCount: 0, maxUses: 0 };
   }
 
-  const usedByOthers = await countCardUsesByFingerprint(fingerprint, {
-    excludeUserId: userId,
-  });
+  const usedByOthers = await countCardUsesByFingerprint(
+    fingerprint,
+    {
+      excludeUserId: userId,
+    },
+    database,
+  );
   const maxUses = getMaxUsesForFunding(funding);
   // The current user counts as 1 use of the slot, so others may take up to maxUses-1.
   if (usedByOthers + 1 > maxUses) {
@@ -216,6 +223,57 @@ export async function checkCardEligibility({
     };
   }
   return { eligible: true };
+}
+
+/** Claim a verification slot atomically across different users sharing a card. */
+export function claimCardVerification(
+  database: typeof db,
+  {
+    userId,
+    customerId,
+    fingerprint,
+    funding,
+  }: { userId: string; customerId: string; fingerprint: string; funding: CardFunding },
+) {
+  return database.transaction(
+    async (transaction) => {
+      await transaction.execute(sql`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`);
+      await transaction.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`card-verification:${fingerprint}`}, 0))`,
+      );
+      const eligibility = await checkCardEligibility({
+        fingerprint,
+        funding,
+        userId,
+        database: transaction,
+      });
+      if (!eligibility.eligible) return eligibility;
+      const verifiedAt = new Date();
+      const [record] = await transaction
+        .insert(billing)
+        .values({
+          userId,
+          stripeCustomerId: customerId,
+          paymentMethodFingerprint: fingerprint,
+          cardFunding: funding,
+          cardVerifiedAt: verifiedAt,
+        })
+        .onConflictDoUpdate({
+          target: billing.userId,
+          targetWhere: sql`organization_id IS NULL`,
+          set: {
+            paymentMethodFingerprint: fingerprint,
+            cardFunding: funding,
+            cardVerifiedAt: verifiedAt,
+            updatedAt: verifiedAt,
+          },
+        })
+        .returning();
+      if (!record) throw new Error("Unable to claim card verification.");
+      return { eligible: true as const, record };
+    },
+    { isolationLevel: "read committed" },
+  );
 }
 
 export async function isTrialFingerprintEligible(

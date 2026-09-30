@@ -573,7 +573,7 @@ export function CheckoutReceiptForm({
           totalAmount={checkout.total.total.amount}
         >
           {checkout.currencyOptions && checkout.currencyOptions.length > 1 ? (
-            <div className="mb-3 rounded-lg border border-white/8 bg-white/4 px-3 py-2">
+            <div className="mb-3 rounded-xl border border-white/8 bg-white/4 px-3 py-2">
               <CurrencySelectorElement />
             </div>
           ) : null}

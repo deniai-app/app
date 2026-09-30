@@ -210,7 +210,7 @@ function FlixaAuthorizeContent() {
                   <label
                     key={apiKey.id}
                     htmlFor={`api-key-${apiKey.id}`}
-                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40"
+                    className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 transition-colors hover:bg-muted/40"
                   >
                     <RadioGroupItem
                       value={apiKey.id}

@@ -32,6 +32,7 @@ import {
   consumeAffiliateResetCredit,
 } from "@/lib/affiliate";
 import { protectedProcedure, router } from "../trpc";
+import { isVerifiedAdmin, type AdminUser } from "@/lib/verified-admin";
 
 const referredUser = alias(user, "affiliate_admin_referred_user");
 const affiliateRewardPreferenceSchema = z.enum([
@@ -45,9 +46,9 @@ const affiliateResetGrantTargetSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("user"), identifier: z.string().trim().min(1).max(320) }),
 ]);
 
-function getAdminEmail(ctx: { session: { user?: { email?: string | null } } | null }) {
+function getAdminEmail(ctx: { session: { user?: AdminUser } | null }) {
   const email = ctx.session?.user?.email;
-  if (!isAffiliateAdmin(email)) {
+  if (!isVerifiedAdmin(ctx.session?.user, isAffiliateAdmin)) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Affiliate administration access is not configured for this account.",
@@ -89,7 +90,7 @@ async function notifyAffiliateResetRewardEmail({
 export const affiliateRouter = router({
   status: protectedProcedure.query(async ({ ctx }) => {
     const status = await getAffiliateStatus(ctx.userId);
-    return { ...status, isAdmin: isAffiliateAdmin(ctx.session?.user?.email) };
+    return { ...status, isAdmin: isVerifiedAdmin(ctx.session?.user, isAffiliateAdmin) };
   }),
 
   setRewardPreference: protectedProcedure

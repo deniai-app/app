@@ -40,7 +40,7 @@ function RuleRow({
 }) {
   return (
     <div className="flex items-start gap-3 rounded-xl border bg-muted/20 p-3">
-      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-background shadow-sm">
+      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-background shadow-sm">
         {icon}
       </div>
       <div className="min-w-0">

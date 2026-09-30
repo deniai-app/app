@@ -44,7 +44,7 @@ export function TeamMaxModeMemberRow({
   const displayName = memberPolicy.name || memberPolicy.email;
 
   return (
-    <div className="grid grid-cols-1 items-center gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_88px_120px_120px]">
+    <div className="grid grid-cols-1 items-center gap-3 rounded-xl border p-3 md:grid-cols-[minmax(0,1fr)_88px_120px_120px]">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">{displayName}</p>
         <p className="truncate text-xs text-muted-foreground">{memberPolicy.email}</p>

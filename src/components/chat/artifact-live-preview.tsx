@@ -331,7 +331,7 @@ function PreviewErrorMessage({
   return (
     <div
       className={cn(
-        "flex max-w-xl items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-left text-sm text-destructive",
+        "flex max-w-xl items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-left text-sm text-destructive",
         className,
       )}
     >

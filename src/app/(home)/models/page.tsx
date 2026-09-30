@@ -254,7 +254,7 @@ export default function ModelsPage() {
 
       <section className="relative px-4 py-16 md:py-24">
         <div className="mx-auto max-w-2xl">
-          <div className="rounded-lg border border-border bg-card p-8 md:p-10 text-center">
+          <div className="rounded-xl border border-border bg-card p-8 md:p-10 text-center">
             <h2 className="text-xl md:text-2xl font-semibold tracking-tight mb-3">
               {t("Try All Models for Free")}
             </h2>

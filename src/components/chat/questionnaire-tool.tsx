@@ -300,7 +300,7 @@ function QuestionnaireForm({
 
               return (
                 <label
-                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 transition-colors hover:bg-muted/50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
                   htmlFor={choiceId}
                   key={`${choice.value}-${choiceIndex}`}
                 >

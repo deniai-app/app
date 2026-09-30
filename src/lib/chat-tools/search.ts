@@ -47,6 +47,7 @@ async function refundSearchUsage(usage: ChatToolUsageContext, amount: number): P
       userId: usage.userId,
       category: "basic",
       amount,
+      isAnonymous: usage.isAnonymous,
     });
     usage.onRefunded?.({ amount, maxModeRefunded: refunded.maxModeRefunded });
   } catch (error) {

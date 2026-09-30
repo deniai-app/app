@@ -687,7 +687,7 @@ export default function DeveloperAppsSettingsPage() {
                         <span className="text-xs font-medium text-muted-foreground">
                           {t("Client ID")}
                         </span>
-                        <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+                        <div className="flex items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2">
                           <code className="min-w-0 flex-1 truncate font-mono text-xs">
                             {client.client_id}
                           </code>
@@ -703,7 +703,7 @@ export default function DeveloperAppsSettingsPage() {
                             {client.redirect_uris.map((uri) => (
                               <code
                                 key={uri}
-                                className="break-all rounded-lg border px-3 py-2 font-mono text-xs"
+                                className="break-all rounded-xl border px-3 py-2 font-mono text-xs"
                               >
                                 {uri}
                               </code>
@@ -835,7 +835,7 @@ export default function DeveloperAppsSettingsPage() {
             <div className="flex flex-col gap-4">
               <Field>
                 <FieldLabel>{t("Client ID")}</FieldLabel>
-                <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+                <div className="flex items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2">
                   <code className="min-w-0 flex-1 break-all font-mono text-xs">
                     {credentialReveal.clientId}
                   </code>
@@ -845,7 +845,7 @@ export default function DeveloperAppsSettingsPage() {
               {credentialReveal.clientSecret ? (
                 <Field>
                   <FieldLabel>{t("Client secret")}</FieldLabel>
-                  <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+                  <div className="flex items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2">
                     <code className="min-w-0 flex-1 break-all font-mono text-xs">
                       {credentialReveal.clientSecret}
                     </code>

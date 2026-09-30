@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import {
@@ -37,6 +37,11 @@ import {
   pickLicensedSubscription,
 } from "@/lib/stripe-subscriptions";
 import { getOrgMemberCount, updateTeamSeatCount } from "@/lib/team-billing";
+import {
+  findTeamBillingRecord,
+  saveTeamBillingRecord,
+  withTeamBillingLock,
+} from "@/lib/team-billing-record";
 import { getUsageLimitConfig } from "@/lib/usage";
 import { type ProtectedContext, protectedProcedure, router } from "../trpc";
 import { historyBefore, historyCursorSchema, historyCursorTimestamp } from "../history-pagination";
@@ -113,37 +118,6 @@ async function verifyOrgOwner(ctx: ProtectedContext, organizationId: string) {
 // subscription). Purchasing, changing plans, and the Stripe billing portal
 // stay owner-only via verifyOrgOwner.
 async function verifyOrgOwnerOrAdmin(ctx: ProtectedContext, organizationId: string) {
-  const [memberRecord] = await ctx.db
-    .select({ role: member.role })
-    .from(member)
-    .where(and(eq(member.organizationId, organizationId), eq(member.userId, ctx.userId)))
-    .limit(1);
-
-  if (!memberRecord || (memberRecord.role !== "owner" && memberRecord.role !== "admin")) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Only organization owners or admins can manage this.",
-    });
-  }
-}
-
-// For audit-log-recording mutations that follow an already-authorized
-// better-auth call (updateMemberRole/removeMember), rather than performing the
-// state change themselves. Re-checking "is still owner/admin *right now*"
-// breaks self-actions: an admin demoting themselves to member, or removing
-// themselves from the team, is no longer owner/admin by the time this runs
-// (their role already changed / their member row is already gone), so the
-// strict check would throw FORBIDDEN and silently drop the audit entry even
-// though the underlying action legitimately succeeded. Self-target is always
-// allowed since the caller is authenticated as exactly the person the entry
-// is about; anyone else still needs to currently be an owner/admin.
-async function verifyOrgManagerOrSelf(
-  ctx: ProtectedContext,
-  organizationId: string,
-  targetUserId: string,
-) {
-  if (ctx.userId === targetUserId) return;
-
   const [memberRecord] = await ctx.db
     .select({ role: member.role })
     .from(member)
@@ -286,43 +260,28 @@ async function ensureTeamBillingRecord(
   userId: string,
   organizationId: string,
 ) {
-  const [existing] = await ctx.db
-    .select()
-    .from(billing)
-    .where(and(eq(billing.userId, userId), eq(billing.organizationId, organizationId)))
-    .limit(1);
-
-  if (existing) {
-    return existing;
-  }
-
-  const profile = await fetchUserProfile(ctx, userId);
-  const customer = await findOrCreateStripeCustomer({
-    email: profile.email,
-    name: profile.name,
-    userId,
-    organizationId,
-  });
-
-  const [created] = await ctx.db
-    .insert(billing)
-    .values({
+  return withTeamBillingLock(ctx.db, organizationId, async (transaction) => {
+    const existing = await findTeamBillingRecord(transaction, organizationId);
+    if (existing) return existing;
+    const profile = await fetchUserProfile(ctx, userId);
+    const customer = await findOrCreateStripeCustomer({
+      email: profile.email,
+      name: profile.name,
       userId,
       organizationId,
-      stripeCustomerId: customer.id,
-      status: "inactive",
-    })
-    .onConflictDoUpdate({
-      target: [billing.userId, billing.organizationId],
-      targetWhere: sql`organization_id IS NOT NULL`,
-      set: {
+    });
+    const [created] = await transaction
+      .insert(billing)
+      .values({
+        userId,
+        organizationId,
         stripeCustomerId: customer.id,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
-
-  return created;
+        status: "inactive",
+      })
+      .returning();
+    if (!created) throw new Error("Unable to create team billing record.");
+    return created;
+  });
 }
 
 async function syncTeamSubscription(ctx: ProtectedContext, userId: string, organizationId: string) {
@@ -340,7 +299,15 @@ async function syncTeamSubscription(ctx: ProtectedContext, userId: string, organ
   );
   const subscriptionId = bestSub?.id;
   if (!subscriptionId) {
-    return billingRecord;
+    return saveTeamBillingRecord(ctx.db, billingRecord.userId, organizationId, {
+      stripeCustomerId: billingRecord.stripeCustomerId,
+      stripeSubscriptionId: null,
+      planId: null,
+      priceId: null,
+      status: "inactive",
+      currentPeriodEnd: null,
+      cancelAt: null,
+    });
   }
 
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
@@ -358,7 +325,11 @@ async function syncTeamSubscription(ctx: ProtectedContext, userId: string, organ
     updates.planId = plan?.id ?? billingRecord.planId;
     updates.cancelAt = subscription.cancel_at;
     updates.status =
-      subscription.cancel_at_period_end || subscription.cancel_at ? "canceled" : status;
+      status === "canceled"
+        ? "inactive"
+        : subscription.cancel_at_period_end || subscription.cancel_at
+          ? "canceled"
+          : status;
     updates.mode = deriveModeFromPrice(price);
     updates.currentPeriodEnd = getSubscriptionPeriodEndDate(subscription);
   }
@@ -366,26 +337,10 @@ async function syncTeamSubscription(ctx: ProtectedContext, userId: string, organ
     return billingRecord;
   }
 
-  const [updated] = await ctx.db
-    .insert(billing)
-    .values({
-      userId,
-      organizationId,
-      stripeCustomerId: billingRecord.stripeCustomerId,
-      ...updates,
-    })
-    .onConflictDoUpdate({
-      target: [billing.userId, billing.organizationId],
-      targetWhere: sql`organization_id IS NOT NULL`,
-      set: {
-        stripeCustomerId: billingRecord.stripeCustomerId,
-        ...updates,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
-
-  return updated;
+  return saveTeamBillingRecord(ctx.db, billingRecord.userId, organizationId, {
+    ...updates,
+    stripeCustomerId: billingRecord.stripeCustomerId,
+  });
 }
 
 async function reuseOpenTeamCheckoutSession({
@@ -851,54 +806,6 @@ export const organizationRouter = router({
       return { success: true };
     }),
 
-  recordMemberRoleChanged: billingEnabledProcedure
-    .input(
-      z.object({
-        organizationId: z.string().min(1),
-        targetUserId: z.string().min(1),
-        previousRole: z.string().min(1),
-        newRole: z.string().min(1),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      await verifyOrgManagerOrSelf(ctx, input.organizationId, input.targetUserId);
-      await recordTeamUsageAuditLog({
-        ctx,
-        organizationId: input.organizationId,
-        action: "member_role_updated",
-        targetUserId: input.targetUserId,
-        metadata: {
-          previousRole: input.previousRole,
-          newRole: input.newRole,
-        },
-      });
-
-      return { success: true };
-    }),
-
-  recordMemberRemoved: billingEnabledProcedure
-    .input(
-      z.object({
-        organizationId: z.string().min(1),
-        targetUserId: z.string().min(1),
-        role: z.string().min(1),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      await verifyOrgManagerOrSelf(ctx, input.organizationId, input.targetUserId);
-      await recordTeamUsageAuditLog({
-        ctx,
-        organizationId: input.organizationId,
-        action: "member_removed",
-        targetUserId: input.targetUserId,
-        metadata: {
-          role: input.role,
-        },
-      });
-
-      return { success: true };
-    }),
-
   createTeamCheckoutSession: billingEnabledProcedure
     .input(
       z.object({
@@ -1005,30 +912,14 @@ export const organizationRouter = router({
         customCheckoutRequestOptions,
       );
 
-      await ctx.db
-        .insert(billing)
-        .values({
-          userId: ctx.userId,
-          organizationId: input.organizationId,
-          stripeCustomerId: billingRecord.stripeCustomerId,
-          planId: plan.id,
-          priceId: price.id,
-          status: "pending",
-          mode: "subscription",
-          checkoutSessionId: session.id,
-        })
-        .onConflictDoUpdate({
-          target: [billing.userId, billing.organizationId],
-          targetWhere: sql`organization_id IS NOT NULL`,
-          set: {
-            planId: plan.id,
-            priceId: price.id,
-            status: "pending",
-            mode: "subscription",
-            checkoutSessionId: session.id,
-            updatedAt: new Date(),
-          },
-        });
+      await saveTeamBillingRecord(ctx.db, ctx.userId, input.organizationId, {
+        stripeCustomerId: billingRecord.stripeCustomerId,
+        planId: plan.id,
+        priceId: price.id,
+        status: "pending",
+        mode: "subscription",
+        checkoutSessionId: session.id,
+      });
 
       if (!session.client_secret) {
         throw new TRPCError({
@@ -1137,6 +1028,7 @@ export const organizationRouter = router({
           organizationId: input.organizationId,
         },
         proration_behavior: "always_invoice",
+        payment_behavior: "error_if_incomplete",
       });
 
       const updates: Partial<BillingRecord> = {
@@ -1148,23 +1040,10 @@ export const organizationRouter = router({
         stripeSubscriptionId: updated.id,
       };
 
-      const [saved] = await ctx.db
-        .insert(billing)
-        .values({
-          userId: ctx.userId,
-          organizationId: input.organizationId,
-          stripeCustomerId: subscription.customer as string,
-          ...updates,
-        })
-        .onConflictDoUpdate({
-          target: [billing.userId, billing.organizationId],
-          targetWhere: sql`organization_id IS NOT NULL`,
-          set: {
-            ...updates,
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
+      const saved = await saveTeamBillingRecord(ctx.db, ctx.userId, input.organizationId, {
+        ...updates,
+        stripeCustomerId: subscriptionState.stripeCustomerId,
+      });
 
       if (saved?.maxModeEnabled) {
         await attachMaxModeMeteredItems(saved, ctx.userId);
@@ -1213,24 +1092,11 @@ export const organizationRouter = router({
           getSubscriptionPeriodEndDate(canceled) ?? subscriptionState.currentPeriodEnd,
       };
 
-      const [saved] = await ctx.db
-        .insert(billing)
-        .values({
-          userId: ctx.userId,
-          organizationId: input.organizationId,
-          stripeCustomerId: subscriptionState.stripeCustomerId,
-          stripeSubscriptionId: subscriptionState.stripeSubscriptionId,
-          ...updates,
-        })
-        .onConflictDoUpdate({
-          target: [billing.userId, billing.organizationId],
-          targetWhere: sql`organization_id IS NOT NULL`,
-          set: {
-            ...updates,
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
+      const saved = await saveTeamBillingRecord(ctx.db, ctx.userId, input.organizationId, {
+        stripeSubscriptionId: subscriptionState.stripeSubscriptionId,
+        ...updates,
+        stripeCustomerId: subscriptionState.stripeCustomerId,
+      });
 
       await recordTeamUsageAuditLog({
         ctx,
@@ -1279,23 +1145,10 @@ export const organizationRouter = router({
         mode: deriveModeFromPrice(price),
       };
 
-      const [saved] = await ctx.db
-        .insert(billing)
-        .values({
-          userId: ctx.userId,
-          organizationId: input.organizationId,
-          stripeCustomerId: subscriptionState.stripeCustomerId,
-          ...updates,
-        })
-        .onConflictDoUpdate({
-          target: [billing.userId, billing.organizationId],
-          targetWhere: sql`organization_id IS NOT NULL`,
-          set: {
-            ...updates,
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
+      const saved = await saveTeamBillingRecord(ctx.db, ctx.userId, input.organizationId, {
+        ...updates,
+        stripeCustomerId: subscriptionState.stripeCustomerId,
+      });
 
       await recordTeamUsageAuditLog({
         ctx,

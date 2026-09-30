@@ -129,7 +129,7 @@ export default function AppearancePage() {
                   type="button"
                   onClick={() => handleSelect(presetItem.key)}
                   className={cn(
-                    "group relative flex flex-col gap-2 rounded-lg border p-3 text-left transition-colors",
+                    "group relative flex flex-col gap-2 rounded-xl border p-3 text-left transition-colors",
                     selected ? "border-foreground bg-accent" : "border-border hover:bg-accent/50",
                   )}
                 >

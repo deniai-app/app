@@ -247,7 +247,7 @@ export function AssistantMessageVideoParts({
         if (part.state !== "output-available" && part.state !== "output-error") {
           return (
             <Message key={key} from="assistant">
-              <MessageContent className="w-full gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+              <MessageContent className="w-full gap-2 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <Spinner className="size-4" />
                   <span>{t("Generating video...")}</span>
@@ -293,14 +293,14 @@ export function AssistantMessageVideoParts({
 
         return (
           <Message key={key} from="assistant">
-            <MessageContent className="w-full gap-3 rounded-lg border border-border/60 bg-background/90 px-4 py-3">
+            <MessageContent className="w-full gap-3 rounded-xl border border-border/60 bg-background/90 px-4 py-3">
               {output.negativePrompt && (
                 <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs">
                   <p className="text-xs font-medium text-foreground">{t("Negative prompt")}</p>
                   <p className="text-muted-foreground">{output.negativePrompt}</p>
                 </div>
               )}
-              <div className="overflow-hidden rounded-lg border border-border/70 bg-muted/30">
+              <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/30">
                 {/* oxlint-disable-next-line: generated videos don't include captions. */}
                 <video controls src={output.videoUrl} className="h-auto w-full" />
               </div>
@@ -363,7 +363,7 @@ export function AssistantMessageImageParts({
         if (part.state !== "output-available" && part.state !== "output-error") {
           return (
             <Message key={key} from="assistant">
-              <MessageContent className="w-full gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+              <MessageContent className="w-full gap-2 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <Spinner className="size-4" />
                   <span>{t("Generating image...")}</span>
@@ -409,12 +409,12 @@ export function AssistantMessageImageParts({
 
         return (
           <Message key={key} from="assistant">
-            <MessageContent className="w-full gap-3 rounded-lg border border-border/60 bg-background/90 px-4 py-3">
+            <MessageContent className="w-full gap-3 rounded-xl border border-border/60 bg-background/90 px-4 py-3">
               <div className="grid gap-3">
                 {output.imageUrls.map((imageUrl: string, idx: number) => (
                   <div
                     key={imageUrl}
-                    className="overflow-hidden rounded-lg border border-border/70 bg-muted/30"
+                    className="overflow-hidden rounded-xl border border-border/70 bg-muted/30"
                   >
                     <Image
                       src={imageUrl}

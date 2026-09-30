@@ -121,19 +121,19 @@ export function TeamMaxModeCard({
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border p-3">
+              <div className="rounded-xl border p-3">
                 <p className="text-xs text-muted-foreground">{t("Status")}</p>
                 <p className="mt-1 text-sm font-medium">
                   {settings?.enabled ? t("Enabled") : t("Disabled")}
                 </p>
               </div>
-              <div className="rounded-lg border p-3">
+              <div className="rounded-xl border p-3">
                 <p className="text-xs text-muted-foreground">{t("Basic Max Mode usage")}</p>
                 <p className="mt-1 text-sm font-medium">
                   {numberFormatter.format(settings?.usageBasic ?? 0)} {t("tokens")}
                 </p>
               </div>
-              <div className="rounded-lg border p-3">
+              <div className="rounded-xl border p-3">
                 <p className="text-xs text-muted-foreground">{t("Premium Max Mode usage")}</p>
                 <p className="mt-1 text-sm font-medium">
                   {numberFormatter.format(settings?.usagePremium ?? 0)} {t("tokens")}
@@ -167,7 +167,7 @@ export function TeamMaxModeCard({
                 />
               ))}
             </div>
-            <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+            <div className="flex items-start gap-2 rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
               <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
               <p>
                 {t(
@@ -176,7 +176,7 @@ export function TeamMaxModeCard({
               </p>
             </div>
             {settings?.auditLog.length ? (
-              <div className="space-y-2 rounded-lg border p-3">
+              <div className="space-y-2 rounded-xl border p-3">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <History className="size-3.5 text-muted-foreground" />
                   {t("Recent activity")}

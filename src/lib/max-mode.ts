@@ -11,8 +11,10 @@ import {
   type MaxModeCurrency,
 } from "@/lib/max-mode-stripe";
 import { stripe } from "@/lib/stripe";
+import { canonicalTeamBillingRow } from "@/lib/team-billing-record";
 
 import type { UsageCategory } from "./usage";
+type MaxModeDatabase = Pick<typeof db, "select" | "update">;
 
 // Max Mode pricing in minor currency units per token unit. Chat usage sends
 // token counts, so configure the Stripe meter price to bill per 1,000 tokens.
@@ -50,7 +52,7 @@ async function canManageTeamMaxMode(userId: string, organizationId: string) {
  * Uses the team billing record when the user is on an active team plan,
  * otherwise falls back to the personal billing record.
  */
-async function getEffectiveBillingRecord(userId: string) {
+async function getEffectiveBillingRecord(userId: string, database: MaxModeDatabase = db) {
   const selectFields = {
     id: billing.id,
     organizationId: billing.organizationId,
@@ -67,7 +69,7 @@ async function getEffectiveBillingRecord(userId: string) {
   };
 
   // Check for active team plan first
-  const teamRecords = await db
+  const teamRecords = await database
     .select(selectFields)
     .from(billing)
     .innerJoin(member, eq(billing.organizationId, member.organizationId))
@@ -75,6 +77,7 @@ async function getEffectiveBillingRecord(userId: string) {
       and(
         eq(member.userId, userId),
         isNotNull(billing.organizationId),
+        canonicalTeamBillingRow(),
         or(like(billing.planId, "pro_team%"), like(billing.planId, "max_team%")),
       ),
     );
@@ -88,7 +91,7 @@ async function getEffectiveBillingRecord(userId: string) {
   }
 
   // Fall back to personal billing record
-  const [personal] = await db
+  const [personal] = await database
     .select(selectFields)
     .from(billing)
     .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
@@ -262,8 +265,9 @@ async function applyMaxModeUsageDelta(
   expression: (
     column: typeof billing.maxModeUsageBasic | typeof billing.maxModeUsagePremium,
   ) => ReturnType<typeof sql>,
+  database: MaxModeDatabase,
 ): Promise<{ success: boolean; newUsage: number }> {
-  const record = await getEffectiveBillingRecord(userId);
+  const record = await getEffectiveBillingRecord(userId, database);
 
   if (!record) {
     return { success: false, newUsage: 0 };
@@ -272,7 +276,7 @@ async function applyMaxModeUsageDelta(
   const column = category === "basic" ? billing.maxModeUsageBasic : billing.maxModeUsagePremium;
   const field = category === "basic" ? "maxModeUsageBasic" : "maxModeUsagePremium";
 
-  const [updated] = await db
+  const [updated] = await database
     .update(billing)
     .set({
       [field]: expression(column),
@@ -303,15 +307,25 @@ async function applyMaxModeUsageDelta(
  * Reporting here would bill the estimate permanently. Use
  * {@link reportMaxModeUsageToStripe} once, after reconciliation.
  */
-export async function recordMaxModeUsage(userId: string, category: UsageCategory, amount = 1) {
+export async function recordMaxModeUsage(
+  userId: string,
+  category: UsageCategory,
+  amount = 1,
+  database: MaxModeDatabase = db,
+) {
   if (amount <= 0) {
     return { success: false, newUsage: 0 };
   }
-  return applyMaxModeUsageDelta(userId, category, (column) => sql`${column} + ${amount}`);
+  return applyMaxModeUsageDelta(userId, category, (column) => sql`${column} + ${amount}`, database);
 }
 
 /** Reverses a local Max Mode ledger entry, e.g. when an over-reserved estimate is refunded. */
-export async function refundMaxModeUsage(userId: string, category: UsageCategory, amount = 1) {
+export async function refundMaxModeUsage(
+  userId: string,
+  category: UsageCategory,
+  amount = 1,
+  database: MaxModeDatabase = db,
+) {
   if (amount <= 0) {
     return { success: false, newUsage: 0 };
   }
@@ -319,6 +333,7 @@ export async function refundMaxModeUsage(userId: string, category: UsageCategory
     userId,
     category,
     (column) => sql`GREATEST(${column} - ${amount}, 0)`,
+    database,
   );
 }
 

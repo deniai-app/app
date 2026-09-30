@@ -139,7 +139,7 @@ export function BillingResetCard() {
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-medium">
               {t("{count} reset credits available", { count: String(status.resetCredits) })}

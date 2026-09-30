@@ -211,7 +211,7 @@ export default function SettingsWrapper({ children }: { children: React.ReactNod
         {/* Nav links (not real tabs) — avoids Base UI TabsTrigger + Link nativeButton issues */}
         <div className="-mx-4 mb-2 overflow-x-auto px-4 lg:mx-0 lg:px-0">
           <nav
-            className="bg-muted group/tabs-list inline-flex h-9 w-max items-center justify-center rounded-lg p-[3px] text-muted-foreground lg:w-auto"
+            className="bg-muted group/tabs-list inline-flex h-9 w-max items-center justify-center rounded-xl p-[3px] text-muted-foreground lg:w-auto"
             aria-label={t("Settings")}
           >
             {settingsTabs.map((tab) => {

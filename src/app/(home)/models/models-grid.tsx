@@ -84,7 +84,7 @@ export function ModelsGrid({
             </h2>
             <div className="grid sm:grid-cols-2 gap-3">
               {authorModels.map((model) => (
-                <div key={model.value} className="rounded-lg border border-border bg-card p-4">
+                <div key={model.value} className="rounded-xl border border-border bg-card p-4">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 className="font-medium text-sm">{model.name}</h3>
                     <div className="flex items-center gap-1 shrink-0">

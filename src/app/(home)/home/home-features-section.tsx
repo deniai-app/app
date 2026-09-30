@@ -263,17 +263,13 @@ export function HomeFeaturesSection() {
           </div>
 
           <div className="mt-10 flex justify-start">
-            <Button variant="outline" asChild>
-              <Link href="/models">
-                {t("Open the model list")}
-                <ArrowRight className="size-4" />
-              </Link>
+            <Button variant="outline" render={<Link href="/models" />} nativeButton={false}>
+              {t("Open the model list")}
+              <ArrowRight className="size-4" />
             </Button>
-            <Button variant="outline" asChild>
-              <Link href="/guides">
-                {t("Read the AI guides")}
-                <ArrowRight className="size-4" />
-              </Link>
+            <Button variant="outline" render={<Link href="/guides" />} nativeButton={false}>
+              {t("Read the AI guides")}
+              <ArrowRight className="size-4" />
             </Button>
           </div>
         </div>

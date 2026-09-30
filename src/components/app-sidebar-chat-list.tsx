@@ -299,37 +299,36 @@ function ChatItem({ item }: { item: ChatListItem }) {
               : "cursor-grab active:cursor-grabbing"
           }
           isActive={pathname === `/chat/${item.id}`}
-          asChild
+
+          render={
+            <Link
+              href={`/chat/${item.id}`}
+              className="flex min-w-0 items-center gap-2"
+              onMouseEnter={prefetchChatPage}
+              onFocus={prefetchChatPage}
+              onTouchStart={prefetchChatPage}
+            />
+          }
         >
-          <Link
-            href={`/chat/${item.id}`}
-            className="flex min-w-0 items-center gap-2"
-            onMouseEnter={prefetchChatPage}
-            onFocus={prefetchChatPage}
-            onTouchStart={prefetchChatPage}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="truncate leading-5">{item.title ?? t("Untitled")}</div>
-              {item.tags.length > 0 ? (
-                <div className="mt-1 flex items-center gap-1 overflow-hidden text-[11px] text-muted-foreground">
-                  {item.tags.slice(0, 2).map((tag) => (
-                    <Badge key={tag} variant="outline" className="h-4 px-1.5 text-[10px]">
-                      {tag}
-                    </Badge>
-                  ))}
-                  {item.tags.length > 2 ? <span>+{item.tags.length - 2}</span> : null}
-                </div>
-              ) : null}
-            </div>
-            {item.pinned ? <Pin className="size-3.5 shrink-0 text-muted-foreground" /> : null}
-          </Link>
+          <div className="min-w-0 flex-1">
+            <div className="truncate leading-5">{item.title ?? t("Untitled")}</div>
+            {item.tags.length > 0 ? (
+              <div className="mt-1 flex items-center gap-1 overflow-hidden text-[11px] text-muted-foreground">
+                {item.tags.slice(0, 2).map((tag) => (
+                  <Badge key={tag} variant="outline" className="h-4 px-1.5 text-[10px]">
+                    {tag}
+                  </Badge>
+                ))}
+                {item.tags.length > 2 ? <span>+{item.tags.length - 2}</span> : null}
+              </div>
+            ) : null}
+          </div>
+          {item.pinned ? <Pin className="size-3.5 shrink-0 text-muted-foreground" /> : null}
         </SidebarMenuButton>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuAction>
-              <MoreHorizontal className="size-4" />
-              <span className="sr-only">{t("More")}</span>
-            </SidebarMenuAction>
+          <DropdownMenuTrigger render={<SidebarMenuAction />}>
+            <MoreHorizontal className="size-4" />
+            <span className="sr-only">{t("More")}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start">
             <DropdownMenuItem onClick={openDetails}>
@@ -528,7 +527,7 @@ function FolderSection({
     <Fragment>
       <SidebarMenuItem className="mt-4 first:mt-0">
         <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-2">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="text-xs font-medium tracking-wider text-muted-foreground">
             {t("Folders")}
           </div>
           <Button
@@ -729,9 +728,6 @@ export function AppSidebarChatList({
           <SidebarMenu>
             {chats.length === 0 ? (
               <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
-                <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-secondary">
-                  <MessageSquare className="size-5 text-muted-foreground" />
-                </div>
                 <p className="text-sm text-muted-foreground">{t("No chats yet")}</p>
                 <p className="mt-1 text-xs text-muted-foreground/70">
                   {t("Start a conversation to see it here")}
@@ -752,18 +748,21 @@ export function AppSidebarChatList({
               </Fragment>
             ) : null}
 
-            <FolderSection
-              activeChatId={activeChatId}
-              folderGroups={folderGroups}
-              onRequestCreateFolder={onRequestCreateFolder}
-            />
-
-            <RemoveFromFolderDropZone visible={activeDragChat !== null} />
+            {chats.length > 0 ? (
+              <Fragment>
+                <FolderSection
+                  activeChatId={activeChatId}
+                  folderGroups={folderGroups}
+                  onRequestCreateFolder={onRequestCreateFolder}
+                />
+                <RemoveFromFolderDropZone visible={activeDragChat !== null} />
+              </Fragment>
+            ) : null}
 
             {recencyGroups.map((group) => (
               <Fragment key={group.key}>
                 <SidebarMenuItem className="mt-4 first:mt-0">
-                  <div className="px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  <div className="px-2 pb-1 pt-2 text-xs font-medium tracking-wider text-muted-foreground">
                     {getRecencyLabel(group.key)}
                   </div>
                 </SidebarMenuItem>

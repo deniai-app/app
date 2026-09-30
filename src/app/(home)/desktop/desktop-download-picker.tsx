@@ -320,23 +320,25 @@ export function DesktopDownloadPicker({ downloads }: { downloads: DesktopDownloa
               <div className="flex w-full flex-col items-stretch justify-center sm:flex-row">
                 <Button
                   size="lg"
-                  asChild
+
                   className="h-12 rounded-b-none rounded-r-none! rounded-t-xl bg-primary px-6 text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 sm:rounded-r-none sm:rounded-b-xl sm:rounded-l-xl"
+                  render={<a href={selectedOption.href} target="_blank" rel="noreferrer" />}
+                  nativeButton={false}
                 >
-                  <a href={selectedOption.href} target="_blank" rel="noreferrer">
-                    <Download className="size-4" />
-                    {t("Download")} {getOsText(selectedOption.os)}
-                  </a>
+                  <Download className="size-4" />
+                  {t("Download")} {getOsText(selectedOption.os)}
                 </Button>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      size="lg"
-                      variant="default"
-                      className="h-12 rounded-t-none rounded-l-none! rounded-b-xl border-0 border-t border-primary-foreground/15 bg-primary px-4 text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 sm:w-14 sm:rounded-l-none sm:rounded-r-xl sm:rounded-b-xl sm:rounded-t-xl sm:border-t-0 sm:border-l"
-                    >
-                      <ChevronDown className="size-4" />
-                    </Button>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        size="lg"
+                        variant="default"
+                        className="h-12 rounded-t-none rounded-l-none! rounded-b-xl border-0 border-t border-primary-foreground/15 bg-primary px-4 text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 sm:w-14 sm:rounded-l-none sm:rounded-r-xl sm:rounded-b-xl sm:rounded-t-xl sm:border-t-0 sm:border-l"
+                      />
+                    }
+                  >
+                    <ChevronDown className="size-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="end"

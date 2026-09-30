@@ -48,7 +48,7 @@ export function CardVerificationCard({ isFreeTier, hasVerifiedPaymentMethod }: P
             <div className="flex items-center gap-2">
               <CreditCard className="size-4 text-muted-foreground" />
               <CardTitle className="text-sm font-medium">
-                {t("Verify a card to unlock more usage")}
+                {t("Verify a card to unlock all models and more usage")}
               </CardTitle>
               {hasVerifiedPaymentMethod && (
                 <Badge variant="secondary" className="gap-1">
@@ -62,8 +62,12 @@ export function CardVerificationCard({ isFreeTier, hasVerifiedPaymentMethod }: P
                 ? t(
                     "All models are unlocked with 25M basic / 10M premium tokens per month. We will not charge this card.",
                   )
-                : t(
-                    "Add a card to unlock all models and lift your monthly limits to 25M basic / 10M premium tokens. We place a $1 hold that is released immediately — no actual charge.",
+                : (
+                    <span className="whitespace-pre-line">
+                      {t(
+                        "Add a card to unlock all models and lift your monthly limits to 25M basic / 10M premium tokens.\n We place a $1 hold that is released immediately — no actual charge.",
+                      )}
+                    </span>
                   )}
             </CardDescription>
           </div>

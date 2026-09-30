@@ -34,10 +34,12 @@ export function ChatExportMenu({ chatId, messages, chatTitle }: ChatExportMenuPr
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-7 shrink-0" title="Export chat">
-          <DownloadIcon className="size-3.5" />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="ghost" size="icon" className="size-7 shrink-0" title="Export chat" />
+        }
+      >
+        <DownloadIcon className="size-3.5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem

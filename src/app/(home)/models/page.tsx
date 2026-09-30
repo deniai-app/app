@@ -245,8 +245,8 @@ export default function ModelsPage() {
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button variant="outline" asChild>
-              <Link href="/use-cases">{t("See example use cases")}</Link>
+            <Button variant="outline" render={<Link href="/use-cases" />} nativeButton={false}>
+              {t("See example use cases")}
             </Button>
           </div>
         </div>

@@ -6,7 +6,6 @@ import { useExtracted } from "next-intl";
 import type { ClientPlan, IndividualPlanId } from "@/lib/billing";
 import { cn } from "@/lib/utils";
 import { PlanCard } from "./billing-plan-card";
-import { UpgradeDecisionPanel } from "./billing-upgrade-panel";
 import { PlanHighlights } from "./plan-highlights";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -92,11 +91,6 @@ export function BillingPlansSection({
   return (
     <>
       <div className="space-y-4">
-        <UpgradeDecisionPanel
-          yearlySavingsPercent={yearlySavingsPercent}
-          hasActiveSubscription={hasActiveSubscription}
-        />
-
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {selectedPlusPlan && (
             <PlanCard
@@ -204,8 +198,8 @@ export function BillingPlansSection({
               {t("Give your whole team Pro or Max access with per-seat pricing.")}
             </CardDescription>
           </div>
-          <Button asChild size="sm">
-            <Link href="/settings/team">{t("Manage Team")}</Link>
+          <Button size="sm" render={<Link href="/settings/team" />} nativeButton={false}>
+            {t("Manage Team")}
           </Button>
         </CardHeader>
         <CardContent>

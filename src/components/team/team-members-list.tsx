@@ -100,19 +100,21 @@ export function TeamMembersList({
                 </Badge>
                 {isAdmin && m.role !== "owner" && (
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7"
-                        disabled={updatingMemberRoleId === m.id}
-                      >
-                        {updatingMemberRoleId === m.id ? (
-                          <Spinner className="size-3.5" />
-                        ) : (
-                          <MoreHorizontal className="size-4" />
-                        )}
-                      </Button>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          disabled={updatingMemberRoleId === m.id}
+                        />
+                      }
+                    >
+                      {updatingMemberRoleId === m.id ? (
+                        <Spinner className="size-3.5" />
+                      ) : (
+                        <MoreHorizontal className="size-4" />
+                      )}
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       {m.role !== "admin" && (

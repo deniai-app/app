@@ -270,6 +270,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `bun run auth:generate`      | Regenerate better-auth schema        |
 | `bun run disposable:refresh` | Refresh disposable-email domain list |
 | `bun run tools:codename`     | Generate version codenames           |
+| `bun run tools:update-types` | Add missing Lucide type exports      |
 | `bun run tools:commit`       | AI-assisted conventional commits     |
 | `bun run doctor`             | Run react-doctor diagnostics         |
 
@@ -306,7 +307,7 @@ Optional flash offer coupon: `STRIPE_FLASH_OFFER_COUPON_ID`.
 
 Dispute handling is automatic when those extra webhook events are enabled. On `charge.dispute.created` the app emails admins and cancels the related subscription (immediately for fraud, otherwise at period end). Evidence is not submitted automatically; contest from the Stripe Dashboard if needed. On `radar.early_fraud_warning.created` it refunds as fraud only when the payment is still actionable, 3D Secure did not authenticate it, and the account has no post-payment service use. Alerts go to `AFFILIATE_ADMIN_EMAILS` / `BLOG_ADMIN_EMAILS` when Cloudflare email is configured.
 
-Checkout and card verification always request 3D Secure (`request_three_d_secure: any`), matching the Radar policy that also blocks `:card_3d_secure_support: = 'not_supported'`. A verified card unlocks the full chat model catalog for free accounts (subject to the verified-free token limits); guests remain limited to the guest model.
+Checkout and card verification always request 3D Secure (`request_three_d_secure: any`), matching the Radar policy that also blocks `:card_3d_secure_support: = 'not_supported'`. A verified card unlocks the full chat model catalog for free accounts (subject to the verified-free token limits); guests remain limited to the guest model. Signed-in free users without a verified card see a reminder at the bottom of the model selector's right panel; it stays visible while scrolling the model list and is hidden for verified-card users, paid users, guests, and deployments with billing disabled.
 
 Keep a Terms of Service URL in Stripe public details (`https://deniai.app/legal/terms`). Optional: turn on [Smart Disputes](https://dashboard.stripe.com/settings/disputes) if you want Stripe to help assemble network evidence.
 

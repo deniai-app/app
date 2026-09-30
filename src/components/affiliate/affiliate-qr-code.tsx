@@ -60,11 +60,14 @@ export function ReferralQrCode({ url }: { url: string }) {
         )}
       </div>
       {dataUrl ? (
-        <Button asChild size="sm" className="w-full">
-          <a href={dataUrl} download="deni-ai-referral-qr.png">
-            <Download className="size-3.5" />
-            {t("Download QR")}
-          </a>
+        <Button
+          size="sm"
+          className="w-full"
+          render={<a href={dataUrl} download="deni-ai-referral-qr.png" />}
+          nativeButton={false}
+        >
+          <Download className="size-3.5" />
+          {t("Download QR")}
         </Button>
       ) : null}
     </div>

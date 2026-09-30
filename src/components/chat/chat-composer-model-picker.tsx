@@ -13,6 +13,7 @@ import {
   ChevronDownIcon,
   Code,
   Coins,
+  CreditCard,
   Gem,
   SearchIcon,
   Sparkle,
@@ -22,6 +23,7 @@ import {
 import { useExtracted, useLocale } from "next-intl";
 import { useState } from "react";
 import Openai from "@/components/openai";
+import { useAvailableModels } from "@/hooks/use-available-models";
 import { formatModelDeprecationDate } from "@/lib/constants";
 import { translateModelDescription, useModelDescriptionCopy } from "@/lib/model-description-copy";
 import { cn } from "@/lib/utils";
@@ -297,6 +299,7 @@ export function ChatComposerModelPicker({
   availableModels,
   selectedModel,
 }: ChatComposerModelPickerProps) {
+  const { shouldVerifyCard } = useAvailableModels();
   const t = useExtracted();
   const locale = useLocale();
   const modelDescriptionLabels: ModelDescriptionLabels = {
@@ -401,48 +404,50 @@ export function ChatComposerModelPicker({
 
   return (
     <Popover open={modelPopoverOpen} onOpenChange={handleModelPopoverOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "h-auto gap-1.5 border-none bg-transparent px-2 py-1.5 font-medium text-muted-foreground shadow-none transition-colors dark:bg-input/30",
-            "hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground",
-          )}
-        >
-          <span className="flex items-center [&_svg]:size-3.5">
-            <ModelIcon model={selectedModel ?? { author: "openai", premium: false }} />
-          </span>
-          <span className="max-w-30 truncate text-sm">
-            {selectedModel?.name ?? t("Select model")}
-          </span>
-          {selectedModelDeprecationWarning && (
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-auto gap-1.5 border-none bg-transparent px-2 py-1.5 font-medium text-muted-foreground shadow-none transition-colors dark:bg-input/30",
+              "hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground",
+            )}
+          />
+        }
+      >
+        <span className="flex items-center [&_svg]:size-3.5">
+          <ModelIcon model={selectedModel ?? { author: "openai", premium: false }} />
+        </span>
+        <span className="max-w-30 truncate text-sm">
+          {selectedModel?.name ?? t("Select model")}
+        </span>
+        {selectedModelDeprecationWarning && (
+          <Badge
+            variant="secondary"
+            className="bg-orange-500/15 text-orange-700 dark:text-orange-400 text-[10px] leading-none px-1 py-0.5 h-auto"
+            title={selectedModelDeprecationWarning}
+            aria-label={selectedModelDeprecationWarning}
+          >
+            <TriangleAlert className="size-3" aria-hidden="true" />
+          </Badge>
+        )}
+        {selectedModel &&
+          "tokenMultiplier" in selectedModel &&
+          typeof selectedModel.tokenMultiplier === "number" &&
+          selectedModel.tokenMultiplier > 1 && (
             <Badge
               variant="secondary"
-              className="bg-orange-500/15 text-orange-700 dark:text-orange-400 text-[10px] leading-none px-1 py-0.5 h-auto"
-              title={selectedModelDeprecationWarning}
-              aria-label={selectedModelDeprecationWarning}
+              className="bg-amber-500/15 text-amber-700 dark:text-amber-400 text-[10px] leading-none px-1 py-0.5 h-auto"
+              title={t("Each token counts {multiplier}× toward your usage", {
+                multiplier: String(selectedModel.tokenMultiplier),
+              })}
             >
-              <TriangleAlert className="size-3" aria-hidden="true" />
+              <Coins className="size-3 mr-0.5" aria-hidden="true" />
+              {selectedModel.tokenMultiplier}x
             </Badge>
           )}
-          {selectedModel &&
-            "tokenMultiplier" in selectedModel &&
-            typeof selectedModel.tokenMultiplier === "number" &&
-            selectedModel.tokenMultiplier > 1 && (
-              <Badge
-                variant="secondary"
-                className="bg-amber-500/15 text-amber-700 dark:text-amber-400 text-[10px] leading-none px-1 py-0.5 h-auto"
-                title={t("Each token counts {multiplier}× toward your usage", {
-                  multiplier: String(selectedModel.tokenMultiplier),
-                })}
-              >
-                <Coins className="size-3 mr-0.5" aria-hidden="true" />
-                {selectedModel.tokenMultiplier}x
-              </Badge>
-            )}
-          <ChevronDownIcon className="size-3 opacity-50 shrink-0" aria-hidden="true" />
-        </Button>
+        <ChevronDownIcon className="size-3 opacity-50 shrink-0" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverContent
         className="flex w-[calc(100vw-1rem)] max-w-125 max-h-[min(31rem,var(--available-height))] flex-col overflow-hidden p-0 shadow-lg sm:w-125"
@@ -499,34 +504,38 @@ export function ChatComposerModelPicker({
               })}
             </div>
 
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain p-1.5 [-webkit-overflow-scrolling:touch]">
-              {currentProviderModels.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  {t("No models available")}
-                </p>
-              ) : (
-                <>
-                  {activeModels.map((m) => (
-                    <ModelPickerItem
-                      key={m.value}
-                      model={m}
-                      isSelected={m.value === model}
-                      featureLabels={featureLabels}
-                      modelDescriptionLabels={modelDescriptionLabels}
-                      modelDescriptionCopy={modelDescriptionCopy}
-                      onSelect={() => {
-                        onModelChange(m.value);
-                        setModelPopoverOpen(false);
-                      }}
-                    />
-                  ))}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain p-1.5 [-webkit-overflow-scrolling:touch]">
+                {currentProviderModels.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    {t("No models available")}
+                  </p>
+                ) : (
+                  <>
+                    {activeModels.map((m) => (
+                      <ModelPickerItem
+                        key={m.value}
+                        model={m}
+                        isSelected={m.value === model}
+                        featureLabels={featureLabels}
+                        modelDescriptionLabels={modelDescriptionLabels}
+                        modelDescriptionCopy={modelDescriptionCopy}
+                        onSelect={() => {
+                          onModelChange(m.value);
+                          setModelPopoverOpen(false);
+                        }}
+                      />
+                    ))}
 
-                  {legacyModels.length > 0 && (
-                    <Collapsible open={legacyModelsOpen} onOpenChange={setLegacyModelsOpen}>
-                      <CollapsibleTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    {legacyModels.length > 0 && (
+                      <Collapsible open={legacyModelsOpen} onOpenChange={setLegacyModelsOpen}>
+                        <CollapsibleTrigger
+                          render={
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                          }
                         >
                           <ArchiveIcon className="size-4 shrink-0" aria-hidden="true" />
                           <span className="flex-1">
@@ -541,27 +550,43 @@ export function ChatComposerModelPicker({
                             )}
                             aria-hidden="true"
                           />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="mt-1 flex flex-col gap-0.5">
-                        {legacyModels.map((m) => (
-                          <ModelPickerItem
-                            key={m.value}
-                            model={m}
-                            isSelected={m.value === model}
-                            featureLabels={featureLabels}
-                            modelDescriptionLabels={modelDescriptionLabels}
-                            modelDescriptionCopy={modelDescriptionCopy}
-                            onSelect={() => {
-                              onModelChange(m.value);
-                              setModelPopoverOpen(false);
-                            }}
-                          />
-                        ))}
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
-                </>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-1 flex flex-col gap-0.5">
+                          {legacyModels.map((m) => (
+                            <ModelPickerItem
+                              key={m.value}
+                              model={m}
+                              isSelected={m.value === model}
+                              featureLabels={featureLabels}
+                              modelDescriptionLabels={modelDescriptionLabels}
+                              modelDescriptionCopy={modelDescriptionCopy}
+                              onSelect={() => {
+                                onModelChange(m.value);
+                                setModelPopoverOpen(false);
+                              }}
+                            />
+                          ))}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    )}
+                  </>
+                )}
+              </div>
+              {shouldVerifyCard && (
+                <div className="flex shrink-0 flex-col gap-2 border-t bg-muted/30 p-3 text-muted-foreground">
+                  <div className="flex items-start gap-2">
+                    <CreditCard className="size-5 shrink-0" aria-hidden="true" />
+                    <p>{t("Verify your card to unlock all models")}</p>
+                  </div>
+                  <Button
+                    render={<a href="/settings/billing" />}
+                    variant="outline"
+                    size="sm"
+                    className="self-start"
+                  >
+                    {t("Verify card")}
+                  </Button>
+                </div>
               )}
             </div>
           </div>

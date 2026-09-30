@@ -68,9 +68,10 @@ export default function ChangelogPage() {
         <ol className="relative space-y-10 border-l border-border/70 pl-6 sm:pl-8">
           {changelogEntries.map((entry) => (
             <li key={entry.version} className="relative">
-              <span className="absolute -left-[1.55rem] top-1.5 flex size-6 items-center justify-center rounded-full border border-border bg-background sm:-left-[2.05rem]">
-                <Sparkles className="size-3 text-primary" />
-              </span>
+              <Sparkles
+                aria-hidden="true"
+                className="absolute -left-8 top-2 size-4 bg-background text-primary sm:-left-10"
+              />
               <article className="rounded-xl border border-border bg-card p-5 sm:p-6">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <h2 className="text-lg font-semibold tracking-tight">

@@ -79,11 +79,9 @@ export function BlogSettingsPage() {
       title={t("Blog")}
       description={t("Write, preview, and publish public articles without a code change.")}
       actions={
-        <Button asChild>
-          <Link href="/settings/blog/new">
-            <FilePlus2 className="size-4" />
-            {t("New post")}
-          </Link>
+        <Button render={<Link href="/settings/blog/new" />} nativeButton={false}>
+          <FilePlus2 className="size-4" />
+          {t("New post")}
         </Button>
       }
     >
@@ -123,18 +121,24 @@ export function BlogSettingsPage() {
                       <Star className={post.featured ? "size-3.5 fill-current" : "size-3.5"} />
                       {post.featured ? t("Unfeature") : t("Feature")}
                     </Button>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/blog/${post.slug}`} target="_blank">
-                        {t("View")}
-                      </Link>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      render={<Link href={`/blog/${post.slug}`} target="_blank" />}
+                      nativeButton={false}
+                    >
+                      {t("View")}
                     </Button>
                   </>
                 ) : null}
-                <Button variant="outline" size="sm" asChild>
-                  <Link href={`/settings/blog/${post.id}`}>
-                    <Pencil className="size-3.5" />
-                    {t("Edit")}
-                  </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  render={<Link href={`/settings/blog/${post.id}`} />}
+                  nativeButton={false}
+                >
+                  <Pencil className="size-3.5" />
+                  {t("Edit")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -177,7 +181,6 @@ export function BlogSettingsPage() {
             <AlertDialogCancel disabled={deletePost.isPending}>{t("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               disabled={deletePost.isPending}
-              loading={deletePost.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 if (deleteId) {
@@ -185,6 +188,7 @@ export function BlogSettingsPage() {
                 }
               }}
             >
+              {deletePost.isPending && <Spinner data-icon="inline-start" />}
               {t("Delete")}
             </AlertDialogAction>
           </AlertDialogFooter>

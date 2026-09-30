@@ -61,46 +61,48 @@ export function MultiSelect({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-controls={listId}
-          aria-expanded={open}
-          disabled={disabled}
-          className={cn(
-            "w-full justify-between overflow-hidden",
-            !selectedOptions.length && "text-muted-foreground",
-            className,
-          )}
-        >
-          <div className="flex items-center gap-2 overflow-hidden">
-            {selectedOptions.length === 0 ? (
-              <span className="truncate">{placeholder}</span>
-            ) : (
-              <>
-                <div className="flex items-center gap-1 w-full">
-                  {selectedOptions.slice(0, maxBadges).map((opt) => (
-                    <Badge
-                      key={opt.value}
-                      variant="secondary"
-                      className="flex items-center gap-1 text-xs"
-                    >
-                      {opt.icon}
-                      <span className="truncate max-w-[120px]">{opt.label}</span>
-                    </Badge>
-                  ))}
-                  {selectedOptions.length > maxBadges && (
-                    <span className="text-xs text-muted-foreground">
-                      +{selectedOptions.length - maxBadges}
-                    </span>
-                  )}
-                </div>
-              </>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-controls={listId}
+            aria-expanded={open}
+            disabled={disabled}
+            className={cn(
+              "w-full justify-between overflow-hidden",
+              !selectedOptions.length && "text-muted-foreground",
+              className,
             )}
-          </div>
-        </Button>
+          />
+        }
+      >
+        <div className="flex items-center gap-2 overflow-hidden">
+          {selectedOptions.length === 0 ? (
+            <span className="truncate">{placeholder}</span>
+          ) : (
+            <>
+              <div className="flex items-center gap-1 w-full">
+                {selectedOptions.slice(0, maxBadges).map((opt) => (
+                  <Badge
+                    key={opt.value}
+                    variant="secondary"
+                    className="flex items-center gap-1 text-xs"
+                  >
+                    {opt.icon}
+                    <span className="truncate max-w-[120px]">{opt.label}</span>
+                  </Badge>
+                ))}
+                {selectedOptions.length > maxBadges && (
+                  <span className="text-xs text-muted-foreground">
+                    +{selectedOptions.length - maxBadges}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </PopoverTrigger>
 
       <PopoverContent className="w-[260px] p-0" align="start">

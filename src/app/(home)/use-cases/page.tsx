@@ -156,17 +156,13 @@ export default function UseCasesPage() {
           <p className="mt-6 max-w-3xl text-base leading-8 text-muted-foreground">{description}</p>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button variant="outline" asChild>
-              <Link href="/models">
-                {t("Compare models")}
-                <ArrowRight className="size-4" />
-              </Link>
+            <Button variant="outline" render={<Link href="/models" />} nativeButton={false}>
+              {t("Compare models")}
+              <ArrowRight className="size-4" />
             </Button>
-            <Button variant="outline" asChild>
-              <Link href="/about">
-                {t("Learn about the product")}
-                <ArrowRight className="size-4" />
-              </Link>
+            <Button variant="outline" render={<Link href="/about" />} nativeButton={false}>
+              {t("Learn about the product")}
+              <ArrowRight className="size-4" />
             </Button>
           </div>
         </div>
@@ -248,23 +244,17 @@ export default function UseCasesPage() {
           <div className="mt-6 flex flex-col items-center gap-4">
             <LoginButton />
             <div className="flex flex-wrap justify-center gap-3">
-              <Button variant="outline" asChild>
-                <Link href="/blog">
-                  {t("Blog")}
-                  <ArrowRight className="size-4" />
-                </Link>
+              <Button variant="outline" render={<Link href="/blog" />} nativeButton={false}>
+                {t("Blog")}
+                <ArrowRight className="size-4" />
               </Button>
-              <Button asChild variant="outline">
-                <Link href="/guides">
-                  {t("AI Guides")}
-                  <ArrowRight className="size-4" />
-                </Link>
+              <Button variant="outline" render={<Link href="/guides" />} nativeButton={false}>
+                {t("AI Guides")}
+                <ArrowRight className="size-4" />
               </Button>
-              <Button variant="outline" asChild>
-                <Link href="/faq">
-                  {t("FAQ")}
-                  <ArrowRight className="size-4" />
-                </Link>
+              <Button variant="outline" render={<Link href="/faq" />} nativeButton={false}>
+                {t("FAQ")}
+                <ArrowRight className="size-4" />
               </Button>
             </div>
           </div>

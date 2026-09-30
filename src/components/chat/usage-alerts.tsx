@@ -96,11 +96,9 @@ export function UsageAlerts({ status, usage, enableMaxMode, onRefreshUsage }: Us
                 </Button>
               )}
               {!status.isAnonymous && !status.billingDisabled && !status.canEnableMaxMode && (
-                <Button size="sm" asChild>
-                  <Link href="/settings/billing">
-                    {t("Upgrade plan")}
-                    <ArrowUpRight className="size-3.5" />
-                  </Link>
+                <Button size="sm" render={<Link href="/settings/billing" />} nativeButton={false}>
+                  {t("Upgrade plan")}
+                  <ArrowUpRight className="size-3.5" />
                 </Button>
               )}
               <Button variant="ghost" size="sm" onClick={onRefreshUsage}>

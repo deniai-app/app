@@ -162,6 +162,7 @@ export { default as Route } from "lucide-react/dist/esm/icons/route.mjs";
 export { default as Save } from "lucide-react/dist/esm/icons/save.mjs";
 export { default as SaveIcon } from "lucide-react/dist/esm/icons/save.mjs";
 export { default as Scale } from "lucide-react/dist/esm/icons/scale.mjs";
+export { default as ScrollText } from "lucide-react/dist/esm/icons/scroll-text.mjs";
 export { default as Search } from "lucide-react/dist/esm/icons/search.mjs";
 export { default as SearchIcon } from "lucide-react/dist/esm/icons/search.mjs";
 export { default as Send } from "lucide-react/dist/esm/icons/send.mjs";

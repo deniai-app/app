@@ -21,7 +21,9 @@ function normalizeTags(value: unknown): string[] {
     return [];
   }
 
-  return value.flatMap((entry) => (typeof entry === "string" ? [entry.trim()] : []));
+  return value.flatMap((entry) =>
+    typeof entry === "string" ? [entry.trim()] : [],
+  );
 }
 
 export function ChatSearch({
@@ -73,16 +75,19 @@ export function ChatSearch({
         <CommandInput placeholder={t("Search chats...")} />
       </div>
       <CommandList className="max-h-[min(60vh,32rem)]">
+        <CommandEmpty>{t("No chats found.")}</CommandEmpty>
         <CommandGroup heading={t("Actions")}>
           <CommandItem onSelect={() => handleSelect("/chat")}>
             <Plus className="size-4" />
             <span>{t("New Chat")}</span>
-            <CommandShortcut>Ctrl K</CommandShortcut>
+            <div className="flex gap-1 ml-auto">
+              <CommandShortcut>Ctrl</CommandShortcut>
+              <CommandShortcut>K</CommandShortcut>
+            </div>
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading={t("Chats")}>
-          <CommandEmpty>{t("No chats found.")}</CommandEmpty>
           {data?.map((chat) => {
             const tags = normalizeTags(chat.tags);
             return (
@@ -94,7 +99,9 @@ export function ChatSearch({
               >
                 <MessageSquare className="size-4" />
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate">{chat.title ?? t("Untitled")}</span>
+                  <span className="truncate">
+                    {chat.title ?? t("Untitled")}
+                  </span>
                   {chat.folder || tags.length > 0 ? (
                     <span className="truncate text-xs text-muted-foreground">
                       {[chat.folder, ...tags].filter(Boolean).join(" · ")}
@@ -111,7 +118,10 @@ export function ChatSearch({
           <Search className="size-3.5" />
           <span>{t("Jump across your chat history instantly.")}</span>
         </div>
-        <CommandShortcut>Ctrl K</CommandShortcut>
+        <div className="flex gap-1 ml-auto">
+          <CommandShortcut>Ctrl</CommandShortcut>
+          <CommandShortcut>K</CommandShortcut>
+        </div>
       </div>
     </CommandDialog>
   );

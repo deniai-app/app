@@ -19,19 +19,6 @@ const jetbrainsMono = JetBrains_Mono({
   preload: false,
 });
 
-const geistSans = Geist({
-  variable: "--font-geist",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  display: "swap",
-  preload: false,
-});
-
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
@@ -193,7 +180,7 @@ export default function RootLayout({
   return (
     <html lang={defaultLocale} suppressHydrationWarning data-scroll-behavior="smooth">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${jetbrainsMono.variable} ${inter.variable} font-sans antialiased min-w-screen min-h-screen overflow-x-hidden transition-colors duration-500`}
+        className={`${jetbrainsMono.variable} ${inter.variable} font-sans antialiased min-w-full min-h-screen overflow-x-hidden transition-colors duration-500`}
       >
         <InlineBootScript />
         <script

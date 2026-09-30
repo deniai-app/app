@@ -327,10 +327,13 @@ export function AssistantMessageVideoParts({
                 </p>
               )}
               <div>
-                <Button asChild size="sm" variant="outline">
-                  <a href={toSafeHref(output.videoUrl)} download>
-                    {t("Download video")}
-                  </a>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  render={<a href={toSafeHref(output.videoUrl)} download />}
+                  nativeButton={false}
+                >
+                  {t("Download video")}
                 </Button>
               </div>
             </MessageContent>
@@ -440,15 +443,21 @@ export function AssistantMessageImageParts({
               </div>
               <div className="flex flex-wrap gap-2">
                 {output.imageUrls.map((imageUrl: string, idx: number) => (
-                  <Button key={imageUrl} asChild size="sm" variant="outline">
-                    <a
-                      href={toSafeDownloadHref(imageUrl)}
-                      download={t("image-{index}.png", {
-                        index: String(idx + 1),
-                      })}
-                    >
-                      {t("Download image {index}", { index: String(idx + 1) })}
-                    </a>
+                  <Button
+                    key={imageUrl}
+                    size="sm"
+                    variant="outline"
+                    render={
+                      <a
+                        href={toSafeDownloadHref(imageUrl)}
+                        download={t("image-{index}.png", {
+                          index: String(idx + 1),
+                        })}
+                      />
+                    }
+                    nativeButton={false}
+                  >
+                    {t("Download image {index}", { index: String(idx + 1) })}
                   </Button>
                 ))}
               </div>

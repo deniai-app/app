@@ -225,7 +225,9 @@ export function ProjectPage({ projectId, initialProjectName }: ProjectPageProps)
             <Label htmlFor="proj-model">{t("Default model")}</Label>
             <Select
               value={defaultModel || "__none__"}
-              onValueChange={(value) => setDefaultModel(value === "__none__" ? "" : value)}
+              onValueChange={(value) => {
+                if (value !== null) setDefaultModel(value === "__none__" ? "" : value);
+              }}
               disabled={!canManage}
             >
               <SelectTrigger id="proj-model">
@@ -258,7 +260,7 @@ export function ProjectPage({ projectId, initialProjectName }: ProjectPageProps)
                     unshareProject.mutate({ id: projectId });
                     return;
                   }
-                  shareProject.mutate({ id: projectId, organizationId: value });
+                  if (value !== null) shareProject.mutate({ id: projectId, organizationId: value });
                 }}
               >
                 <SelectTrigger id="proj-share">

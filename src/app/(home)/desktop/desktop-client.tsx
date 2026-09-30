@@ -69,24 +69,24 @@ export function DesktopClient({ downloads }: { downloads: DesktopDownloads }) {
                 <Button
                   variant="outline"
                   size="lg"
-                  asChild
+
                   className="group transition-colors hover:bg-secondary"
+                  render={<Link href="#download" />}
+                  nativeButton={false}
                 >
-                  <Link href="#download">
-                    <Download className="size-5 transition-transform group-hover:translate-x-1" />
-                    {t("Download")}
-                  </Link>
+                  <Download className="size-5 transition-transform group-hover:translate-x-1" />
+                  {t("Download")}
                 </Button>
                 <Button
                   variant="outline"
                   size="lg"
-                  asChild
+
                   className="group transition-colors hover:bg-secondary"
+                  render={<Link href="#features" />}
+                  nativeButton={false}
                 >
-                  <Link href="#features">
-                    {t("Learn More")}
-                    <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
-                  </Link>
+                  {t("Learn More")}
+                  <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
                 </Button>
               </m.div>
 

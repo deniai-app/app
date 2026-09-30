@@ -370,7 +370,7 @@ export const PromptInputActionAddAttachments = ({
 
   return (
     <DropdownMenuItem {...props} onClick={handleClick}>
-      <ImageIcon className="mr-2 size-4" /> {label}
+      <ImageIcon className="size-4" /> {label}
     </DropdownMenuItem>
   );
 };
@@ -1025,7 +1025,7 @@ export const PromptInputButton = ({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipTrigger render={button} />
       <TooltipContent side={side}>
         {tooltipContent}
         {shortcut && <span className="ml-2 text-muted-foreground">{shortcut}</span>}
@@ -1046,10 +1046,8 @@ export const PromptInputActionMenuTrigger = ({
   children,
   ...props
 }: PromptInputActionMenuTriggerProps) => (
-  <DropdownMenuTrigger asChild>
-    <PromptInputButton className={className} {...props}>
-      {children ?? <PlusIcon className="size-4" />}
-    </PromptInputButton>
+  <DropdownMenuTrigger render={<PromptInputButton className={className} {...props} />}>
+    {children ?? <PlusIcon className="size-4" />}
   </DropdownMenuTrigger>
 );
 
@@ -1102,7 +1100,7 @@ export const PromptInputSubmit = ({
   }
 
   const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
+    (e: Parameters<NonNullable<PromptInputSubmitProps["onClick"]>>[0]) => {
       if (isGenerating && onStop) {
         e.preventDefault();
         onStop();
@@ -1170,18 +1168,12 @@ export const PromptInputSelectValue = ({ className, ...props }: PromptInputSelec
 
 export type PromptInputHoverCardProps = ComponentProps<typeof HoverCard>;
 
-export const PromptInputHoverCard = ({
-  openDelay = 0,
-  closeDelay = 0,
-  ...props
-}: PromptInputHoverCardProps) => (
-  <HoverCard closeDelay={closeDelay} openDelay={openDelay} {...props} />
-);
+export const PromptInputHoverCard = (props: PromptInputHoverCardProps) => <HoverCard {...props} />;
 
 export type PromptInputHoverCardTriggerProps = ComponentProps<typeof HoverCardTrigger>;
 
 export const PromptInputHoverCardTrigger = (props: PromptInputHoverCardTriggerProps) => (
-  <HoverCardTrigger {...props} />
+  <HoverCardTrigger delay={0} closeDelay={0} {...props} />
 );
 
 export type PromptInputHoverCardContentProps = ComponentProps<typeof HoverCardContent>;

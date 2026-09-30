@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Code2, FileText, KeyRound, ShieldCheck, X } from "lucide-react";
+import { ArrowRight, Code2, ShieldCheck, ScrollText, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from "motion/react";
 import Link from "next/link";
@@ -68,15 +68,6 @@ export function TwoFactorBanner() {
 
   const announcements: Announcement[] = [
     {
-      id: "terms",
-      message: t("Terms - We updated our Terms of Service."),
-      linkLabel: t("Read"),
-      href: "/legal/terms",
-      external: false,
-      icon: FileText,
-      iconClassName: "text-violet-500",
-    },
-    {
       id: "flixa",
       message: t("Flixa - A low-cost, high-performance coding agent"),
       linkLabel: t("Download"),
@@ -86,12 +77,12 @@ export function TwoFactorBanner() {
       iconClassName: "text-sky-500",
     },
     {
-      id: "api-credits",
-      message: t("API - API now available at 2/3 the price. Get $10 credit for just $1 now."),
-      linkLabel: t("Get it now"),
-      href: "https://platform.deniai.app/free-credits",
+      id: "changelog",
+      message: t("Updates - Check out the latest changes"),
+      linkLabel: t("Read"),
+      href: "/changelog",
       external: true,
-      icon: KeyRound,
+      icon: ScrollText,
       iconClassName: "text-amber-500",
     },
     ...(!twoFactorEnabled

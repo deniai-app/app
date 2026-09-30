@@ -278,7 +278,7 @@ export function AppSidebar({ onOpenChatSearch }: { onOpenChatSearch: () => void 
             <SidebarMenu className="gap-0">
               <SidebarMenuItem>
                 <Button
-                  className="group/newchat h-9 w-full justify-start gap-2 rounded-b-none font-medium"
+                  className="group/newchat h-9 w-full justify-start gap-2 rounded-t-lg rounded-b-none font-medium"
                   onClick={handleNewChat}
                 >
                   <Plus className="size-4" />
@@ -303,14 +303,13 @@ export function AppSidebar({ onOpenChatSearch }: { onOpenChatSearch: () => void 
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <Button
-                  className="h-9 w-full justify-start gap-2 rounded-t-none font-medium"
-                  asChild
+                  className="h-9 w-full justify-start gap-2 rounded-t-none rounded-b-lg font-medium"
                   variant="outline"
+                  render={<Link href="/settings/projects" />}
+                  nativeButton={false}
                 >
-                  <Link href="/settings/projects">
-                    <FolderClosed className="size-4" />
-                    <span>{t("Projects")}</span>
-                  </Link>
+                  <FolderClosed className="size-4" />
+                  <span>{t("Projects")}</span>
                 </Button>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -357,7 +356,6 @@ export function AppSidebar({ onOpenChatSearch }: { onOpenChatSearch: () => void 
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteAllChats.isPending}
-              loading={deleteAllChats.isPending}
               onClick={handleDeleteAllChats}
             >
               {deleteAllChats.isPending ? <Spinner /> : null}

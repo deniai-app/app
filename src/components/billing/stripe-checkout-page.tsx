@@ -300,8 +300,8 @@ function CheckoutForm({
           <CardDescription>{checkoutState.error.message}</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button asChild variant="outline">
-            <Link href={backHref}>{returnLabel}</Link>
+          <Button variant="outline" render={<Link href={backHref} />} nativeButton={false}>
+            {returnLabel}
           </Button>
         </CardContent>
       </Card>
@@ -692,11 +692,9 @@ export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
             <div className="text-sm text-muted-foreground">{t("Checkout")}</div>
             <h1 className="text-2xl font-semibold tracking-tight">{planLabel}</h1>
           </div>
-          <Button asChild variant="ghost" size="sm">
-            <Link href={backHref}>
-              <ArrowLeft className="size-4" />
-              {returnLabel}
-            </Link>
+          <Button variant="ghost" size="sm" render={<Link href={backHref} />} nativeButton={false}>
+            <ArrowLeft className="size-4" />
+            {returnLabel}
           </Button>
         </div>
       ) : null}
@@ -712,8 +710,8 @@ export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
             <CardDescription>{bootstrapError}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild variant="outline">
-              <Link href={backHref}>{returnLabel}</Link>
+            <Button variant="outline" render={<Link href={backHref} />} nativeButton={false}>
+              {returnLabel}
             </Button>
           </CardContent>
         </Card>
@@ -728,8 +726,8 @@ export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild variant="outline">
-              <Link href={backHref}>{returnLabel}</Link>
+            <Button variant="outline" render={<Link href={backHref} />} nativeButton={false}>
+              {returnLabel}
             </Button>
           </CardContent>
         </Card>

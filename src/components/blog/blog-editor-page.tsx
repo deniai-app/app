@@ -136,8 +136,8 @@ export function BlogEditorPage({ postId }: { postId?: string }) {
   if (!canManage.data) {
     return (
       <SettingsPageShell title={t("Blog")} description={t("You cannot edit blog posts.")}>
-        <Button variant="outline" asChild>
-          <Link href="/settings/blog">{t("Back")}</Link>
+        <Button variant="outline" render={<Link href="/settings/blog" />} nativeButton={false}>
+          {t("Back")}
         </Button>
       </SettingsPageShell>
     );
@@ -151,11 +151,9 @@ export function BlogEditorPage({ postId }: { postId?: string }) {
       )}
       actions={
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/settings/blog">
-              <ArrowLeft className="size-4" />
-              {t("All posts")}
-            </Link>
+          <Button variant="outline" render={<Link href="/settings/blog" />} nativeButton={false}>
+            <ArrowLeft className="size-4" />
+            {t("All posts")}
           </Button>
           <Button
             variant="outline"

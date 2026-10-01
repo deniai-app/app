@@ -249,7 +249,7 @@ export default function ChatHome() {
 
         {canShowAds && (
           <aside aria-label={t("Advertisement")} className="flex justify-center">
-            <MeaxAdUnit appId="app-23f69d025b5b" unitId="unit-0125557542ea" size="728x90" />
+            <MeaxAdUnit appId="app-23f69d025b5b" unitId="unit-0125557542ea" size="300x250" />
           </aside>
         )}
       </div>

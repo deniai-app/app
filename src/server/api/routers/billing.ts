@@ -1110,7 +1110,7 @@ export const billingRouter = router({
       customer: billingRecord.stripeCustomerId,
       amount: 100,
       currency: "usd",
-      payment_method_types: ["card"],
+      allowed_payment_method_types: ["card"],
       capture_method: "manual",
       setup_future_usage: "off_session",
       description: "Card verification (released immediately, never charged)",

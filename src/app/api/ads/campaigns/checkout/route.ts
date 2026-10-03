@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       const checkout = await stripe.checkout.sessions.create({
         mode: "payment",
         allow_promotion_codes: true,
-        payment_method_types: ["card"],
+        allowed_payment_method_types: ["card"],
         client_reference_id: session.session.userId,
         metadata: { adCampaignId: ad.id, userId: session.session.userId },
         payment_intent_data: { metadata: { adCampaignId: ad.id } },

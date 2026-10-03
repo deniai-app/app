@@ -5,7 +5,11 @@ import { db } from "@/db/drizzle";
 import { adCampaign } from "@/db/schema";
 import { env } from "@/env";
 import { reviewAd } from "@/lib/ad-review";
-import { adCreativeSchema, hasOnlyOppositeVariant } from "@/lib/ad-creative";
+import {
+  adCreativeSchema,
+  adTargetLanguagesSchema,
+  hasOnlyOppositeVariant,
+} from "@/lib/ad-creative";
 import { creativeFields } from "@/lib/ad-variants";
 import { activatePaidAd, releaseExpiredAdCheckout } from "@/lib/ad-checkout";
 import { adPlans } from "@/lib/ads";
@@ -18,6 +22,7 @@ const inputSchema = z
     ...adCreativeSchema.shape,
     plan: z.enum(adPlans),
     budgetYen: z.number().int().min(300).max(100_000),
+    targetLanguages: adTargetLanguagesSchema,
   })
   .refine((input) => input.plan !== "fixed" || input.budgetYen === 3000)
   .refine(hasOnlyOppositeVariant);
@@ -113,6 +118,7 @@ export async function POST(request: Request) {
       ...creativeFields(input.data),
       plan: input.data.plan,
       budgetYen: input.data.budgetYen,
+      targetLanguages: input.data.targetLanguages,
       status: review.approved ? "approved" : "rejected",
       reviewReason: review.reason,
     })

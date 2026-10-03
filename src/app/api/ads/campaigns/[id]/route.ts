@@ -4,7 +4,11 @@ import { z } from "zod";
 import { db } from "@/db/drizzle";
 import { adCampaign } from "@/db/schema";
 import { env } from "@/env";
-import { adCreativeSchema, hasOnlyOppositeVariant } from "@/lib/ad-creative";
+import {
+  adCreativeSchema,
+  adTargetLanguagesSchema,
+  hasOnlyOppositeVariant,
+} from "@/lib/ad-creative";
 import { creativeFields, sameCreative, storedCreative } from "@/lib/ad-variants";
 import { reviewAd } from "@/lib/ad-review";
 import { isAllowedAdOrigin } from "@/lib/ad-origin";
@@ -14,9 +18,14 @@ import { checkRateLimit } from "@/lib/rate-limit";
 const editSchema = z
   .strictObject({
     ...adCreativeSchema.shape,
+    targetLanguages: adTargetLanguagesSchema,
     previous: adCreativeSchema,
   })
   .refine(hasOnlyOppositeVariant);
+
+function sameTargetLanguages(a: readonly string[], b: readonly string[]) {
+  return a.length === b.length && a.every((language) => b.includes(language));
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isAllowedAdOrigin(request)) return new Response(null, { status: 403 });
@@ -28,7 +37,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!z.uuid().safeParse(id).success) return new Response(null, { status: 404 });
   const input = editSchema.safeParse(await request.json().catch(() => null));
   if (!input.success) return Response.json({ error: "Invalid creative" }, { status: 400 });
-  const { previous, ...creative } = input.data;
+  const { previous, targetLanguages, ...creative } = input.data;
   const [existing] = await db
     .select()
     .from(adCampaign)
@@ -42,8 +51,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!canEdit) return Response.json({ error: "Campaign cannot be edited" }, { status: 409 });
   if (!sameCreative(storedCreative(existing), previous))
     return Response.json({ error: "Campaign changed; refresh and try again" }, { status: 409 });
-  if (sameCreative(storedCreative(existing), creative))
-    return Response.json({ campaign: existing }, { headers: { "Cache-Control": "no-store" } });
+  if (sameCreative(storedCreative(existing), creative)) {
+    if (sameTargetLanguages(existing.targetLanguages, targetLanguages))
+      return Response.json({ campaign: existing }, { headers: { "Cache-Control": "no-store" } });
+    // Targeting does not change the creative, so it needs no new AI review.
+    const [updated] = await db
+      .update(adCampaign)
+      .set({ targetLanguages, updatedAt: new Date() })
+      .where(
+        and(
+          eq(adCampaign.id, id),
+          eq(adCampaign.userId, session.session.userId),
+          eq(adCampaign.status, existing.status),
+        ),
+      )
+      .returning();
+    if (!updated)
+      return Response.json({ error: "Campaign changed; refresh and try again" }, { status: 409 });
+    return Response.json({ campaign: updated }, { headers: { "Cache-Control": "no-store" } });
+  }
 
   const limit = await checkRateLimit({
     key: `ad-edit-review:${session.session.userId}`,
@@ -67,6 +93,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .update(adCampaign)
     .set({
       ...creativeFields(creative),
+      targetLanguages,
       ...(existing.status === "rejected" ? { status: "approved" } : {}),
       reviewReason: null,
       updatedAt: new Date(),

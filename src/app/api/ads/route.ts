@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     viewerId,
     !session?.session || Boolean(session.user.isAnonymous),
     excludeId,
+    locale,
   );
   const token = ad && viewerId ? signAdDelivery(ad.id, viewerId, ad.url) : "";
   return Response.json(

@@ -51,7 +51,7 @@ test("serves a non-billable localized homepage ad when no usable IP is available
     },
   });
   expect(response.headers.get("cache-control")).toBe("private, no-store");
-  expect(mocks.choose).toHaveBeenCalledWith(undefined, true, null);
+  expect(mocks.choose).toHaveBeenCalledWith(undefined, true, null, "ja");
   expect(mocks.sign).not.toHaveBeenCalled();
 });
 
@@ -59,14 +59,14 @@ test.each(["home", "chat"])("keeps signed-in delivery tracking for %s", async (p
   mocks.session.mockResolvedValue({ session: { userId: "viewer" }, user: { isAnonymous: false } });
   const response = await GET(request(placement));
   expect((await response.json()).ad.url).toBe("/api/ads/click?id=campaign&token=signed-token");
-  expect(mocks.choose).toHaveBeenCalledWith("viewer", false, null);
+  expect(mocks.choose).toHaveBeenCalledWith("viewer", false, null, "en");
   expect(mocks.sign).toHaveBeenCalledWith(ad.id, "viewer", ad.url);
 });
 
 test("keeps anonymous guest billing for the homepage", async () => {
   mocks.session.mockResolvedValue({ session: { userId: "guest" }, user: { isAnonymous: true } });
   expect((await (await GET(request())).json()).ad.token).toBe("signed-token");
-  expect(mocks.choose).toHaveBeenCalledWith("guest", true, null);
+  expect(mocks.choose).toHaveBeenCalledWith("guest", true, null, "en");
   expect(mocks.freeViewer).not.toHaveBeenCalled();
 });
 
@@ -93,7 +93,7 @@ test("binds public homepage deliveries to the IP and uses guest eligibility", as
   expect((await (await GET(req)).json()).ad.url).toBe(
     "/api/ads/click?id=campaign&token=signed-token",
   );
-  expect(mocks.choose).toHaveBeenCalledWith(viewer, true, null);
+  expect(mocks.choose).toHaveBeenCalledWith(viewer, true, null, "en");
   expect(mocks.sign).toHaveBeenCalledWith(ad.id, viewer, ad.url);
 });
 

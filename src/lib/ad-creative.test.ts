@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { adCreativeSchema, submittedAdCreativeSchema } from "./ad-creative";
+import {
+  adCreativeSchema,
+  adTargetLanguagesSchema,
+  submittedAdCreativeSchema,
+} from "./ad-creative";
 
 const creative = {
   title: "Sample ad",
@@ -51,4 +55,12 @@ test("editing cannot include price or budget and rejects unsafe URLs", () => {
     adCreativeSchema.safeParse({ ...creative, url: "https://127.0.0.1/" }).success,
     false,
   );
+});
+
+test("target languages require a unique, non-empty selection", () => {
+  assert.deepEqual(adTargetLanguagesSchema.parse(["en", "ja"]), ["ja", "en"]);
+  assert.deepEqual(adTargetLanguagesSchema.parse(["en"]), ["en"]);
+  assert.equal(adTargetLanguagesSchema.safeParse([]).success, false);
+  assert.equal(adTargetLanguagesSchema.safeParse(["en", "en"]).success, false);
+  assert.equal(adTargetLanguagesSchema.safeParse(["fr"]).success, false);
 });

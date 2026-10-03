@@ -1,8 +1,9 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, arrayContains, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db/drizzle";
 import { adCampaign, adEvent } from "@/db/schema";
 import { env } from "@/env";
+import type { AdLanguage } from "@/lib/ad-creative";
 
 export type AdCreative = {
   id: string;
@@ -94,8 +95,12 @@ export async function chooseAd(
   userId: string | undefined,
   isGuest = false,
   excludeId?: string | null,
+  language: AdLanguage = "en",
 ) {
-  const campaigns = await db.select().from(adCampaign).where(adEligible(isGuest));
+  const campaigns = await db
+    .select()
+    .from(adCampaign)
+    .where(and(adEligible(isGuest), arrayContains(adCampaign.targetLanguages, [language])));
   return pickAd(
     campaigns.filter((ad) => ad.userId !== userId),
     excludeId,

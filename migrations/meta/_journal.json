@@ -379,6 +379,13 @@
       "when": 1790851633261,
       "tag": "0053_previous_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1791016937997,
+      "tag": "0054_careful_chronomancer",
+      "breakpoints": true
     }
   ]
 }

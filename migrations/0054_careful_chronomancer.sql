@@ -1,0 +1,1 @@
+ALTER TABLE "ad_campaign" ADD COLUMN "target_languages" text[] DEFAULT ARRAY['ja', 'en']::text[] NOT NULL;

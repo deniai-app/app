@@ -19,6 +19,11 @@ export const adCampaign = pgTable(
     japaneseDescription: text("japanese_description"),
     englishTitle: text("english_title"),
     englishDescription: text("english_description"),
+    // Viewer UI languages this campaign is delivered to.
+    targetLanguages: text("target_languages", { enum: ["ja", "en"] })
+      .array()
+      .notNull()
+      .default(sql`ARRAY['ja', 'en']::text[]`),
     url: text("url").notNull(),
     plan: text("plan").notNull(), // cpm, cpc, fixed
     status: text("status").notNull().default("review"), // review, rejected, approved, active, paused

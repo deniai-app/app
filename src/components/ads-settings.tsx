@@ -16,7 +16,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -95,6 +104,53 @@ function VariantFields({
   );
 }
 
+type AdLanguage = "ja" | "en";
+const allLanguages: AdLanguage[] = ["ja", "en"];
+
+function TargetLanguageFields({
+  idPrefix,
+  value,
+  onChange,
+}: {
+  idPrefix: string;
+  value: AdLanguage[];
+  onChange: (value: AdLanguage[]) => void;
+}) {
+  const t = useExtracted();
+  return (
+    <FieldSet className="gap-3">
+      <FieldLegend variant="label" className="mb-2">
+        {t("Target languages")}
+      </FieldLegend>
+      <div className="flex flex-wrap gap-x-6 gap-y-3">
+        {allLanguages.map((language) => (
+          <Field key={language} orientation="horizontal" className="w-auto">
+            <Checkbox
+              id={`${idPrefix}-target-${language}`}
+              checked={value.includes(language)}
+              // Keep at least one language so the campaign can still be delivered.
+              disabled={value.length === 1 && value.includes(language)}
+              onCheckedChange={(checked) =>
+                onChange(
+                  allLanguages.filter((item) =>
+                    item === language ? checked : value.includes(item),
+                  ),
+                )
+              }
+            />
+            <FieldLabel htmlFor={`${idPrefix}-target-${language}`} className="font-normal">
+              {language === "ja" ? t("Japanese") : t("English")}
+            </FieldLabel>
+          </Field>
+        ))}
+      </div>
+      <FieldDescription>
+        {t("Your ad is shown only to viewers using Deni AI in the selected languages.")}
+      </FieldDescription>
+    </FieldSet>
+  );
+}
+
 type Campaign = {
   id: string;
   title: string;
@@ -104,6 +160,7 @@ type Campaign = {
   japaneseDescription: string | null;
   englishTitle: string | null;
   englishDescription: string | null;
+  targetLanguages: AdLanguage[];
   url: string;
   plan: string;
   status: string;
@@ -132,10 +189,13 @@ export function AdsSettings() {
   const [editError, setEditError] = useState("");
   const [defaultLanguage, setDefaultLanguage] = useState<"ja" | "en">("ja");
   const [editLanguage, setEditLanguage] = useState<"ja" | "en">("ja");
+  const [targetLanguages, setTargetLanguages] = useState<AdLanguage[]>(allLanguages);
+  const [editTargetLanguages, setEditTargetLanguages] = useState<AdLanguage[]>(allLanguages);
   const [plan, setPlan] = useState("cpm");
   const [budget, setBudget] = useState(3000);
   function startEditing(ad: Campaign) {
     setEditLanguage(ad.defaultLanguage ?? (ad.japaneseTitle ? "en" : "ja"));
+    setEditTargetLanguages(ad.targetLanguages);
     setEditingCampaign(ad);
     setEditError("");
   }
@@ -174,6 +234,7 @@ export function AdsSettings() {
           url: form.get("url"),
           japaneseVariant: editLanguage === "en" ? variantFromForm(form, "japanese") : null,
           englishVariant: editLanguage === "ja" ? variantFromForm(form, "english") : null,
+          targetLanguages: editTargetLanguages,
           previous,
         }),
       });
@@ -235,6 +296,7 @@ export function AdsSettings() {
           url: form.get("url"),
           japaneseVariant: defaultLanguage === "en" ? variantFromForm(form, "japanese") : null,
           englishVariant: defaultLanguage === "ja" ? variantFromForm(form, "english") : null,
+          targetLanguages,
           plan,
           budgetYen: plan === "fixed" ? 3000 : budget,
         }),
@@ -248,6 +310,7 @@ export function AdsSettings() {
       setPage(1);
       formElement.reset();
       setDefaultLanguage("ja");
+      setTargetLanguages(allLanguages);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("Unable to submit ad"));
     } finally {
@@ -385,6 +448,11 @@ export function AdsSettings() {
                 <FieldLabel htmlFor="new-ad-url">{t("Destination URL (HTTPS)")}</FieldLabel>
                 <Input id="new-ad-url" name="url" type="url" pattern="https://.*" required />
               </Field>
+              <TargetLanguageFields
+                idPrefix="new"
+                value={targetLanguages}
+                onChange={setTargetLanguages}
+              />
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="new-ad-plan">{t("Pricing plan")}</FieldLabel>
@@ -524,6 +592,12 @@ export function AdsSettings() {
               {ad.weightedClickUnits / 2} {t("billable clicks")}
             </p>
             <p className="text-sm text-muted-foreground">
+              {t("Target languages")}:{" "}
+              {ad.targetLanguages
+                .map((language) => (language === "ja" ? t("Japanese") : t("English")))
+                .join(", ")}
+            </p>
+            <p className="text-sm text-muted-foreground">
               {t("Spent")}: ¥{ad.spentYen} / ¥{ad.budgetYen}
               {ad.endsAt ? ` · ${new Date(ad.endsAt).toLocaleDateString()}` : ""}
             </p>
@@ -551,7 +625,7 @@ export function AdsSettings() {
               >
                 <FieldDescription>
                   {t(
-                    "Changes to ad text or URL are AI-reviewed before publishing. Pricing and budget cannot be changed.",
+                    "Changes to ad text or URL are AI-reviewed before publishing. Target languages can be changed without review. Pricing and budget cannot be changed.",
                   )}
                 </FieldDescription>
                 <FieldGroup className="gap-4">
@@ -620,6 +694,11 @@ export function AdsSettings() {
                       required
                     />
                   </Field>
+                  <TargetLanguageFields
+                    idPrefix={ad.id}
+                    value={editTargetLanguages}
+                    onChange={setEditTargetLanguages}
+                  />
                 </FieldGroup>
                 {editError && <FieldError>{editError}</FieldError>}
                 <div className="flex flex-wrap gap-2">

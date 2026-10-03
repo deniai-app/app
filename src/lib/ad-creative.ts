@@ -28,6 +28,16 @@ export const adCreativeSchema = z.strictObject({
     }),
 });
 
+export const adLanguages = ["ja", "en"] as const;
+export type AdLanguage = (typeof adLanguages)[number];
+
+export const adTargetLanguagesSchema = z
+  .array(z.enum(adLanguages))
+  .min(1)
+  .max(adLanguages.length)
+  .refine((languages) => new Set(languages).size === languages.length)
+  .transform((languages) => adLanguages.filter((language) => languages.includes(language)));
+
 // Old campaigns can have both variants and no recorded default language.
 export function hasOnlyOppositeVariant(input: z.infer<typeof adCreativeSchema>) {
   return (

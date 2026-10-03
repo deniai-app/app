@@ -13,5 +13,7 @@ export type ChatToolUsageContext = {
 
 export type CreateChatToolsOptions = {
   webSearch?: boolean;
+  interactive?: boolean;
+  enabledTools?: readonly ("search" | "browse")[];
   usage?: ChatToolUsageContext;
 };

@@ -7,6 +7,7 @@ export * from "./billing";
 export * from "./chat";
 export * from "./device-auth";
 export * from "./memory";
+export * from "./model-comparison";
 export * from "./project";
 export * from "./provider-keys";
 export * from "./provider-settings";

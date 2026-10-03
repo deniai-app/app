@@ -31,6 +31,8 @@ export function ChangeAvatar({ className }: ChangeAvatarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [action, setAction] = useState<"upload" | "delete" | null>(null);
 
   const isPending = updatePending || isUploading || isDeleting;
 
@@ -40,6 +42,7 @@ export function ChangeAvatar({ className }: ChangeAvatarProps) {
 
     e.target.value = "";
 
+    setAction("upload");
     setIsUploading(true);
 
     try {
@@ -63,6 +66,8 @@ export function ChangeAvatar({ className }: ChangeAvatarProps) {
   }
 
   async function handleDelete() {
+    if (isPending) return;
+    setAction("delete");
     const currentImage = session?.user.image;
 
     updateUser(
@@ -108,7 +113,12 @@ export function ChangeAvatar({ className }: ChangeAvatarProps) {
           <UserAvatar className="size-12" isPending={isPending} />
         </Button>
 
-        <DropdownMenu>
+        <DropdownMenu
+          open={isMenuOpen}
+          onOpenChange={(open) => {
+            if (!isPending) setIsMenuOpen(open);
+          }}
+        >
           <DropdownMenuTrigger
             className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
             disabled={!session || isPending}
@@ -119,18 +129,29 @@ export function ChangeAvatar({ className }: ChangeAvatarProps) {
           </DropdownMenuTrigger>
 
           <DropdownMenuContent className="min-w-fit">
-            <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-              <Upload className="text-muted-foreground" />
+            <DropdownMenuItem
+              closeOnClick={false}
+              disabled={isPending}
+              aria-busy={isPending && action === "upload"}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {isPending && action === "upload" ? (
+                <Spinner />
+              ) : (
+                <Upload className="text-muted-foreground" />
+              )}
 
               {localization.settings.uploadAvatar}
             </DropdownMenuItem>
 
             <DropdownMenuItem
               variant="destructive"
-              disabled={!session?.user.image}
+              closeOnClick={false}
+              disabled={isPending || !session?.user.image}
+              aria-busy={isPending && action === "delete"}
               onClick={handleDelete}
             >
-              <Trash2 />
+              {isPending && action === "delete" ? <Spinner /> : <Trash2 />}
 
               {localization.settings.deleteAvatar}
             </DropdownMenuItem>

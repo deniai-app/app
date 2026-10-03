@@ -2,15 +2,18 @@
 
 import { MessageSquare, Code, Image, FileText, PenLine } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useExtracted } from "next-intl";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ChatComposer, type ComposerMessage } from "@/components/chat/chat-composer";
-import { MeaxAdUnit } from "@/components/meax-ad-unit";
+import { AdSlot } from "@/components/ad-slot";
 import { ProjectSelect } from "@/components/projects/project-select";
 import { useAvailableModels } from "@/hooks/use-available-models";
 import { useNewChat } from "@/hooks/use-new-chat";
 import { defaultModel, getPreferredReasoningEffort, type ReasoningEffort } from "@/lib/constants";
+import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc/react";
 
 // Storage key for passing initial message data to chat page
@@ -60,6 +63,7 @@ export default function ChatHome() {
   const t = useExtracted();
   const { push } = useRouter();
   const startNewChat = useNewChat();
+  const session = authClient.useSession();
   const { availableModels, platformCapabilities, canShowAds } = useAvailableModels();
   const { features } = platformCapabilities;
   const [input, setInput] = useState("");
@@ -217,13 +221,19 @@ export default function ChatHome() {
         <div>
           <ChatComposer
             bottomContent={
-              <ProjectSelect
-                projects={projectsQuery.data ?? []}
-                value={projectId}
-                onValueChange={handleProjectChange}
-                onCreateClick={() => push("/settings/projects")}
-                className="flex-wrap"
-              />
+              <div className="w-full flex flex-col md:flex-row gap-2">
+                <ProjectSelect
+                  projects={projectsQuery.data ?? []}
+                  value={projectId}
+                  onValueChange={handleProjectChange}
+                  onCreateClick={() => push("/settings/projects")}
+                  className="flex-wrap"
+                />
+
+                <Button size="sm" nativeButton={false} render={<Link href="/compare" />}>
+                  {t("Compare models")}
+                </Button>
+              </div>
             }
             value={input}
             onValueChange={setInput}
@@ -247,10 +257,15 @@ export default function ChatHome() {
           />
         </div>
 
-        {canShowAds && (
-          <aside aria-label={t("Advertisement")} className="flex justify-center">
-            <MeaxAdUnit appId="app-23f69d025b5b" unitId="unit-0125557542ea" size="728x90" />
-          </aside>
+        {canShowAds && !session.isPending && (
+          <AdSlot
+            viewerId={session.data?.user.id ?? "public"}
+            chatId="home"
+            placement="home"
+            visible
+            requestInFlight={false}
+            className="max-w-3xl"
+          />
         )}
       </div>
     </section>

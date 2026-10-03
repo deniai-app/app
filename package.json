@@ -28,9 +28,6 @@
     "doctor": "react-doctor"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.69",
-    "@ai-sdk/google": "^4.0.86",
-    "@ai-sdk/groq": "^4.0.53",
     "@ai-sdk/openai": "^4.0.82",
     "@ai-sdk/react": "^4.0.126",
     "@ai-sdk/xai": "^5.0.13",

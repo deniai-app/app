@@ -2,6 +2,8 @@
 
 import type { UIMessage } from "ai";
 import { DownloadIcon, FileJsonIcon, FileTextIcon, PrinterIcon } from "lucide-react";
+import { useState } from "react";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,6 +22,8 @@ interface ChatExportMenuProps {
 
 export function ChatExportMenu({ chatId, messages, chatTitle }: ChatExportMenuProps) {
   const utils = trpc.useUtils();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState<"markdown" | "json" | null>(null);
   const filename = chatTitle ?? "chat";
   const safeFilename = filename.replace(/[^a-z0-9\u3040-\u9fff\s-]/gi, "").trim() || "chat";
 
@@ -32,8 +36,33 @@ export function ChatExportMenu({ chatId, messages, chatTitle }: ChatExportMenuPr
     }
   };
 
+  const handleExport = async (format: "markdown" | "json") => {
+    if (exporting) return;
+    setExporting(format);
+    try {
+      const fullMessages = await resolveMessages();
+      if (format === "markdown") {
+        triggerDownload(
+          exportAsMarkdown(fullMessages, chatTitle ?? undefined),
+          `${safeFilename}.md`,
+          "text/markdown",
+        );
+      } else {
+        triggerDownload(exportAsJson(fullMessages), `${safeFilename}.json`, "application/json");
+      }
+      setIsMenuOpen(false);
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      open={isMenuOpen}
+      onOpenChange={(open) => {
+        if (!exporting) setIsMenuOpen(open);
+      }}
+    >
       <DropdownMenuTrigger
         render={
           <Button variant="ghost" size="icon" className="size-7 shrink-0" title="Export chat" />
@@ -43,28 +72,32 @@ export function ChatExportMenu({ chatId, messages, chatTitle }: ChatExportMenuPr
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem
-          onSelect={() => {
-            void resolveMessages().then((fullMessages) => {
-              const content = exportAsMarkdown(fullMessages, chatTitle ?? undefined);
-              triggerDownload(content, `${safeFilename}.md`, "text/markdown");
-            });
-          }}
+          closeOnClick={false}
+          disabled={!!exporting}
+          aria-busy={exporting === "markdown"}
+          onClick={() => handleExport("markdown")}
         >
-          <FileTextIcon className="size-4" />
+          {exporting === "markdown" ? (
+            <Spinner className="size-4" />
+          ) : (
+            <FileTextIcon className="size-4" />
+          )}
           Export as Markdown
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => {
-            void resolveMessages().then((fullMessages) => {
-              const content = exportAsJson(fullMessages);
-              triggerDownload(content, `${safeFilename}.json`, "application/json");
-            });
-          }}
+          closeOnClick={false}
+          disabled={!!exporting}
+          aria-busy={exporting === "json"}
+          onClick={() => handleExport("json")}
         >
-          <FileJsonIcon className="size-4" />
+          {exporting === "json" ? (
+            <Spinner className="size-4" />
+          ) : (
+            <FileJsonIcon className="size-4" />
+          )}
           Export as JSON
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={exportAsPdf}>
+        <DropdownMenuItem disabled={!!exporting} onClick={exportAsPdf}>
           <PrinterIcon className="size-4" />
           Export as PDF
         </DropdownMenuItem>

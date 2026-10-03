@@ -5,6 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useExtracted } from "next-intl";
+import { useState } from "react";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -76,6 +78,8 @@ function AccountUsageRow({
 
 export function AccountMenu() {
   const t = useExtracted();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const { push } = useRouter();
   const { isMobile } = useSidebar();
   const utils = trpc.useUtils();
@@ -116,8 +120,30 @@ export function AccountMenu() {
   });
 
   const maxModePending = enableMaxMode.isPending || disableMaxMode.isPending;
+  const isMenuPending = maxModePending || isSigningOut;
+
+  const handleSignOut = async () => {
+    if (isMenuPending) return;
+    setIsSigningOut(true);
+    try {
+      const result = await authClient.signOut();
+      if (result.error) {
+        toast.error(result.error.message);
+        return;
+      }
+      setIsMenuOpen(false);
+      push("/");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
   const maxModeEnabled =
-    !billingDisabled && (maxModeQuery.data?.enabled ?? usageQuery.data?.maxModeEnabled ?? false);
+    !billingDisabled &&
+    (disableMaxMode.isPending ||
+      (!enableMaxMode.isPending &&
+        (maxModeQuery.data?.enabled ?? usageQuery.data?.maxModeEnabled ?? false)));
   const maxModeEligible =
     !billingDisabled && (maxModeQuery.data?.eligible ?? usageQuery.data?.maxModeEligible ?? false);
 
@@ -134,7 +160,12 @@ export function AccountMenu() {
           : t("Pro");
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      open={isMenuOpen}
+      onOpenChange={(open) => {
+        if (!isMenuPending) setIsMenuOpen(open);
+      }}
+    >
       <DropdownMenuTrigger render={<SidebarMenuButton className="h-auto py-2" />}>
         <div className="flex w-full items-center gap-2">
           <div className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground overflow-hidden">
@@ -219,6 +250,11 @@ export function AccountMenu() {
               {!isAnonymous && !billingDisabled && (
                 <Link
                   href="/settings/billing"
+                  aria-disabled={isMenuPending}
+                  tabIndex={isMenuPending ? -1 : undefined}
+                  onClick={(event) => {
+                    if (isMenuPending) event.preventDefault();
+                  }}
                   className="block text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                 >
                   {t("View billing")}
@@ -228,36 +264,46 @@ export function AccountMenu() {
           </>
         )}
 
-        {(maxModeEnabled || maxModeEligible) && (
+        {(maxModeEnabled || maxModeEligible || maxModePending) && (
           <>
             <DropdownMenuSeparator />
             {maxModeEnabled && (
               <DropdownMenuItem
                 className="gap-2 text-sm text-muted-foreground"
                 closeOnClick={false}
-                disabled={maxModePending}
+                disabled={isMenuPending}
+                aria-busy={disableMaxMode.isPending}
                 onClick={() => {
-                  if (maxModePending) return;
+                  if (isMenuPending) return;
                   disableMaxMode.mutate();
                 }}
               >
-                <Zap className="size-4 text-amber-500" />
+                {disableMaxMode.isPending ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <Zap className="size-4 text-amber-500" />
+                )}
                 <span className="flex-1">
                   {disableMaxMode.isPending ? t("Disabling…") : t("Disable Max Mode")}
                 </span>
               </DropdownMenuItem>
             )}
-            {!maxModeEnabled && maxModeEligible && (
+            {!maxModeEnabled && (maxModeEligible || enableMaxMode.isPending) && (
               <DropdownMenuItem
                 className="gap-2 text-sm text-amber-600"
                 closeOnClick={false}
-                disabled={maxModePending}
+                disabled={isMenuPending}
+                aria-busy={enableMaxMode.isPending}
                 onClick={() => {
-                  if (maxModePending) return;
+                  if (isMenuPending) return;
                   enableMaxMode.mutate();
                 }}
               >
-                <Zap className="size-4" />
+                {enableMaxMode.isPending ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <Zap className="size-4" />
+                )}
                 <span className="flex-1">
                   {enableMaxMode.isPending ? t("Enabling…") : t("Enable Max Mode")}
                 </span>
@@ -285,6 +331,7 @@ export function AccountMenu() {
         }
         <DropdownMenuItem
           className="gap-2 text-sm"
+          disabled={isMenuPending}
           render={<Link href="/account/settings" className="flex w-full" />}
         >
           <UserIcon className="size-4" />
@@ -293,6 +340,7 @@ export function AccountMenu() {
         {!isAnonymous && (
           <DropdownMenuItem
             className="gap-2 text-sm"
+            disabled={isMenuPending}
             render={<Link href="/settings/appearance" className="flex w-full" />}
           >
             <Settings className="size-4" />
@@ -302,6 +350,7 @@ export function AccountMenu() {
         {!isAnonymous && !billingDisabled && (
           <DropdownMenuItem
             className="gap-2 text-sm"
+            disabled={isMenuPending}
             render={<Link href="/settings/team" className="flex w-full" />}
           >
             <Users className="size-4" />
@@ -311,12 +360,12 @@ export function AccountMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="gap-2 text-sm"
-          onClick={() => {
-            authClient.signOut();
-            push("/");
-          }}
+          closeOnClick={false}
+          disabled={isMenuPending}
+          aria-busy={isSigningOut}
+          onClick={handleSignOut}
         >
-          <LogOut className="size-4" />
+          {isSigningOut ? <Spinner className="size-4" /> : <LogOut className="size-4" />}
           <span>{t("Logout")}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>

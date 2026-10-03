@@ -81,7 +81,7 @@ export function ProjectSelect({
       {onCreateClick ? (
         <Button type="button" variant="outline" size="sm" onClick={onCreateClick}>
           <Plus className="size-4" />
-          {t("New project")}
+          {t("New")}
         </Button>
       ) : null}
     </div>

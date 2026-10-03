@@ -5,8 +5,8 @@ import { env } from "@/env";
 
 let redis: Redis | null = null;
 
-const redisUrl = env.UPSTASH_REDIS_REST_URL ?? env.KV_REST_API_URL;
-const redisToken = env.UPSTASH_REDIS_REST_TOKEN ?? env.KV_REST_API_TOKEN;
+const redisUrl = env.UPSTASH_REDIS_REST_URL;
+const redisToken = env.UPSTASH_REDIS_REST_TOKEN;
 
 if (redisUrl && redisToken) {
   redis = new Redis({

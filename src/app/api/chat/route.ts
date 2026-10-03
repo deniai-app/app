@@ -24,6 +24,7 @@ import {
   updateChat,
 } from "@/lib/chat";
 import { mergeStoredAndClientMessages } from "@/lib/chat-messages";
+import { isComparisonConversation } from "@/lib/comparison-conversation";
 import {
   clearChatGeneration,
   isCurrentChatGeneration,
@@ -41,7 +42,7 @@ import { buildMemoryPrompt, getUserMemoryState, maybeAutoSaveMemories } from "@/
 import { platformCapabilities } from "@/lib/platform-capabilities.server";
 import { buildProjectPrompt } from "@/lib/project-context";
 import { reportMaxModeUsageToStripe } from "@/lib/max-mode";
-import { consumeUsage, refundUsage, UsageLimitError } from "@/lib/usage";
+import { canCompareModels, consumeUsage, refundUsage, UsageLimitError } from "@/lib/usage";
 import {
   computeWeightedUsageFromLanguageModelUsage,
   type TokenUsageBreakdown,
@@ -178,8 +179,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
+  if (parsedBody.data.comparison && !(await canCompareModels(userId))) {
+    return NextResponse.json({ error: "Model comparison requires Pro or Max." }, { status: 403 });
+  }
+
   const {
-    id,
+    id: requestId,
     messages: rawMessages = [],
     model: baseModel,
     webSearch = false,
@@ -192,12 +197,19 @@ export async function POST(req: Request) {
     additionalInstruction,
   } = parsedBody.data;
 
+  const isComparison = parsedBody.data.comparison === true;
+  // Ephemeral generation keys are scoped to the authenticated account and never
+  // overlap persisted chat IDs or another user's in-process generation lock.
+  const id = isComparison ? `comparison:${userId}:${requestId}` : requestId;
+
   const validatedMessagesPromise = safeValidateUIMessages<UIMessage>({
     messages: rawMessages,
   });
 
   const [chat, validatedMessages] = await Promise.all([
-    getChatById(id, userId),
+    isComparison
+      ? Promise.resolve({ title: null, projectId: null, messages: [] as UIMessage[] })
+      : getChatById(id, userId),
     validatedMessagesPromise,
   ]);
 
@@ -207,6 +219,10 @@ export async function POST(req: Request) {
 
   if (!validatedMessages.success) {
     return NextResponse.json({ error: "Invalid messages payload" }, { status: 400 });
+  }
+
+  if (isComparison && !isComparisonConversation(validatedMessages.data)) {
+    return NextResponse.json({ error: "Invalid comparison conversation." }, { status: 400 });
   }
 
   const storedMessages = Array.isArray(chat.messages) ? (chat.messages as UIMessage[]) : [];
@@ -249,15 +265,23 @@ export async function POST(req: Request) {
     usesOpenRouter,
   );
 
-  const webSearchEnabled = platformCapabilities.features.webSearch;
-  const deepResearchEnabled = webSearchEnabled && deepResearch;
+  const enabledTools = parsedBody.data.enabledTools ?? ["search", "browse"];
+  const searchToolEnabled =
+    platformCapabilities.features.webSearch && enabledTools.includes("search");
+  const browseToolEnabled =
+    platformCapabilities.features.webSearch && enabledTools.includes("browse");
+  const webSearchEnabled = searchToolEnabled || browseToolEnabled;
+  const deepResearchEnabled = searchToolEnabled && deepResearch;
   // Explicit Search (or a retry that requests search) still forces at least one lookup.
-  const forceWebSearchEnabled = webSearchEnabled && (forceWebSearch || webSearch);
+  const forceWebSearchEnabled = searchToolEnabled && (forceWebSearch || webSearch);
   // Net Max Mode overage for this request, including search-tool charges.
   // Reported to Stripe once after reconciliation; meter events cannot be reduced.
   let pendingMaxModeAmount = 0;
   const tools = createChatTools({
+    // Comparison panes have no interactive questionnaire UI.
+    interactive: !parsedBody.data.comparison,
     webSearch: webSearchEnabled,
+    enabledTools,
     usage: {
       userId,
       isAnonymous,
@@ -301,7 +325,7 @@ export async function POST(req: Request) {
   const ownsCurrentGeneration = async () => {
     return (
       isCurrentChatGeneration(id, generationId) &&
-      (await isChatGenerationActive(id, userId, generationId))
+      (isComparison || (await isChatGenerationActive(id, userId, generationId)))
     );
   };
 
@@ -416,7 +440,7 @@ export async function POST(req: Request) {
   };
 
   const rollbackPendingAssistantState = async () => {
-    if (pendingStateRolledBack) {
+    if (isComparison || pendingStateRolledBack) {
       return;
     }
 
@@ -434,7 +458,10 @@ export async function POST(req: Request) {
     }
   };
 
+  const abortComparison = () => generationAbortController?.abort("stopped");
+
   const clearGenerationLock = () => {
+    if (isComparison) req.signal.removeEventListener("abort", abortComparison);
     if (generationWatch) {
       clearInterval(generationWatch);
       generationWatch = undefined;
@@ -457,10 +484,15 @@ export async function POST(req: Request) {
 
   try {
     ({ abortController: generationAbortController } = startChatGeneration(id, generationId));
-    await updateChat(id, userId, [...messages, pendingAssistantMessage], undefined, {
-      nextGenerationId: generationId,
-    });
-    projectPrompt = await buildProjectPrompt(chat.projectId, userId);
+    if (isComparison) {
+      req.signal.addEventListener("abort", abortComparison, { once: true });
+      if (req.signal.aborted) abortComparison();
+    } else {
+      await updateChat(id, userId, [...messages, pendingAssistantMessage], undefined, {
+        nextGenerationId: generationId,
+      });
+    }
+    projectPrompt = isComparison ? null : await buildProjectPrompt(chat.projectId, userId);
     if (usageUnit === "requests") {
       consumedUsageAmount = 1;
       const consumed = await consumeUsage({
@@ -489,6 +521,9 @@ export async function POST(req: Request) {
     additionalInstruction,
     responseStyle,
     webSearchEnabled,
+    searchToolEnabled,
+    browseToolEnabled,
+    interactive: !isComparison,
     deepResearch: deepResearchEnabled,
     forceWebSearch: forceWebSearchEnabled,
   });
@@ -502,13 +537,15 @@ export async function POST(req: Request) {
     requestSystem = cachedPrompt.system;
   }
 
-  generationWatch = setInterval(() => {
-    void isChatGenerationActive(id, userId, generationId).then((isActive) => {
-      if (!isActive) {
-        generationAbortController?.abort("stopped");
-      }
-    });
-  }, 1000);
+  if (!isComparison) {
+    generationWatch = setInterval(() => {
+      void isChatGenerationActive(id, userId, generationId).then((isActive) => {
+        if (!isActive) {
+          generationAbortController?.abort("stopped");
+        }
+      });
+    }, 1000);
+  }
 
   let result: ReturnType<typeof streamText<typeof tools>>;
 
@@ -605,6 +642,10 @@ export async function POST(req: Request) {
     if (pendingMessage.parts.length > 0) {
       hasAssistantOutput = true;
     }
+    if (isComparison) {
+      latestPersistedMessage = pendingMessage;
+      return;
+    }
     const signature = JSON.stringify(pendingMessage.parts);
 
     if (!force && signature === lastPersistedSignature) {
@@ -680,6 +721,10 @@ export async function POST(req: Request) {
         // Accounting belongs to this request, not to the current chat-row owner.
         // Stopping/replacing the generation must only suppress transcript writes.
         await settleUsage();
+
+        // Comparisons consume normal usage but never write chats or auto-memory.
+        // The chosen transcript is saved explicitly by saveComparison later.
+        if (isComparison) return;
 
         if (!(await ownsCurrentGeneration())) {
           pendingStateRolledBack = true;

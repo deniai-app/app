@@ -291,6 +291,9 @@ export interface ChatComposerModelPickerProps {
   onModelChange: (model: string) => void;
   availableModels: ModelOption[];
   selectedModel: ModelOption | undefined;
+  disabled?: boolean;
+  ariaLabel?: string;
+  className?: string;
 }
 
 export function ChatComposerModelPicker({
@@ -298,6 +301,9 @@ export function ChatComposerModelPicker({
   onModelChange,
   availableModels,
   selectedModel,
+  disabled = false,
+  ariaLabel,
+  className,
 }: ChatComposerModelPickerProps) {
   const { shouldVerifyCard } = useAvailableModels();
   const t = useExtracted();
@@ -390,6 +396,7 @@ export function ChatComposerModelPicker({
   }
 
   const handleModelPopoverOpenChange = (open: boolean) => {
+    if (open && disabled) return;
     if (open) {
       setModelQuery("");
       setLegacyModelsOpen(false);
@@ -403,15 +410,18 @@ export function ChatComposerModelPicker({
   };
 
   return (
-    <Popover open={modelPopoverOpen} onOpenChange={handleModelPopoverOpenChange}>
+    <Popover open={modelPopoverOpen && !disabled} onOpenChange={handleModelPopoverOpenChange}>
       <PopoverTrigger
         render={
           <Button
             variant="ghost"
             size="sm"
+            disabled={disabled}
+            aria-label={ariaLabel}
             className={cn(
               "h-auto gap-1.5 border-none bg-transparent px-2 py-1.5 font-medium text-muted-foreground shadow-none transition-colors dark:bg-input/30",
               "hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground",
+              className,
             )}
           />
         }

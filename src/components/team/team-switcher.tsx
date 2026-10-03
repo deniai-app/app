@@ -4,6 +4,8 @@ import { Check, ChevronsUpDown, Plus, Users } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useExtracted } from "next-intl";
+import { useState } from "react";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -31,7 +33,7 @@ export function TeamSwitcher({
 }: {
   organizations: Organization[];
   activeOrg: Organization | null;
-  onSelect: (org: Organization) => void;
+  onSelect: (org: Organization) => Promise<void>;
   pendingInvitations: ReceivedInvitation[];
   isCreateDialogOpen: boolean;
   onCreateDialogOpenChange: (open: boolean) => void;
@@ -41,10 +43,28 @@ export function TeamSwitcher({
   isCreating: boolean;
 }) {
   const t = useExtracted();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [selectingOrgId, setSelectingOrgId] = useState<string | null>(null);
+
+  const handleSelect = async (org: Organization) => {
+    if (selectingOrgId) return;
+    setSelectingOrgId(org.id);
+    try {
+      await onSelect(org);
+      setIsMenuOpen(false);
+    } finally {
+      setSelectingOrgId(null);
+    }
+  };
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu
+        open={isMenuOpen}
+        onOpenChange={(open) => {
+          if (!selectingOrgId) setIsMenuOpen(open);
+        }}
+      >
         <DropdownMenuTrigger
           render={<Button variant="outline" className="w-full justify-between gap-2 px-2.5 py-5" />}
         >
@@ -76,7 +96,14 @@ export function TeamSwitcher({
           <DropdownMenuGroup>
             <DropdownMenuLabel>{t("Teams")}</DropdownMenuLabel>
             {organizations.map((org) => (
-              <DropdownMenuItem key={org.id} className="gap-2 py-2" onClick={() => onSelect(org)}>
+              <DropdownMenuItem
+                key={org.id}
+                className="gap-2 py-2"
+                closeOnClick={false}
+                disabled={!!selectingOrgId}
+                aria-busy={selectingOrgId === org.id}
+                onClick={() => handleSelect(org)}
+              >
                 <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-[10px] font-semibold uppercase">
                   {org.logo ? (
                     <Image
@@ -93,7 +120,11 @@ export function TeamSwitcher({
                   )}
                 </span>
                 <span className="flex-1 truncate">{org.name}</span>
-                {activeOrg?.id === org.id && <Check className="size-3.5" />}
+                {selectingOrgId === org.id ? (
+                  <Spinner className="size-3.5" />
+                ) : activeOrg?.id === org.id ? (
+                  <Check className="size-3.5" />
+                ) : null}
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>
@@ -105,6 +136,7 @@ export function TeamSwitcher({
                 {pendingInvitations.map((inv) => (
                   <DropdownMenuItem
                     key={inv.id}
+                    disabled={!!selectingOrgId}
                     className="gap-2 py-2"
                     render={<Link href="/settings/team" />}
                   >
@@ -119,7 +151,11 @@ export function TeamSwitcher({
             </>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="gap-2" onClick={() => onCreateDialogOpenChange(true)}>
+          <DropdownMenuItem
+            className="gap-2"
+            disabled={!!selectingOrgId}
+            onClick={() => onCreateDialogOpenChange(true)}
+          >
             <Plus className="size-3.5" />
             {t("New Team")}
           </DropdownMenuItem>

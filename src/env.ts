@@ -19,22 +19,7 @@ export const env = createEnv({
     STRIPE_FLASH_OFFER_COUPON_ID: z.string().min(1).optional(),
     AFFILIATE_ADMIN_EMAILS: z.string().min(1).optional(),
     BLOG_ADMIN_EMAILS: z.string().min(1).optional(),
-    GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1).optional(),
-    ANTHROPIC_API_KEY: z.string().min(1).optional(),
-    GROQ_API_KEY: z.string().min(1).optional(),
     OPENROUTER_API_KEY: z.string().min(1).optional(),
-    /**
-     * When "true" or "1", OpenAI + Anthropic traffic is routed through the
-     * voids.top OpenAI-compatible gateway.
-     */
-    VOIDS_MODE: z
-      .string()
-      .optional()
-      .transform((value) => value === "true" || value === "1"),
-    /** voids.top Chat Completions base URL (default: https://capi.voids.top/v2). */
-    VOIDS_BASE_URL: z.url().optional(),
-    /** Optional API key for voids.top (default placeholder when omitted). */
-    VOIDS_API_KEY: z.string().min(1).optional(),
     /**
      * OpenAI-compatible Deni AI API. Both key and base URL are required to
      * expose DeepSeek / MiniMax models routed through this provider.
@@ -52,8 +37,6 @@ export const env = createEnv({
     CLOUDFLARE_API_TOKEN: z.string().min(1).optional(),
     UPSTASH_REDIS_REST_URL: z.url().optional(),
     UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
-    KV_REST_API_URL: z.url().optional(),
-    KV_REST_API_TOKEN: z.string().min(1).optional(),
     UPLOADTHING_TOKEN: z.string().min(1).optional(),
   },
   client: {
@@ -87,13 +70,7 @@ export const env = createEnv({
     GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
-    GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-    GROQ_API_KEY: process.env.GROQ_API_KEY,
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
-    VOIDS_MODE: process.env.VOIDS_MODE,
-    VOIDS_BASE_URL: process.env.VOIDS_BASE_URL,
-    VOIDS_API_KEY: process.env.VOIDS_API_KEY,
     DENI_API_KEY: process.env.DENI_API_KEY,
     DENI_API_BASE_URL: process.env.DENI_API_BASE_URL,
     EXA_API_KEY: process.env.EXA_API_KEY,
@@ -106,8 +83,6 @@ export const env = createEnv({
     CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN,
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-    KV_REST_API_URL: process.env.KV_REST_API_URL,
-    KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
     UPLOADTHING_TOKEN: process.env.UPLOADTHING_TOKEN,
   },
 });

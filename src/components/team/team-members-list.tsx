@@ -11,6 +11,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useExtracted } from "next-intl";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +50,7 @@ export function TeamMembersList({
 }) {
   const t = useExtracted();
   const roleLabel = useRoleLabel();
+  const [openMemberId, setOpenMemberId] = useState<string | null>(null);
 
   return (
     <Card>
@@ -99,7 +101,12 @@ export function TeamMembersList({
                   {roleLabel(m.role)}
                 </Badge>
                 {isAdmin && m.role !== "owner" && (
-                  <DropdownMenu>
+                  <DropdownMenu
+                    open={openMemberId === m.id}
+                    onOpenChange={(open) => {
+                      if (!updatingMemberRoleId) setOpenMemberId(open ? m.id : null);
+                    }}
+                  >
                     <DropdownMenuTrigger
                       render={
                         <Button
@@ -118,20 +125,39 @@ export function TeamMembersList({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       {m.role !== "admin" && (
-                        <DropdownMenuItem onClick={() => onRoleChange(m, "admin")}>
-                          <ShieldCheck className="size-4" />
+                        <DropdownMenuItem
+                          closeOnClick={false}
+                          disabled={!!updatingMemberRoleId}
+                          aria-busy={updatingMemberRoleId === m.id}
+                          onClick={() => onRoleChange(m, "admin")}
+                        >
+                          {updatingMemberRoleId === m.id ? (
+                            <Spinner className="size-4" />
+                          ) : (
+                            <ShieldCheck className="size-4" />
+                          )}
                           {t("Make {role}", { role: roleLabel("admin") })}
                         </DropdownMenuItem>
                       )}
                       {m.role !== "member" && (
-                        <DropdownMenuItem onClick={() => onRoleChange(m, "member")}>
-                          <UserRound className="size-4" />
+                        <DropdownMenuItem
+                          closeOnClick={false}
+                          disabled={!!updatingMemberRoleId}
+                          aria-busy={updatingMemberRoleId === m.id}
+                          onClick={() => onRoleChange(m, "member")}
+                        >
+                          {updatingMemberRoleId === m.id ? (
+                            <Spinner className="size-4" />
+                          ) : (
+                            <UserRound className="size-4" />
+                          )}
                           {t("Make {role}", { role: roleLabel("member") })}
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
+                        disabled={!!updatingMemberRoleId}
                         onClick={() =>
                           onRemoveClick({
                             ...m,

@@ -76,6 +76,8 @@ head `canary`. Merge it when merge/instant merge was requested. Summarize the
 promoted changes and verification. Never force-push shared branches unless
 explicitly requested.
 
+Direct commits and pushes to the master branch are allowed if the user gives permission.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know

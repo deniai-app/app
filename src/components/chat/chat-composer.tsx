@@ -155,7 +155,7 @@ export function ChatComposer({
         globalDrop={globalDrop}
         multiple
         placeholder={placeholder}
-        headerClassName="py-0.5!"
+        headerClassName="py-0!"
         value={value}
         onValueChange={onValueChange}
         status={status}

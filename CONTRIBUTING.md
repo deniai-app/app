@@ -67,10 +67,10 @@ Required and optional variables are validated in `src/env.ts`. A starter list is
 
 - **Core:** `DATABASE_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` (32 chars)
 - **OAuth (optional):** Google + GitHub client ID/secret; missing provider pairs hide those buttons. Deni AI's OAuth 2.1 / OpenID Connect provider is enabled by default and uses the existing auth secret and database.
-- **AI (optional):** `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`
+- **AI (optional):** `OPENROUTER_API_KEY` (all platform models)
 - **Search / CAPTCHA (optional):** `EXA_API_KEY`, Turnstile keys
 - **Stripe (optional):** `STRIPE_SECRET_KEY`; missing Stripe keys disable billing
-- **Optional:** Cloudflare Email Sending, Upstash/KV Redis, UploadThing, AdSense, voids.top gateway
+- **Optional:** Cloudflare Email Sending, Upstash Redis, UploadThing, AdSense
 
 Details: [SETUP.md](SETUP.md).
 

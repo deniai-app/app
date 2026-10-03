@@ -1,0 +1,2 @@
+ALTER TABLE "model_comparisons" ADD COLUMN "left_settings" jsonb DEFAULT '{}'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "model_comparisons" ADD COLUMN "right_settings" jsonb DEFAULT '{}'::jsonb NOT NULL;

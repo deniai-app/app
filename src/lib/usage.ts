@@ -111,6 +111,11 @@ export async function isFreeAdViewer(userId: string): Promise<boolean> {
   return (await getTierInfo(userId, new Date())).tier === "free";
 }
 
+export async function canCompareModels(userId: string): Promise<boolean> {
+  const { tier } = await getTierInfo(userId, new Date());
+  return tier === "pro" || tier === "max";
+}
+
 async function getTierInfo(
   userId: string,
   now: Date,

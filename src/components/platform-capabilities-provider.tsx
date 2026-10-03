@@ -9,7 +9,6 @@ const defaultCapabilities: PlatformCapabilities = {
     anthropic: true,
     google: true,
     xai: true,
-    groq: true,
     deni: true,
   },
   features: {

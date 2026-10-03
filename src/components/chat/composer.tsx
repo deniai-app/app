@@ -31,6 +31,7 @@ import {
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
+import { is } from "zod/v4/locales";
 
 export type ComposerMessage = PromptInputMessage;
 
@@ -80,6 +81,8 @@ type ComposerProps = Pick<PromptInputProps, "globalDrop" | "multiple"> & {
   voiceInput?: ReactNode;
   bottomContent?: ReactNode;
   isSubmitDisabled?: boolean;
+  attachmentsEnabled?: boolean;
+  compact?: boolean;
 };
 
 export function Composer({
@@ -102,6 +105,8 @@ export function Composer({
   isSubmitDisabled,
   globalDrop,
   multiple,
+  attachmentsEnabled = true,
+  compact = false,
 }: ComposerProps) {
   const t = useExtracted();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -154,21 +159,32 @@ export function Composer({
         className={cn("h-auto flex-col", className)}
         globalDrop={globalDrop}
         multiple={multiple}
+        maxFiles={attachmentsEnabled ? undefined : 0}
       >
-        <PromptInputHeader className={cn(headerClassName)}>
-          <ComposerAttachments />
-        </PromptInputHeader>
-        <div className="flex w-full min-w-0 items-center gap-1 px-2 py-1">
-          <PromptInputActionMenu>
-            <PromptInputActionMenuTrigger
-              className="size-8 shrink-0 text-muted-foreground"
-              onClick={() => setIsExpanded(true)}
-            />
-            <PromptInputActionMenuContent>
-              <PromptInputActionAddAttachments />
-              {actionMenuItems}
-            </PromptInputActionMenuContent>
-          </PromptInputActionMenu>
+        {(!compact || attachmentsEnabled) && (
+          <PromptInputHeader className={cn(headerClassName)}>
+            <ComposerAttachments />
+          </PromptInputHeader>
+        )}
+        <div
+          className={cn(
+            "flex w-full min-w-0 items-center gap-1 p-2",
+            isExpanded && !compact && "pb-0",
+            compact && "py-2",
+          )}
+        >
+          {attachmentsEnabled || actionMenuItems ? (
+            <PromptInputActionMenu>
+              <PromptInputActionMenuTrigger
+                className="size-8 shrink-0 text-muted-foreground"
+                onClick={() => setIsExpanded(true)}
+              />
+              <PromptInputActionMenuContent>
+                {attachmentsEnabled && <PromptInputActionAddAttachments />}
+                {actionMenuItems}
+              </PromptInputActionMenuContent>
+            </PromptInputActionMenu>
+          ) : null}
           <PromptInputTextarea
             onChange={(event) => onValueChange(event.target.value)}
             onFocus={() => setIsExpanded(true)}
@@ -191,31 +207,33 @@ export function Composer({
             onStop={onStop}
           />
         </div>
-        <div
-          className={cn(
-            "grid w-full transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
-            isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
-          )}
-          inert={!isExpanded}
-          aria-hidden={!isExpanded}
-        >
-          <div className="min-h-0 overflow-hidden">
-            <PromptInputFooter className="flex-wrap justify-start">
-              <PromptInputTools className="flex-wrap">
-                {onToggleWebSearch ? (
-                  <PromptInputButton
-                    variant={webSearch ? "default" : "ghost"}
-                    onClick={onToggleWebSearch}
-                  >
-                    <GlobeIcon size={16} />
-                    {resolvedSearchLabel}
-                  </PromptInputButton>
-                ) : null}
-                {tools}
-              </PromptInputTools>
-            </PromptInputFooter>
+        {!compact || onToggleWebSearch || tools ? (
+          <div
+            className={cn(
+              "grid w-full transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+              isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+            )}
+            inert={!isExpanded}
+            aria-hidden={!isExpanded}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <PromptInputFooter className="flex-wrap justify-start">
+                <PromptInputTools className="flex-wrap">
+                  {onToggleWebSearch ? (
+                    <PromptInputButton
+                      variant={webSearch ? "default" : "ghost"}
+                      onClick={onToggleWebSearch}
+                    >
+                      <GlobeIcon size={16} />
+                      {resolvedSearchLabel}
+                    </PromptInputButton>
+                  ) : null}
+                  {tools}
+                </PromptInputTools>
+              </PromptInputFooter>
+            </div>
           </div>
-        </div>
+        ) : null}
         {bottomContent ? (
           <PromptInputFooter className="justify-start border-t">{bottomContent}</PromptInputFooter>
         ) : null}

@@ -1,7 +1,7 @@
-import { createGroq } from "@ai-sdk/groq";
-import { generateText, tool } from "ai";
+import { generateText, type LanguageModel, tool } from "ai";
 import { z } from "zod";
 import { env } from "@/env";
+import { createDeniOpenRouter } from "@/lib/openrouter-provider";
 import { consumeUsage, getSearchToolUsageAmount, refundUsage, UsageLimitError } from "@/lib/usage";
 import { fetchPageText } from "./fetch-page";
 import { fetchWithAbortHandling, isAbortError, withDeadline } from "./helpers";
@@ -57,7 +57,7 @@ async function refundSearchUsage(usage: ChatToolUsageContext, amount: number): P
 
 async function summarizeResult(
   result: SearchHit,
-  summarizer: ReturnType<ReturnType<typeof createGroq>>,
+  summarizer: LanguageModel,
   signal: AbortSignal,
 ): Promise<SearchHit> {
   try {
@@ -160,12 +160,14 @@ export function createSearchTool(usage?: ChatToolUsageContext) {
             description: item.highlights?.join("\n\n") || item.text?.slice(0, 500) || "",
           }));
 
-          const groqApiKey = env.GROQ_API_KEY?.trim();
-          if (!groqApiKey || results.length === 0 || signal.aborted) {
+          const openRouterApiKey = env.OPENROUTER_API_KEY?.trim();
+          if (!openRouterApiKey || results.length === 0 || signal.aborted) {
             return results.map((result) => ({ ...result, summary: result.description }));
           }
 
-          const summarizer = createGroq({ apiKey: groqApiKey })("openai/gpt-oss-20b");
+          const summarizer = createDeniOpenRouter({ apiKey: openRouterApiKey }).chat(
+            "openai/gpt-oss-20b",
+          );
           const toSummarize = results.slice(0, SUMMARIZE_MAX_PAGES);
           const remainder = results.slice(SUMMARIZE_MAX_PAGES);
           const summarizedHead = await Promise.all(

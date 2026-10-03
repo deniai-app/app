@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
+import { comparisonToolNames } from "@/lib/comparison-settings";
 
 export const ChatRequestSchema = z.object({
   id: z.string().min(1),
@@ -8,7 +9,9 @@ export const ChatRequestSchema = z.object({
     .transform((value) => value as unknown as UIMessage[])
     .optional(),
   model: z.string(),
+  comparison: z.boolean().optional(),
   webSearch: z.boolean().optional(),
+  enabledTools: z.array(z.enum(comparisonToolNames)).max(2).optional(),
   reasoningEffort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
   proMode: z.boolean().optional(),
   fastMode: z.boolean().optional(),

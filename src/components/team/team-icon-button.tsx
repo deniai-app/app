@@ -3,7 +3,7 @@
 import { Pencil, Trash2, Upload, Users } from "lucide-react";
 import Image from "next/image";
 import { useExtracted } from "next-intl";
-import { type ChangeEvent, useRef } from "react";
+import { type ChangeEvent, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -28,11 +28,16 @@ export function TeamIconButton({
 }) {
   const t = useExtracted();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [action, setAction] = useState<"upload" | "remove" | null>(null);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (file) onUpload(file);
+    if (file) {
+      setAction("upload");
+      onUpload(file);
+    }
   }
 
   return (
@@ -65,7 +70,12 @@ export function TeamIconButton({
         )}
       </div>
       {isAdmin && (
-        <DropdownMenu>
+        <DropdownMenu
+          open={isMenuOpen}
+          onOpenChange={(open) => {
+            if (!isSaving) setIsMenuOpen(open);
+          }}
+        >
           <DropdownMenuTrigger
             render={
               <Button
@@ -80,12 +90,30 @@ export function TeamIconButton({
             <span className="sr-only">{t("Change team icon")}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-              <Upload className="text-muted-foreground" />
+            <DropdownMenuItem
+              closeOnClick={false}
+              disabled={isSaving}
+              aria-busy={isSaving && action === "upload"}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {isSaving && action === "upload" ? (
+                <Spinner className="size-4" />
+              ) : (
+                <Upload className="text-muted-foreground" />
+              )}
               {t("Upload icon")}
             </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" disabled={!logo} onClick={onRemove}>
-              <Trash2 />
+            <DropdownMenuItem
+              closeOnClick={false}
+              variant="destructive"
+              disabled={isSaving || !logo}
+              aria-busy={isSaving && action === "remove"}
+              onClick={() => {
+                setAction("remove");
+                onRemove();
+              }}
+            >
+              {isSaving && action === "remove" ? <Spinner className="size-4" /> : <Trash2 />}
               {t("Remove icon")}
             </DropdownMenuItem>
           </DropdownMenuContent>

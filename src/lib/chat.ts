@@ -1,8 +1,9 @@
-import { groq } from "@ai-sdk/groq";
 import { generateText, type UIMessage } from "ai";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db/drizzle";
 import { chats } from "@/db/schema";
+import { env } from "@/env";
+import { createDeniOpenRouter } from "@/lib/openrouter-provider";
 import { setPendingState } from "@/app/api/chat/_lib/schema";
 
 type ChatUpdateFields = Partial<typeof chats.$inferInsert>;
@@ -23,8 +24,13 @@ export async function generateTitle(messages: UIMessage[]): Promise<string> {
     return "New Chat";
   }
 
+  const apiKey = env.OPENROUTER_API_KEY?.trim();
+  if (!apiKey) {
+    return "New Chat";
+  }
+
   const { text } = await generateText({
-    model: groq("openai/gpt-oss-20b"),
+    model: createDeniOpenRouter({ apiKey }).chat("openai/gpt-oss-20b"),
     system:
       "You are a title generator. Generate a short, concise title (max 50 characters) for the conversation based on the user's first message. Output only the title, nothing else. No quotes, no explanation.",
     prompt: textParts.slice(0, 500),

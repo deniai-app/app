@@ -1,6 +1,3 @@
-import { type AnthropicProviderOptions, createAnthropic } from "@ai-sdk/anthropic";
-import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
-import { createGroq } from "@ai-sdk/groq";
 import { createOpenAI, type OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
 import type { XaiResponsesProviderOptions } from "@ai-sdk/xai";
 import type { LanguageModel, ModelMessage, SystemModelMessage } from "ai";
@@ -17,12 +14,8 @@ import { isModelProviderAvailable } from "@/lib/platform-capabilities";
 import { platformCapabilities } from "@/lib/platform-capabilities.server";
 import { getUsageSummary, type UsageCategory, UsageLimitError } from "@/lib/usage";
 
-const DEFAULT_VOIDS_BASE_URL = "https://capi.voids.top/v2";
-
 const openaiEffortOptions = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-const anthropicEffortOptions = ["low", "medium", "high", "max"] as const;
 const googleThinkingLevels = ["minimal", "low", "medium", "high"] as const;
-const anthropicBudgetModelIds = new Set(["claude-opus-4.1", "claude-opus-4", "claude-sonnet-4"]);
 
 export class ChatRouteError extends Error {
   status: number;
@@ -132,8 +125,6 @@ export async function resolveChatModelContext({
 
   let usageUnit: "requests" | "tokens" = "requests";
   const providerId = selectedModel.provider ?? selectedModel.author;
-  const anthropicApiKey = env.ANTHROPIC_API_KEY?.trim();
-  const groqApiKey = env.GROQ_API_KEY?.trim();
   const deniApiKey = env.DENI_API_KEY?.trim();
   const deniApiBaseUrl = env.DENI_API_BASE_URL;
 
@@ -147,23 +138,10 @@ export async function resolveChatModelContext({
     });
   }
 
-  // voids.top is opt-in via VOIDS_MODE plus VOIDS_API_KEY. When both are
-  // enabled, OpenAI + Anthropic traffic uses the gateway. Otherwise OpenAI/xAI
-  // use OpenRouter, while Anthropic prefers its native platform key.
-  const voidsModeEnabled = Boolean(env.VOIDS_MODE);
-  const voidsKeyConfigured = Boolean(env.VOIDS_API_KEY?.trim());
-  const usesVoids =
-    voidsModeEnabled &&
-    voidsKeyConfigured &&
-    (providerId === "openai" || providerId === "anthropic");
-  const usesOpenRouter =
-    !usesVoids &&
-    (providerId === "openai" ||
-      providerId === "google" ||
-      providerId === "xai" ||
-      (providerId === "anthropic" && !anthropicApiKey));
+  // Everything except the Deni AI API provider is routed through OpenRouter.
+  const usesOpenRouter = providerId !== "deni";
   // OpenRouter exposes Pro models through `*-pro` slugs and supports Fast via
-  // top-level service_tier. voids.top does not support either option.
+  // top-level service_tier.
   const useProMode = Boolean(
     proMode && selectedModel.supportsProMode && providerId === "openai" && usesOpenRouter,
   );
@@ -227,7 +205,7 @@ export async function resolveChatModelContext({
     throw new ChatRouteError(500, { error: "Unable to check usage" });
   }
 
-  // OpenRouter exposes GPT-5.6 and GPT-6 Pro as `*-pro`. voids.top does not — keep base id there.
+  // OpenRouter exposes GPT-5.6 and GPT-6 Pro as `*-pro`.
   const resolvedModelId =
     useProMode && usesOpenRouter ? `${selectedModel.value}-pro` : selectedModel.value;
 
@@ -240,33 +218,6 @@ export async function resolveChatModelContext({
     resolvedReasoningEffort &&
     openaiEffortOptions.includes(resolvedReasoningEffort as (typeof openaiEffortOptions)[number])
       ? (resolvedReasoningEffort as (typeof openaiEffortOptions)[number])
-      : undefined;
-  // Anthropic-native options only apply when using its direct platform SDK.
-  // voids.top is OpenAI-compatible and does not accept Anthropic providerOptions.
-  const anthropicReasoningEffort =
-    providerId === "anthropic" &&
-    !usesVoids &&
-    !usesOpenRouter &&
-    !anthropicBudgetModelIds.has(selectedModel?.value ?? "") &&
-    resolvedReasoningEffort &&
-    anthropicEffortOptions.includes(
-      resolvedReasoningEffort as (typeof anthropicEffortOptions)[number],
-    )
-      ? (resolvedReasoningEffort as (typeof anthropicEffortOptions)[number])
-      : undefined;
-  const anthropicThinkingBudget =
-    providerId === "anthropic" &&
-    !usesVoids &&
-    !usesOpenRouter &&
-    anthropicBudgetModelIds.has(selectedModel?.value ?? "") &&
-    resolvedReasoningEffort
-      ? resolvedReasoningEffort === "low"
-        ? 5_000
-        : resolvedReasoningEffort === "medium"
-          ? 10_000
-          : resolvedReasoningEffort === "high"
-            ? 15_000
-            : undefined
       : undefined;
   const googleThinkingLevel =
     providerId === "google" &&
@@ -305,41 +256,9 @@ export async function resolveChatModelContext({
     return openrouter.chat(selectedOpenRouterModelId, {
       provider: {
         allow_fallbacks: false,
-        only: ["openai", "anthropic", "google-ai-studio", "xai"],
+        only: ["openai", "anthropic", "google-ai-studio", "xai", "groq"],
       },
     });
-  };
-  const getAnthropicModel = (apiKey: string | undefined, baseURL?: string) => {
-    if (!apiKey?.trim()) {
-      throw new ChatRouteError(503, {
-        error: "Anthropic is not configured in the current environment.",
-      });
-    }
-
-    const provider = createAnthropic({
-      apiKey,
-      baseURL,
-    });
-
-    return provider(resolvedModelId.replace(".", "-"));
-  };
-  const getVoidsModel = () => {
-    const apiKey = env.VOIDS_API_KEY?.trim();
-    if (!apiKey) {
-      throw new ChatRouteError(500, {
-        error:
-          "VOIDS_API_KEY is required when VOIDS_MODE is enabled. Set a valid voids.top API key in the environment.",
-      });
-    }
-
-    const provider = createOpenAI({
-      apiKey,
-      baseURL: env.VOIDS_BASE_URL || DEFAULT_VOIDS_BASE_URL,
-      name: "voids",
-    });
-    // voids.top speaks the Chat Completions API with OpenAI-style model ids
-    // (e.g. gpt-5.6-sol, claude-fable-5.1). Keep the id as declared in constants.
-    return provider.chat(resolvedModelId);
   };
   const getDeniModel = () => {
     if (!deniApiKey || !deniApiBaseUrl) {
@@ -355,51 +274,13 @@ export async function resolveChatModelContext({
     return provider.chat(resolvedModelId);
   };
 
-  const anthropicOptions: AnthropicProviderOptions = {};
-  if (anthropicReasoningEffort) {
-    anthropicOptions.effort = anthropicReasoningEffort;
-  }
-  if (anthropicThinkingBudget) {
-    anthropicOptions.thinking = {
-      type: "enabled",
-      budgetTokens: anthropicThinkingBudget,
-    };
-  }
-
   let model: LanguageModel;
   switch (providerId) {
-    case "openai": {
-      model = usesVoids ? getVoidsModel() : getOpenRouterModel();
-      break;
-    }
-    case "anthropic": {
-      if (usesVoids) {
-        model = getVoidsModel();
-      } else if (anthropicApiKey) {
-        model = getAnthropicModel(anthropicApiKey);
-      } else {
-        model = getOpenRouterModel();
-      }
-      break;
-    }
-    case "google": {
-      model = getOpenRouterModel();
-      break;
-    }
+    case "openai":
+    case "anthropic":
+    case "google":
     case "xai": {
       model = getOpenRouterModel();
-      break;
-    }
-    case "groq": {
-      if (!groqApiKey) {
-        throw new ChatRouteError(503, {
-          error: "Groq is not configured in the current environment.",
-        });
-      } else {
-        model = createGroq({
-          apiKey: groqApiKey,
-        })(resolvedModelId);
-      }
       break;
     }
     case "deni": {
@@ -423,11 +304,6 @@ export async function resolveChatModelContext({
           openai: openaiProviderOptions,
         }
       : {}),
-    ...(Object.keys(anthropicOptions).length > 0
-      ? {
-          anthropic: anthropicOptions,
-        }
-      : {}),
     ...(googleThinkingLevel
       ? {
           google: {
@@ -435,7 +311,7 @@ export async function resolveChatModelContext({
               thinkingLevel: googleThinkingLevel,
               includeThoughts: true,
             },
-          } satisfies GoogleGenerativeAIProviderOptions,
+          },
         }
       : {}),
     ...(xaiReasoningEffort
@@ -448,8 +324,7 @@ export async function resolveChatModelContext({
   };
 
   // When routing through OpenRouter, wrap provider-specific options so they are
-  // forwarded in OpenRouter-compatible format. voids.top only understands OpenAI
-  // chat-style options (and only for OpenAI-authored models).
+  // forwarded in OpenRouter-compatible format.
   const openRouterBody = usesOpenRouter
     ? {
         ...(Object.keys(directProviderOptions).length > 0
@@ -459,15 +334,11 @@ export async function resolveChatModelContext({
       }
     : undefined;
   const providerOptions: ChatProviderOptions = (
-    usesVoids
-      ? providerId === "openai" && openaiProviderOptions
-        ? { openai: openaiProviderOptions }
+    !usesOpenRouter
+      ? directProviderOptions
+      : openRouterBody && Object.keys(openRouterBody).length > 0
+        ? { openrouter: openRouterBody }
         : {}
-      : !usesOpenRouter
-        ? directProviderOptions
-        : openRouterBody && Object.keys(openRouterBody).length > 0
-          ? { openrouter: openRouterBody }
-          : {}
   ) as ChatProviderOptions;
 
   return {

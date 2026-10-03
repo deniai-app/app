@@ -3,6 +3,8 @@ import { safeValidateUIMessages } from "ai";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq } from "drizzle-orm";
 import { getAccessibleProject } from "@/lib/project-access";
+import { canCompareModels } from "@/lib/usage";
+import { isComparisonConversation } from "@/lib/comparison-conversation";
 import {
   CHAT_OLDER_MESSAGE_COUNT,
   sliceLatestMessages,
@@ -10,7 +12,9 @@ import {
 } from "@/lib/chat-messages";
 import { z } from "zod";
 import type { db as Db } from "@/db/drizzle";
-import { chats, projects } from "@/db/schema";
+import { chats, modelComparisons, projects } from "@/db/schema";
+import { models } from "@/lib/constants";
+import { comparisonSettingsSchema, normalizeComparisonSettings } from "@/lib/comparison-settings";
 import { protectedProcedure, router } from "../trpc";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -106,6 +110,139 @@ async function loadChatPage(
 }
 
 export const chatRouter = router({
+  getComparisons: protectedProcedure.query(async ({ ctx }) => {
+    return ctx.db
+      .select({
+        id: modelComparisons.id,
+        title: modelComparisons.title,
+        leftName: modelComparisons.leftName,
+        rightName: modelComparisons.rightName,
+        updatedAt: modelComparisons.updatedAt,
+      })
+      .from(modelComparisons)
+      .where(eq(modelComparisons.uid, ctx.userId))
+      .orderBy(desc(modelComparisons.updatedAt), desc(modelComparisons.id));
+  }),
+  getComparison: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const [row] = await ctx.db
+        .select()
+        .from(modelComparisons)
+        .where(and(eq(modelComparisons.id, input.id), eq(modelComparisons.uid, ctx.userId)))
+        .limit(1);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Comparison not found." });
+      return {
+        ...row,
+        leftSettings: comparisonSettingsSchema.parse(row.leftSettings ?? {}),
+        rightSettings: comparisonSettingsSchema.parse(row.rightSettings ?? {}),
+        leftMessages: await loadValidatedMessages(row.leftMessages),
+        rightMessages: await loadValidatedMessages(row.rightMessages),
+      };
+    }),
+  saveComparisonSession: protectedProcedure
+    .input(
+      z.object({
+        id: z.string().min(1).optional(),
+        leftModel: z.string().min(1).max(120),
+        rightModel: z.string().min(1).max(120),
+        leftSettings: comparisonSettingsSchema.default(() => comparisonSettingsSchema.parse({})),
+        rightSettings: comparisonSettingsSchema.default(() => comparisonSettingsSchema.parse({})),
+        leftMessages: z.array(z.record(z.string(), z.unknown())).min(2).max(200),
+        rightMessages: z.array(z.record(z.string(), z.unknown())).min(2).max(200),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!(await canCompareModels(ctx.userId))) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Model comparison requires Pro or Max.",
+        });
+      }
+      const leftModel = models.find((model) => model.value === input.leftModel);
+      const rightModel = models.find((model) => model.value === input.rightModel);
+      if (!leftModel || !rightModel || leftModel.value === rightModel.value) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Choose two different models." });
+      }
+      const [left, right] = await Promise.all([
+        safeValidateUIMessages<UIMessage>({ messages: input.leftMessages }),
+        safeValidateUIMessages<UIMessage>({ messages: input.rightMessages }),
+      ]);
+      if (
+        !left.success ||
+        !right.success ||
+        !isComparisonConversation(left.data, true) ||
+        !isComparisonConversation(right.data, true)
+      ) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Both conversations need an answer." });
+      }
+      const questions = (messages: UIMessage[]) =>
+        messages
+          .filter((message) => message.role === "user")
+          .map((message) =>
+            message.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n"),
+          );
+      if (JSON.stringify(questions(left.data)) !== JSON.stringify(questions(right.data))) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Comparison questions must match." });
+      }
+      const values = {
+        title: questions(left.data)[0].trim().slice(0, 80),
+        leftModel: leftModel.value,
+        rightModel: rightModel.value,
+        leftName: leftModel.name,
+        rightName: rightModel.name,
+        leftSettings: normalizeComparisonSettings(leftModel, input.leftSettings),
+        rightSettings: normalizeComparisonSettings(rightModel, input.rightSettings),
+        leftMessages: left.data.map((message) => ({ ...message, metadata: undefined })),
+        rightMessages: right.data.map((message) => ({ ...message, metadata: undefined })),
+      };
+      if (input.id) {
+        const [saved] = await ctx.db
+          .update(modelComparisons)
+          .set({ ...values, updatedAt: new Date() })
+          .where(and(eq(modelComparisons.id, input.id), eq(modelComparisons.uid, ctx.userId)))
+          .returning({ id: modelComparisons.id });
+        if (!saved) throw new TRPCError({ code: "NOT_FOUND", message: "Comparison not found." });
+        return saved.id;
+      }
+      const [saved] = await ctx.db
+        .insert(modelComparisons)
+        .values({ ...values, uid: ctx.userId })
+        .returning({ id: modelComparisons.id });
+      return saved.id;
+    }),
+  saveComparison: protectedProcedure
+    .input(z.object({ messages: z.array(z.record(z.string(), z.unknown())).min(2).max(200) }))
+    .mutation(async ({ ctx, input }) => {
+      if (!(await canCompareModels(ctx.userId))) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Model comparison requires Pro or Max.",
+        });
+      }
+      const validated = await safeValidateUIMessages<UIMessage>({ messages: input.messages });
+      if (!validated.success || !isComparisonConversation(validated.data, true)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A question and an answer are required.",
+        });
+      }
+      const messages = validated.data.map((message) => ({ ...message, metadata: undefined }));
+      const title = messages[0].parts
+        .flatMap((part) => (part.type === "text" ? [part.text] : []))
+        .join(" ")
+        .trim()
+        .slice(0, 80);
+      const [saved] = await ctx.db
+        .insert(chats)
+        .values({
+          uid: ctx.userId,
+          title: title || "Model comparison",
+          messages,
+        })
+        .returning({ id: chats.id });
+      return saved.id;
+    }),
   getChats: protectedProcedure.query(async ({ ctx }) => {
     const userChats = await ctx.db
       .select({

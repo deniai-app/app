@@ -173,15 +173,6 @@ importers:
 
   .:
     dependencies:
-      '@ai-sdk/anthropic':
-        specifier: ^4.0.69
-        version: 4.0.69(zod@4.6.5)
-      '@ai-sdk/google':
-        specifier: ^4.0.86
-        version: 4.0.86(zod@4.6.5)
-      '@ai-sdk/groq':
-        specifier: ^4.0.53
-        version: 4.0.53(zod@4.6.5)
       '@ai-sdk/openai':
         specifier: ^4.0.82
         version: 4.0.82(zod@4.6.5)
@@ -434,26 +425,8 @@ importers:
 
 packages:
 
-  '@ai-sdk/anthropic@4.0.69':
-    resolution: {integrity: sha512-8qO73NwcxpUb4onZ4V85RGZbXYSyy2AhOw4lgs1BF8MY0iGk9ti00Qt//y1wxCMXK0IvB2YGDcA0vxigWfi+/Q==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
   '@ai-sdk/gateway@4.0.101':
     resolution: {integrity: sha512-lBMXWbNSAb3eQD/F8ja9Egi32PsL9lLajC4DUvionnWO8V+X0nYw9hWJVBJdZ0SftfE/OyKySkoHRfIg/UafYg==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
-  '@ai-sdk/google@4.0.86':
-    resolution: {integrity: sha512-LfYXASE06h7u0WWI9G5Zb6/7HscVg3+V+0UHZUTgrD17lZi6R5LfsHHJiPRO9aiAd1DbbIvXRvHr/dL9eKbf4g==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
-  '@ai-sdk/groq@4.0.53':
-    resolution: {integrity: sha512-Qld40FI8SYlgNmw468w7tP2Eb87Npuv1NXhIcyb48EIVe5V+hGo06pmhIcwqmDCPI5rL2ngQdu+klb4GKLuLhA==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -7008,29 +6981,11 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/anthropic@4.0.69(zod@4.6.5)':
-    dependencies:
-      '@ai-sdk/provider': 4.0.20
-      '@ai-sdk/provider-utils': 5.0.52(zod@4.6.5)
-      zod: 4.6.5
-
   '@ai-sdk/gateway@4.0.101(zod@4.6.5)':
     dependencies:
       '@ai-sdk/provider': 4.0.20
       '@ai-sdk/provider-utils': 5.0.52(zod@4.6.5)
       '@vercel/oidc': 3.2.0
-      zod: 4.6.5
-
-  '@ai-sdk/google@4.0.86(zod@4.6.5)':
-    dependencies:
-      '@ai-sdk/provider': 4.0.20
-      '@ai-sdk/provider-utils': 5.0.52(zod@4.6.5)
-      zod: 4.6.5
-
-  '@ai-sdk/groq@4.0.53(zod@4.6.5)':
-    dependencies:
-      '@ai-sdk/provider': 4.0.20
-      '@ai-sdk/provider-utils': 5.0.52(zod@4.6.5)
       zod: 4.6.5
 
   '@ai-sdk/mcp@2.0.63(zod@4.6.5)':

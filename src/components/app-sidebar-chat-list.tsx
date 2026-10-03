@@ -210,6 +210,7 @@ function ChatItem({ item }: { item: ChatListItem }) {
   const { push } = useRouter();
   const utils = trpc.useUtils();
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [draft, setDraft] = useState(() => createChatItemDraft(item));
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: getChatDragId(item.id),
@@ -240,18 +241,23 @@ function ChatItem({ item }: { item: ChatListItem }) {
   const deleteChat = trpc.chat.deleteChat.useMutation({
     onSuccess: async () => {
       await utils.chat.getChats.invalidate();
+      setIsMenuOpen(false);
       if (pathname === `/chat/${item.id}`) {
         push("/chat");
       }
     },
+    onError: () => toast.error(t("Failed to delete conversations. Please try again.")),
   });
 
   const updateChat = trpc.chat.updateChat.useMutation({
     onSuccess: async () => {
       await utils.chat.getChats.invalidate();
       setIsDetailsOpen(false);
+      setIsMenuOpen(false);
     },
   });
+
+  const isMenuPending = deleteChat.isPending || updateChat.isPending;
 
   const handleSave = () => {
     const normalizedTitle = draft.title.trim() || null;
@@ -265,6 +271,7 @@ function ChatItem({ item }: { item: ChatListItem }) {
   };
 
   const handleTogglePin = () => {
+    if (isMenuPending) return;
     updateChat.mutate({
       id: item.id,
       pinned: !item.pinned,
@@ -325,25 +332,48 @@ function ChatItem({ item }: { item: ChatListItem }) {
           </div>
           {item.pinned ? <Pin className="size-3.5 shrink-0 text-muted-foreground" /> : null}
         </SidebarMenuButton>
-        <DropdownMenu>
+        <DropdownMenu
+          open={isMenuOpen}
+          onOpenChange={(open) => {
+            if (!isMenuPending) {
+              setIsMenuOpen(open);
+            }
+          }}
+        >
           <DropdownMenuTrigger render={<SidebarMenuAction />}>
             <MoreHorizontal className="size-4" />
             <span className="sr-only">{t("More")}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start">
-            <DropdownMenuItem onClick={openDetails}>
+            <DropdownMenuItem onClick={openDetails} disabled={isMenuPending}>
               <Pencil className="size-4" />
               <span>{t("Edit details")}</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleTogglePin}>
-              <Pin className="size-4" />
+            <DropdownMenuItem
+              closeOnClick={false}
+              onClick={handleTogglePin}
+              disabled={isMenuPending}
+              aria-busy={updateChat.isPending}
+            >
+              {updateChat.isPending ? <Spinner className="size-4" /> : <Pin className="size-4" />}
               <span>{item.pinned ? t("Unpin") : t("Pin")}</span>
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={() => deleteChat.mutate({ id: item.id })}
+              closeOnClick={false}
+              disabled={isMenuPending}
+              aria-busy={deleteChat.isPending}
+              onClick={() => {
+                if (!isMenuPending) {
+                  deleteChat.mutate({ id: item.id });
+                }
+              }}
               className="text-destructive focus:text-destructive"
             >
-              <Trash2 className="size-4" />
+              {deleteChat.isPending ? (
+                <Spinner className="size-4" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
               <span>{t("Delete")}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>

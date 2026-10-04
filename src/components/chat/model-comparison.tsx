@@ -100,7 +100,8 @@ export function ModelComparison({
 }) {
   const t = useExtracted();
   const router = useRouter();
-  const { availableModels, platformCapabilities } = useAvailableModels();
+  const { availableModels, platformCapabilities, isAnonymous } = useAvailableModels();
+  const billingEnabled = platformCapabilities.features.billing;
   const webToolsAvailable = platformCapabilities.features.webSearch;
   const [leftSettings, setLeftSettings] = useState(() =>
     comparisonSettingsSchema.parse(initialComparison?.leftSettings ?? {}),
@@ -108,7 +109,7 @@ export function ModelComparison({
   const [rightSettings, setRightSettings] = useState(() =>
     comparisonSettingsSchema.parse(initialComparison?.rightSettings ?? {}),
   );
-  const usage = trpc.billing.usage.useQuery();
+  const usage = trpc.billing.usage.useQuery(undefined, { enabled: !isAnonymous });
   const eligible = usage.data?.tier === "pro" || usage.data?.tier === "max";
   const [input, setInput] = useState("");
   const [leftSelection, setLeftSelection] = useState("");
@@ -452,16 +453,45 @@ export function ModelComparison({
       </header>
       <Conversation className="min-h-0">
         <ConversationContent className="mx-auto w-full max-w-6xl">
-          {usage.isPending ? (
+          {isAnonymous && !comparison ? (
+            <div className="space-y-3 rounded-xl border p-6">
+              <p>
+                {t(
+                  "Log in and upgrade to Pro or Max (Team plans also available) to compare models.",
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {billingEnabled && (
+                  <Button
+                    render={<Link href="/auth/sign-in?redirectTo=/settings/billing" />}
+                    nativeButton={false}
+                  >
+                    {t("Upgrade plan")}
+                    <ArrowUpRight className="size-3.5" />
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  render={<Link href="/auth/sign-in?redirectTo=/compare" />}
+                  nativeButton={false}
+                >
+                  {t("Log in")}
+                </Button>
+              </div>
+            </div>
+          ) : usage.isPending ? (
             <p>{t("Loading…")}</p>
           ) : usage.isError ? (
             <p role="alert">{t("Unable to load your plan. Please try again.")}</p>
           ) : !eligible && !comparison ? (
             <div className="rounded-xl border p-6 space-y-3">
               <p>{t("Model comparison is available on Pro and Max, including team plans.")}</p>
-              <Link href="/settings/billing" className="underline">
-                {t("View plans")}
-              </Link>
+              {billingEnabled && (
+                <Button render={<Link href="/settings/billing" />} nativeButton={false}>
+                  {t("Upgrade plan")}
+                  <ArrowUpRight className="size-3.5" />
+                </Button>
+              )}
             </div>
           ) : leftTurns.length === 0 ? (
             <ConversationEmptyState>

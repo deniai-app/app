@@ -3,6 +3,7 @@
 import type { ChatStatus } from "ai";
 import { useExtracted } from "next-intl";
 import { useEffect, useRef, type ReactNode } from "react";
+import { authClient } from "@/lib/auth-client";
 import {
   ChatComposerActionMenu,
   ChatComposerTools,
@@ -84,6 +85,8 @@ export function ChatComposer({
   onDeepResearchChange,
 }: ChatComposerProps) {
   const t = useExtracted();
+  const session = authClient.useSession();
+  const isGuest = Boolean(session.data?.user?.isAnonymous);
   const selectedModel = availableModels.find((m) => m.value === model);
   const supportedEfforts = selectedModel?.efforts ?? false;
   const supportsReasoningEffort = supportedEfforts !== false;
@@ -126,9 +129,9 @@ export function ChatComposer({
       model,
       webSearch,
       reasoningEffort,
-      proMode: supportsProMode && proMode,
-      fastMode: supportsFastMode && fastMode,
-      deepResearch,
+      proMode: !isGuest && supportsProMode && proMode,
+      fastMode: !isGuest && supportsFastMode && fastMode,
+      deepResearch: !isGuest && deepResearch,
     });
   };
 
@@ -165,6 +168,7 @@ export function ChatComposer({
             webSearch={webSearch}
             onSearchToggle={handleSearchToggle}
             webSearchAvailable={webSearchAvailable}
+            isGuest={isGuest}
             deepResearch={deepResearch}
             onResearchToggle={handleResearchToggle}
             supportsFastMode={supportsFastMode}
@@ -184,6 +188,7 @@ export function ChatComposer({
           <ChatComposerTools
             webSearch={webSearch}
             onSearchToggle={handleSearchToggle}
+            isGuest={isGuest}
             deepResearch={deepResearch}
             onResearchToggle={handleResearchToggle}
             model={model}

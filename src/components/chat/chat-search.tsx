@@ -21,9 +21,7 @@ function normalizeTags(value: unknown): string[] {
     return [];
   }
 
-  return value.flatMap((entry) =>
-    typeof entry === "string" ? [entry.trim()] : [],
-  );
+  return value.flatMap((entry) => (typeof entry === "string" ? [entry.trim()] : []));
 }
 
 export function ChatSearch({
@@ -99,9 +97,7 @@ export function ChatSearch({
               >
                 <MessageSquare className="size-4" />
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate">
-                    {chat.title ?? t("Untitled")}
-                  </span>
+                  <span className="truncate">{chat.title ?? t("Untitled")}</span>
                   {chat.folder || tags.length > 0 ? (
                     <span className="truncate text-xs text-muted-foreground">
                       {[chat.folder, ...tags].filter(Boolean).join(" · ")}

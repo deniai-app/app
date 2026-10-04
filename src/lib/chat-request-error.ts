@@ -5,7 +5,66 @@ const USER_FACING_SUBSTRINGS = [
   "context window",
   "not available on the free plan",
   "not available for guest sessions",
+  "models are currently unavailable",
+  "experiencing high demand",
 ];
+
+export type UpstreamErrorKind = "overloaded" | "unavailable";
+
+function readStatusCode(error: unknown, depth = 0): number | undefined {
+  if (!error || typeof error !== "object" || depth > 4) {
+    return undefined;
+  }
+  const record = error as Record<string, unknown>;
+  for (const value of [record.statusCode, record.status, record.code]) {
+    if (typeof value === "number") {
+      return value;
+    }
+  }
+  const data = record.data;
+  if (data && typeof data === "object") {
+    const nested = readStatusCode(data, depth + 1);
+    if (nested !== undefined) {
+      return nested;
+    }
+  }
+  return readStatusCode(record.cause, depth + 1);
+}
+
+/** Classify upstream provider failures (overload, bad key, no credits, rate limit). */
+export function classifyUpstreamError(error: unknown): UpstreamErrorKind | undefined {
+  const status = readStatusCode(error);
+  const message = (extractChatRequestErrorText(error) ?? "").toLowerCase();
+
+  if (
+    status === 503 ||
+    status === 529 ||
+    message.includes("high demand") ||
+    message.includes("overloaded")
+  ) {
+    return "overloaded";
+  }
+
+  if (
+    status === 401 ||
+    status === 403 ||
+    status === 429 ||
+    message.includes("no credits") ||
+    message.includes("insufficient credits") ||
+    message.includes("invalid api key") ||
+    message.includes("incorrect api key")
+  ) {
+    return "unavailable";
+  }
+
+  return undefined;
+}
+
+export function formatUpstreamErrorMessage(kind: UpstreamErrorKind, providerName: string): string {
+  return kind === "overloaded"
+    ? `${providerName} models are experiencing high demand right now. Please try again later.`
+    : `${providerName} models are currently unavailable. Please try again later.`;
+}
 
 export function isContextOverflowMessage(message: string): boolean {
   const normalized = message.toLowerCase();

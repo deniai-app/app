@@ -119,7 +119,7 @@ export async function resolveChatModelContext({
 
   if (isAnonymous && !isGuestModel(selectedModel.value)) {
     throw new ChatRouteError(403, {
-      error: "Only GPT-5.6 Luna is available for guest sessions.",
+      error: "Only GPT-6 Luna is available for guest sessions.",
     });
   }
 

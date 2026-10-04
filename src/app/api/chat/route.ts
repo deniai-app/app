@@ -47,10 +47,13 @@ import {
 } from "@/lib/token-weighting";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
+  classifyUpstreamError,
   extractChatRequestErrorText,
+  formatUpstreamErrorMessage,
   GENERIC_CHAT_REQUEST_ERROR,
   isContextOverflowMessage,
 } from "@/lib/chat-request-error";
+import { authorLabels } from "@/app/(home)/models/models-author-labels";
 import { addOpenRouterCacheControl, ChatRouteError, resolveChatModelContext } from "./_lib/model";
 import { buildChatSystemPrompt } from "./_lib/prompt";
 import { ChatRequestSchema, setPendingState } from "./_lib/schema";
@@ -64,6 +67,13 @@ const GUEST_MAX_STEPS = 8;
 
 function formatChatStreamError(error: unknown, modelId: string): string {
   console.error("Chat request error", error);
+
+  const upstreamKind = classifyUpstreamError(error);
+  if (upstreamKind) {
+    const author = getModelDefinition(modelId)?.author;
+    const providerName = (author && authorLabels[author]) || author || "This provider's";
+    return formatUpstreamErrorMessage(upstreamKind, providerName);
+  }
 
   const rawMessage = extractChatRequestErrorText(error);
   if (!rawMessage || !isContextOverflowMessage(rawMessage)) {
@@ -192,6 +202,13 @@ export async function POST(req: Request) {
     forceWebSearch = false,
     additionalInstruction,
   } = parsedBody.data;
+
+  if (isAnonymous && (requestedProMode || requestedFastMode || deepResearch)) {
+    return NextResponse.json(
+      { error: "Fast, Pro, and Deep Research are not available for guest sessions." },
+      { status: 403 },
+    );
+  }
 
   const isComparison = parsedBody.data.comparison === true;
   // Ephemeral generation keys are scoped to the authenticated account and never

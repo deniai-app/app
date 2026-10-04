@@ -15,6 +15,7 @@ import {
   Coins,
   CreditCard,
   Gem,
+  LogIn,
   SearchIcon,
   Sparkle,
   StarIcon,
@@ -305,7 +306,7 @@ export function ChatComposerModelPicker({
   ariaLabel,
   className,
 }: ChatComposerModelPickerProps) {
-  const { shouldVerifyCard } = useAvailableModels();
+  const { shouldVerifyCard, isAnonymous } = useAvailableModels();
   const t = useExtracted();
   const locale = useLocale();
   const modelDescriptionLabels: ModelDescriptionLabels = {
@@ -582,6 +583,22 @@ export function ChatComposerModelPicker({
                   </>
                 )}
               </div>
+              {isAnonymous && (
+                <div className="flex shrink-0 flex-col gap-2 border-t bg-muted/30 p-3 text-muted-foreground">
+                  <div className="flex items-start gap-2">
+                    <LogIn className="size-5 shrink-0" aria-hidden="true" />
+                    <p>{t("Log in to use more models")}</p>
+                  </div>
+                  <Button
+                    render={<a href="/auth/sign-in?redirectTo=/chat" />}
+                    variant="outline"
+                    size="sm"
+                    className="self-start"
+                  >
+                    {t("Log in")}
+                  </Button>
+                </div>
+              )}
               {shouldVerifyCard && (
                 <div className="flex shrink-0 flex-col gap-2 border-t bg-muted/30 p-3 text-muted-foreground">
                   <div className="flex items-start gap-2">

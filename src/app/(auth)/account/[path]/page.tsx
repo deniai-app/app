@@ -22,7 +22,12 @@ function AccountPageFallback() {
   );
 }
 
-async function AccountPageContent({ params }: { params: Promise<{ path: string }> }) {
+type AccountPageProps = {
+  params: Promise<{ path: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+async function AccountPageContent({ params, searchParams }: AccountPageProps) {
   // Defer session/DB work past Cache Components prerender (request-time only).
   await connection();
 
@@ -40,7 +45,14 @@ async function AccountPageContent({ params }: { params: Promise<{ path: string }
   });
 
   if (!session) {
-    redirect(`/auth/sign-in?redirectTo=${encodeURIComponent(`/account/${path}`)}`);
+    // Email links can land here signed out; keep their ?error= so the result is
+    // still shown after signing in.
+    const { error } = await searchParams;
+    const returnTo =
+      typeof error === "string"
+        ? `/account/${path}?${new URLSearchParams({ error }).toString()}`
+        : `/account/${path}`;
+    redirect(`/auth/sign-in?redirectTo=${encodeURIComponent(returnTo)}`);
   }
 
   return (
@@ -56,10 +68,10 @@ async function AccountPageContent({ params }: { params: Promise<{ path: string }
   );
 }
 
-export default function AccountPage({ params }: { params: Promise<{ path: string }> }) {
+export default function AccountPage({ params, searchParams }: AccountPageProps) {
   return (
     <Suspense fallback={<AccountPageFallback />}>
-      <AccountPageContent params={params} />
+      <AccountPageContent params={params} searchParams={searchParams} />
     </Suspense>
   );
 }

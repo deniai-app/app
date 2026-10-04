@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth, useChangeEmail, useSession } from "@better-auth-ui/react";
+import { useExtracted } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import { toast } from "sonner";
 
@@ -20,18 +21,27 @@ export type ChangeEmailProps = {
 /**
  * Render a card containing a form to view and update the authenticated user's email.
  *
- * Shows a loading skeleton until session data is available, displays the current
- * email as the form's default value, and sends a verification email to the
- * new address upon successful submission.
+ * Shows a loading skeleton until session data is available and displays the current
+ * email as the form's default value. On submit, a verified account receives a
+ * confirmation link at its current address first (the new address is verified
+ * afterwards); an unverified account receives a verification link at the new address.
  *
  * @returns A JSX element rendering the change-email card and form
  */
 export function ChangeEmail({ className }: ChangeEmailProps) {
-  const { authClient, baseURL, localization, viewPaths } = useAuth();
+  const { authClient, baseURL, basePaths, localization, viewPaths } = useAuth();
   const { data: session } = useSession(authClient);
+  const t = useExtracted();
 
   const { mutate: changeEmail, isPending } = useChangeEmail(authClient, {
-    onSuccess: () => toast.success(localization.settings.changeEmailSuccess),
+    onSuccess: () =>
+      toast.success(
+        session?.user.emailVerified
+          ? t(
+              "Check your current email address to approve the change. We'll then send a verification link to the new address.",
+            )
+          : localization.settings.changeEmailSuccess,
+      ),
   });
 
   const [fieldErrors, setFieldErrors] = useState<{
@@ -44,7 +54,8 @@ export function ChangeEmail({ className }: ChangeEmailProps) {
     const formData = new FormData(e.currentTarget);
     changeEmail({
       newEmail: formData.get("email") as string,
-      callbackURL: `${baseURL}/${viewPaths.settings.account}`,
+      // Both email links (confirmation and verification) return to account settings.
+      callbackURL: `${baseURL}${basePaths.settings}/${viewPaths.settings.account}`,
     });
   }
 

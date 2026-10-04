@@ -17,6 +17,12 @@ export const env = createEnv({
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
     STRIPE_FLASH_OFFER_COUPON_ID: z.string().min(1).optional(),
+    /**
+     * Customer Portal configuration (`bpc_...`) used for billing portal sessions.
+     * Create it with `pnpm run tools:stripe-portal`. When unset, Stripe's default
+     * portal configuration applies and must have subscription updates disabled.
+     */
+    STRIPE_PORTAL_CONFIGURATION_ID: z.string().min(1).optional(),
     AFFILIATE_ADMIN_EMAILS: z.string().min(1).optional(),
     BLOG_ADMIN_EMAILS: z.string().min(1).optional(),
     OPENROUTER_API_KEY: z.string().min(1).optional(),
@@ -38,6 +44,25 @@ export const env = createEnv({
     UPSTASH_REDIS_REST_URL: z.url().optional(),
     UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
     UPLOADTHING_TOKEN: z.string().min(1).optional(),
+    /**
+     * Client IP resolution behind proxies (see `src/lib/client-ip.ts` and SETUP.md).
+     * CLIENT_IP_HEADER: single-value header set by the trusted edge (e.g.
+     * cf-connecting-ip); takes precedence. TRUSTED_PROXY_HOPS: number of trusted
+     * proxies appending to X-Forwarded-For. Neither: first X-Forwarded-For entry
+     * (spoofable unless the edge overwrites it).
+     */
+    CLIENT_IP_HEADER: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9!#$%&'*+.^_`|~-]+$/, "CLIENT_IP_HEADER must be a header name")
+      .optional(),
+    TRUSTED_PROXY_HOPS: z
+      .string()
+      .trim()
+      .regex(/^[1-9]\d*$/, "TRUSTED_PROXY_HOPS must be a positive integer")
+      .transform(Number)
+      .optional(),
   },
   client: {
     /**
@@ -77,6 +102,7 @@ export const env = createEnv({
     TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
     STRIPE_FLASH_OFFER_COUPON_ID: process.env.STRIPE_FLASH_OFFER_COUPON_ID,
+    STRIPE_PORTAL_CONFIGURATION_ID: process.env.STRIPE_PORTAL_CONFIGURATION_ID,
     AFFILIATE_ADMIN_EMAILS: process.env.AFFILIATE_ADMIN_EMAILS,
     BLOG_ADMIN_EMAILS: process.env.BLOG_ADMIN_EMAILS,
     CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
@@ -84,5 +110,7 @@ export const env = createEnv({
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
     UPLOADTHING_TOKEN: process.env.UPLOADTHING_TOKEN,
+    CLIENT_IP_HEADER: process.env.CLIENT_IP_HEADER,
+    TRUSTED_PROXY_HOPS: process.env.TRUSTED_PROXY_HOPS,
   },
 });

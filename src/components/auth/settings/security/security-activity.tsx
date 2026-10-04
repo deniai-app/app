@@ -17,6 +17,7 @@ export function SecurityActivity() {
     signed_in: t("Signed in"),
     signed_out: t("Signed out"),
     password_changed: t("Password changed"),
+    email_change_requested: t("Email change requested"),
     email_changed: t("Email changed"),
     two_factor_enabled: t("Two-factor authentication enabled"),
     two_factor_disabled: t("Two-factor authentication disabled"),

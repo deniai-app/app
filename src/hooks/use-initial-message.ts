@@ -119,9 +119,18 @@ export function useInitialMessage(params: {
   availableModelValues?: ReadonlySet<string>;
   sendMessage: SendMessage;
   onMessageSent: () => void;
+  /** Prefills the composer with a `?message=` prompt without sending it. */
+  onDraft: (text: string) => void;
 }): InitialComposerSeed | null {
-  const { id, initialMessagesLength, model, availableModelValues, sendMessage, onMessageSent } =
-    params;
+  const {
+    id,
+    initialMessagesLength,
+    model,
+    availableModelValues,
+    sendMessage,
+    onMessageSent,
+    onDraft,
+  } = params;
   const searchParams = useSearchParams();
   const stored = useSyncExternalStore(
     subscribeInitialMessageStore,
@@ -132,6 +141,7 @@ export function useInitialMessage(params: {
   const initialMessageSentRef = useRef(false);
   const sendMessageRef = useRef(sendMessage);
   const onMessageSentRef = useRef(onMessageSent);
+  const onDraftRef = useRef(onDraft);
   const modelRef = useRef(model);
   const availableModelValuesRef = useRef(availableModelValues);
   const [consumedSeed, setConsumedSeed] = useState<{
@@ -142,6 +152,7 @@ export function useInitialMessage(params: {
   useEffect(() => {
     sendMessageRef.current = sendMessage;
     onMessageSentRef.current = onMessageSent;
+    onDraftRef.current = onDraft;
     modelRef.current = model;
     availableModelValuesRef.current = availableModelValues;
   });
@@ -225,6 +236,10 @@ export function useInitialMessage(params: {
       return;
     }
 
+    // Anyone can link to `/new/<prompt>` or `/chat/<id>?message=`, including from
+    // native apps where the navigation looks user-initiated. Never send a URL-supplied
+    // prompt on the user's behalf: it could spend their quota or plant memories and
+    // tool calls. Prefill it so the user reviews and sends it themselves.
     initialMessageSentRef.current = true;
     const decodedMessage = decodeQueryMessage(initialMessage);
     const initialWebSearch = searchParams.get("webSearch") === "true";
@@ -241,22 +256,7 @@ export function useInitialMessage(params: {
 
     window.history.replaceState({}, "", `/chat/${id}`);
     emitInitialMessageStore();
-
-    Promise.resolve(
-      sendMessageRef.current(
-        { text: decodedMessage },
-        {
-          body: {
-            model: modelRef.current,
-            webSearch: initialWebSearch,
-            reasoningEffort: "high",
-            id,
-          },
-        },
-      ),
-    ).finally(() => {
-      onMessageSentRef.current();
-    });
+    onDraftRef.current(decodedMessage);
   }, [searchParams, initialMessagesLength, id]);
 
   return liveSeed;

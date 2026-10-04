@@ -17,13 +17,23 @@ import { count, eq } from "drizzle-orm";
 import { createElement } from "react";
 import { db } from "@/db/drizzle";
 import * as schema from "@/db/schema";
+import {
+  ChangeEmailConfirmationEmail,
+  changeEmailConfirmationEmailSubject,
+} from "@/emails/change-email-confirmation-email";
 import { MagicLinkEmail, magicLinkEmailSubject } from "@/emails/magic-link-email";
+import {
+  NewEmailVerificationEmail,
+  newEmailVerificationEmailSubject,
+} from "@/emails/new-email-verification-email";
 import { OrgInvitationEmail } from "@/emails/org-invitation-email";
 import { orgInvitationEmailSubject } from "@/emails/org-invitation-email-subject";
 import { PasswordResetEmail, passwordResetEmailSubject } from "@/emails/password-reset-email";
 import { VerificationEmail, verificationEmailSubject } from "@/emails/verification-email";
 import { env } from "@/env";
+import { resolveClientIp } from "@/lib/client-ip";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { readEmailChangeToken } from "@/lib/email-change-token";
 import { deletePersonalStripeCustomers } from "@/lib/account-deletion-billing";
 import {
   checkSignupEmail,
@@ -33,7 +43,7 @@ import {
 import {
   isAnonymousUser,
   recordSecurityActivity,
-  securityActionForAuthPath,
+  securityActionForAuthResponse,
 } from "@/lib/security-activity";
 import { teamMemberAuditHooks } from "@/lib/team-member-audit";
 import {
@@ -83,6 +93,8 @@ const captchaPlugin =
           "/sign-in/email",
           "/request-password-reset",
           "/sign-in/magic-link",
+          // Guest accounts carry a free usage allowance; stop scripted minting.
+          "/sign-in/anonymous",
         ],
       })
     : null;
@@ -137,7 +149,12 @@ export const auth = betterAuth({
       assertAllowedSignupEmail(email);
     }),
     after: createAuthMiddleware(async (ctx) => {
-      const action = securityActionForAuthPath(ctx.path);
+      const action = securityActionForAuthResponse({
+        path: ctx.path,
+        returned: ctx.context.returned,
+        requestUser: ctx.context.session?.user,
+        issuedUser: ctx.context.newSession?.user,
+      });
       if (!action) return;
 
       const sessionUser = ctx.context.session?.user ?? ctx.context.newSession?.user ?? null;
@@ -174,15 +191,49 @@ export const auth = betterAuth({
   },
   emailVerification: emailEnabled
     ? {
-        sendVerificationEmail: async ({ user, url }) => {
-          await sendEmail({
-            to: user.email,
-            subject: verificationEmailSubject,
-            react: createElement(VerificationEmail, {
-              name: user.name,
-              verificationUrl: url,
-            }),
-          });
+        sendVerificationEmail: async ({ user, url, token }) => {
+          // During an email change Better Auth sends this to the requested address,
+          // so the sign-up wording would be wrong there.
+          const emailChange = readEmailChangeToken(token);
+          await sendEmail(
+            emailChange
+              ? {
+                  to: user.email,
+                  subject: newEmailVerificationEmailSubject,
+                  react: createElement(NewEmailVerificationEmail, {
+                    name: user.name,
+                    newEmail: emailChange.newEmail,
+                    verificationUrl: url,
+                  }),
+                }
+              : {
+                  to: user.email,
+                  subject: verificationEmailSubject,
+                  react: createElement(VerificationEmail, {
+                    name: user.name,
+                    verificationUrl: url,
+                  }),
+                },
+          );
+        },
+        // Called once Better Auth has verified a link. For an email change this is
+        // when the address actually switches, so log it here rather than when the
+        // change was requested.
+        afterEmailVerification: async (user, request) => {
+          const token = request ? new URL(request.url).searchParams.get("token") : null;
+          const emailChange = readEmailChangeToken(token);
+          if (!emailChange || emailChange.requestType === "change-email-confirmation") return;
+          try {
+            await recordSecurityActivity({
+              userId: user.id,
+              action: "email_changed",
+              ipAddress: request ? (resolveClientIp(request.headers) ?? null) : null,
+              userAgent: request?.headers.get("user-agent") ?? null,
+              metadata: { path: "/verify-email" },
+            });
+          } catch (error) {
+            console.error("Failed to record security activity", error);
+          }
         },
         // Send on sign-up and when an unverified user tries to sign in
         // (better-auth only auto-sends on sign-in when this flag is set).
@@ -365,6 +416,29 @@ export const auth = betterAuth({
     },
   },
   user: {
+    // Two-step change for verified accounts: the current address must approve
+    // the request first (sendChangeEmailConfirmation), then Better Auth sends
+    // the new address a verification link via emailVerification; the email is
+    // only updated after that link is opened. Unverified accounts skip the
+    // first step and verify the new address directly.
+    changeEmail: {
+      enabled: emailEnabled,
+      sendChangeEmailConfirmation: emailEnabled
+        ? async ({ user, newEmail, url }) => {
+            await sendEmail({
+              to: user.email,
+              subject: changeEmailConfirmationEmailSubject,
+              react: createElement(ChangeEmailConfirmationEmail, {
+                name: user.name,
+                currentEmail: user.email,
+                newEmail,
+                confirmUrl: url,
+                securityUrl: `${env.NEXT_PUBLIC_BETTER_AUTH_URL}/account/security`,
+              }),
+            });
+          }
+        : undefined,
+    },
     deleteUser: {
       enabled: true,
       beforeDelete: async (user) => {
@@ -380,6 +454,9 @@ export const auth = betterAuth({
     database: {
       joins: true,
     },
+    // Trust only the edge's single-value client IP header when configured. Otherwise
+    // Better Auth accepts X-Forwarded-For only when it has exactly one entry.
+    ...(env.CLIENT_IP_HEADER ? { ipAddress: { ipAddressHeaders: [env.CLIENT_IP_HEADER] } } : {}),
   },
   databaseHooks: {
     user: {

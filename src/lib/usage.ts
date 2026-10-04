@@ -461,6 +461,11 @@ async function upsertUsageRecord({
   return saved ?? null;
 }
 
+/**
+ * `allowLimitOverflow` settles usage that was already incurred (for example when a
+ * finished generation is reconciled). It records the full amount even past the
+ * plan limit or a Max Mode cap; rejecting it would leave that usage unbilled.
+ */
 export async function consumeUsage({
   userId,
   category,
@@ -514,16 +519,27 @@ export async function consumeUsage({
           category === "basic" ? tierInfo.maxModeLimitBasic : tierInfo.maxModeLimitPremium;
         const nextMaxModeUsage = Math.max(state.used + amount - limit, 0);
 
-        if (maxModeLimit !== null && nextMaxModeUsage > maxModeLimit) {
-          throw new UsageLimitError("Usage limit reached for your plan.", tierInfo.maxModeEligible);
-        }
-
         // Only the slice above the plan limit is billable overage. Recording the
         // whole `amount` would overcharge the request that first crosses the limit.
-        const maxModeAmount = Math.min(amount, state.used + amount - limit);
+        let maxModeAmount = Math.min(amount, state.used + amount - limit);
 
-        const recorded = await recordMaxModeUsage(userId, category, maxModeAmount, database);
-        if (!recorded.success) throw new Error("Unable to record Max Mode usage.");
+        if (maxModeLimit !== null && nextMaxModeUsage > maxModeLimit) {
+          if (!allowLimitOverflow) {
+            throw new UsageLimitError(
+              "Usage limit reached for your plan.",
+              tierInfo.maxModeEligible,
+            );
+          }
+          // Settling already-incurred usage: keep the quota accurate so later
+          // requests stay blocked, but never bill beyond the configured cap.
+          const alreadyBilled = Math.max(state.used - limit, 0);
+          maxModeAmount = Math.max(0, Math.min(maxModeAmount, maxModeLimit - alreadyBilled));
+        }
+
+        if (maxModeAmount > 0) {
+          const recorded = await recordMaxModeUsage(userId, category, maxModeAmount, database);
+          if (!recorded.success) throw new Error("Unable to record Max Mode usage.");
+        }
 
         await upsertUsageRecord({
           userId,

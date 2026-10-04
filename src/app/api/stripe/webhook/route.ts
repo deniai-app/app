@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { db } from "@/db/drizzle";
@@ -8,6 +8,13 @@ import { findPlanByLookupKey, isTeamPlan } from "@/lib/billing";
 import { activatePaidAd, pauseReversedAdCharge, releaseExpiredAdCheckout } from "@/lib/ad-checkout";
 import { getBillingFingerprintUpdates } from "@/lib/billing-card-usage";
 import { isAffiliatePaidStatus, processAffiliatePurchase } from "@/lib/affiliate";
+import {
+  findPaidLifetimePurchase,
+  grantsSubscriptionAccess,
+  isLifetimePlanId,
+  isPaidLifetimeRecord,
+  saveLifetimePlan,
+} from "@/lib/lifetime-plan";
 import { resetMaxModeUsage } from "@/lib/max-mode";
 import { stripe } from "@/lib/stripe";
 import { saveTeamBillingRecord } from "@/lib/team-billing-record";
@@ -20,6 +27,7 @@ import {
   getLicensedPrice,
   getSubscriptionPeriodEnd,
   isMaxModeOnlySubscription,
+  isMeteredMaxModePrice,
 } from "@/lib/stripe-subscriptions";
 import {
   cancelOrgMembersPersonalSubscriptions,
@@ -56,10 +64,32 @@ async function saveSubscription(payload: SubscriptionPayload) {
       currentPeriodEnd: billing.currentPeriodEnd,
       firstPaidAt: billing.firstPaidAt,
       maxModeEnabled: billing.maxModeEnabled,
+      planId: billing.planId,
+      status: billing.status,
+      mode: billing.mode,
     })
     .from(billing)
     .where(whereClause)
     .limit(1);
+
+  // A subscription that grants nothing (incomplete, ended, ...) must not replace a
+  // paid lifetime plan, and an ended one hands the row back to that lifetime plan.
+  if (!organizationId && !grantsSubscriptionAccess(payload.status)) {
+    if (isPaidLifetimeRecord(existingRecord)) {
+      return;
+    }
+    if (existingRecord?.firstPaidAt) {
+      const lifetime = await findPaidLifetimePurchase(payload.customerId);
+      if (lifetime) {
+        await saveLifetimePlan(db, {
+          userId: payload.userId,
+          customerId: payload.customerId,
+          purchase: lifetime,
+        });
+        return;
+      }
+    }
+  }
 
   const updates = {
     stripeCustomerId: payload.customerId,
@@ -147,6 +177,13 @@ async function clearPlanData({
     return;
   }
 
+  // The subscription ended; a lifetime plan bought earlier takes over again.
+  const lifetime = await findPaidLifetimePurchase(customerId);
+  if (lifetime) {
+    await saveLifetimePlan(db, { userId, customerId, purchase: lifetime });
+    return;
+  }
+
   await db
     .insert(billing)
     .values({
@@ -176,6 +213,108 @@ async function clearPlanData({
         updatedAt: new Date(),
       },
     });
+}
+
+/**
+ * Activates a paid one-time plan even when the buyer never returns to the
+ * checkout page (which is the only other place that confirms it).
+ */
+async function savePaidLifetimeCheckout(
+  session: Stripe.Checkout.Session,
+  userId: string,
+  planId: string,
+) {
+  const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
+  if (!customerId) return;
+
+  const [existing] = await db
+    .select({
+      status: billing.status,
+      mode: billing.mode,
+      stripeSubscriptionId: billing.stripeSubscriptionId,
+      firstPaidAt: billing.firstPaidAt,
+    })
+    .from(billing)
+    .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
+    .limit(1);
+
+  // A live subscription keeps the row; the lifetime plan is restored from Stripe
+  // once that subscription ends.
+  if (
+    existing?.stripeSubscriptionId &&
+    existing.mode === "subscription" &&
+    grantsSubscriptionAccess(existing.status)
+  ) {
+    return;
+  }
+
+  const [lineItems, fingerprintUpdates] = await Promise.all([
+    stripe.checkout.sessions.listLineItems(session.id, { limit: 1 }),
+    getBillingFingerprintUpdates({ customerId, markTrialUsed: false }),
+  ]);
+
+  await saveLifetimePlan(db, {
+    userId,
+    customerId,
+    purchase: {
+      planId,
+      priceId: lineItems.data.at(0)?.price?.id ?? null,
+      checkoutSessionId: session.id,
+    },
+    extra: {
+      firstPaidAt: existing?.firstPaidAt ?? new Date(),
+      flashOfferEndsAt: null,
+      paymentMethodFingerprint: fingerprintUpdates.paymentMethodFingerprint,
+      ...(fingerprintUpdates.cardFunding ? { cardFunding: fingerprintUpdates.cardFunding } : {}),
+    },
+  });
+}
+
+const METER_HOST_STATUSES = new Set(["trialing", "active", "past_due"]);
+
+/**
+ * The monthly Max Mode meter subscription can be canceled from the Customer
+ * Portal. Meter events only invoice through a live subscription carrying the
+ * metered prices, so turn Max Mode off for the rows that relied on it instead of
+ * letting overage accrue unbilled.
+ */
+async function disableMaxModeForEndedMeterSubscription(
+  subscription: Stripe.Subscription,
+  customerId: string,
+) {
+  const itemIds = subscription.items.data.map((item) => item.id);
+  if (itemIds.length === 0) return;
+
+  // The app itself cancels duplicate meter hosts after attaching a new one; the
+  // meters are still billable then, so leave Max Mode alone.
+  const listed = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 20,
+    expand: ["data.items"],
+  });
+  const meteredElsewhere = listed.data.some(
+    (other) =>
+      other.id !== subscription.id &&
+      METER_HOST_STATUSES.has(other.status) &&
+      other.items.data.some((item) => isMeteredMaxModePrice(item.price)),
+  );
+  if (meteredElsewhere) return;
+
+  await db
+    .update(billing)
+    .set({
+      maxModeEnabled: false,
+      stripeMeteredBasicItemId: null,
+      stripeMeteredPremiumItemId: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      or(
+        inArray(billing.stripeMeteredBasicItemId, itemIds),
+        inArray(billing.stripeMeteredPremiumItemId, itemIds),
+      ),
+    );
 }
 
 async function resolveUserIdFromCustomer(stripeCustomerId: string, metadataUserId?: string | null) {
@@ -244,6 +383,7 @@ export async function POST(req: Request) {
         }
 
         if (isMaxModeOnlySubscription(subscription)) {
+          await disableMaxModeForEndedMeterSubscription(subscription, customerId);
           break;
         }
 
@@ -445,6 +585,10 @@ export async function POST(req: Request) {
               ? await resolveUserIdFromCustomer(session.customer)
               : null);
           const planId = session.metadata?.planId;
+
+          if (userId && isLifetimePlanId(planId) && !session.metadata?.organizationId) {
+            await savePaidLifetimeCheckout(session, userId, planId);
+          }
 
           if (userId && planId) {
             await processAffiliatePurchase({

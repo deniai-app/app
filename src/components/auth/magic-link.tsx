@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin";
+import { toSafeRedirectPath } from "@/lib/auth-redirect";
 import { cn } from "@/lib/utils";
 import { ProviderButtons, type SocialLayout } from "./provider-buttons";
 
@@ -87,7 +88,7 @@ export function MagicLink({ className, socialLayout, socialPosition = "bottom" }
     e.preventDefault();
     signInMagicLink({
       email,
-      callbackURL: `${baseURL}${redirectTo}`,
+      callbackURL: `${baseURL}${toSafeRedirectPath(redirectTo)}`,
       fetchOptions,
     });
   };

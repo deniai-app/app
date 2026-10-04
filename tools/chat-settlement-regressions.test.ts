@@ -11,6 +11,9 @@ const state = vi.hoisted(() => ({
   refunded: 0,
   reported: 0,
   settled: 0,
+  inputTokens: 10,
+  limitReached: false,
+  failSettlement: false,
 }));
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -54,10 +57,15 @@ vi.mock("@/lib/usage", async () => {
   class UsageLimitError extends Error {}
   return {
     UsageLimitError,
-    consumeUsage: vi.fn(async ({ amount }: { amount: number }) => {
-      state.consumed += amount;
-      return { maxModeAmount: state.guest ? 0 : amount };
-    }),
+    consumeUsage: vi.fn(
+      async ({ amount, allowLimitOverflow }: { amount: number; allowLimitOverflow?: boolean }) => {
+        const settling = state.consumed > 0;
+        if (settling && state.failSettlement) throw new Error("Quota write failed");
+        if (settling && state.limitReached && !allowLimitOverflow) throw new UsageLimitError();
+        state.consumed += amount;
+        return { maxModeAmount: state.guest ? 0 : amount };
+      },
+    ),
     refundUsage: vi.fn(async ({ amount }: { amount: number }) => {
       state.refunded += amount;
       state.settled++;
@@ -97,7 +105,9 @@ vi.mock("ai", async () => {
         new ReadableStream({
           async start(controller) {
             if (state.usage)
-              await options.onStepFinish({ usage: { inputTokens: 10, outputTokens: 2 } });
+              await options.onStepFinish({
+                usage: { inputTokens: state.inputTokens, outputTokens: 2 },
+              });
             if (state.mode === "stopped") {
               const { POST } = await import("@/app/api/chat/stop/route");
               await POST(
@@ -111,7 +121,9 @@ vi.mock("ai", async () => {
               startChatGeneration("chat", "new-generation");
               state.activeGenerationId = "new-generation";
             } else if (state.usage) {
-              await options.onFinish({ totalUsage: { inputTokens: 10, outputTokens: 2 } });
+              await options.onFinish({
+                totalUsage: { inputTokens: state.inputTokens, outputTokens: 2 },
+              });
             }
             if (state.output) {
               controller.enqueue({ type: "text-start", id: "text" });
@@ -141,6 +153,9 @@ beforeEach(() => {
   state.refunded = 0;
   state.reported = 0;
   state.settled = 0;
+  state.inputTokens = 10;
+  state.limitReached = false;
+  state.failSettlement = false;
 });
 
 async function run() {
@@ -207,4 +222,22 @@ test("a guest stop before output refunds the request unit", async () => {
   expect(state.consumed).toBe(1);
   expect(state.refunded).toBe(1);
   expect(state.reported).toBe(0);
+});
+
+test("usage above the reservation is billed even past the plan limit", async () => {
+  state.mode = "finished";
+  state.inputTokens = 500_000;
+  state.limitReached = true;
+  await run();
+  expect(state.consumed - state.refunded).toBe(500_010);
+  expect(state.reported).toBe(500_010);
+  expect(clearChatGenerationState).toHaveBeenCalledOnce();
+});
+
+test("a failed settlement keeps the streamed answer in the transcript", async () => {
+  state.mode = "finished";
+  state.inputTokens = 500_000;
+  state.failSettlement = true;
+  await run();
+  expect(clearChatGenerationState).toHaveBeenCalledOnce();
 });

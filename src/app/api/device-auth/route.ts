@@ -7,6 +7,7 @@ import { apiKey, deviceAuthCode } from "@/db/schema";
 import { MAX_API_KEYS, withApiKeyLock, type ApiKeyTransaction } from "@/lib/api-key-quota";
 import { generateApiKey, getKeyPrefix, hashApiKey } from "@/lib/api-key-utils";
 import { auth } from "@/lib/auth";
+import { resolveClientIp } from "@/lib/client-ip";
 import { decryptFromB64 } from "@/lib/crypto";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { env } from "@/env";
@@ -86,7 +87,7 @@ export async function POST(req: Request) {
 
 /** Extension starts the flow; the separate deviceCode is its polling secret. */
 async function handleInitiate(req: Request) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = resolveClientIp(req.headers) ?? "unknown";
   const rateCheck = await checkRateLimit({
     key: `device-auth:${ip}`,
     windowMs: 60_000,

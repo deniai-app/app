@@ -2,11 +2,12 @@
 
 Internal scripts for maintainers. Run from the **repository root** with pnpm. Package scripts explicitly load `.env.local` when present; production maintenance uses `.env.production`.
 
-| Script                  | npm script                       | Purpose                                        |
-| ----------------------- | -------------------------------- | ---------------------------------------------- |
-| `codename-generator.ts` | `pnpm run tools:codename`        | Generate Deni AI version codenames             |
-| `commit.ts`             | `pnpm run tools:commit`          | Conventional commit messages via OpenRouter    |
-| `purge-anonymous.ts`    | `pnpm run tools:purge-anonymous` | Purge anonymous users (uses `.env.production`) |
+| Script                   | npm script                       | Purpose                                        |
+| ------------------------ | -------------------------------- | ---------------------------------------------- |
+| `codename-generator.ts`  | `pnpm run tools:codename`        | Generate Deni AI version codenames             |
+| `commit.ts`              | `pnpm run tools:commit`          | Conventional commit messages via OpenRouter    |
+| `purge-anonymous.ts`     | `pnpm run tools:purge-anonymous` | Purge anonymous users (uses `.env.production`) |
+| `stripe-portal-setup.ts` | `pnpm run tools:stripe-portal`   | Stripe Customer Portal configuration           |
 
 ## Commit helper
 
@@ -37,4 +38,13 @@ Production maintenance. Loads `.env.production` via the package script. Prefer r
 
 ```sh
 pnpm run tools:purge-anonymous
+```
+
+## Stripe Customer Portal
+
+Creates or updates the portal configuration that keeps plan and seat changes in the app (subscription updates disabled). Changes the Stripe account for the loaded secret key; `--check` is read-only. See SETUP.md (Customer Portal).
+
+```sh
+pnpm run tools:stripe-portal
+pnpm run tools:stripe-portal --check
 ```

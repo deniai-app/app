@@ -35,8 +35,6 @@ import {
   getEffectiveTokenMultiplier,
   getModelContextWindow,
   getModelDefinition,
-  OPENAI_LONG_CONTEXT_INPUT_THRESHOLD,
-  supportsOpenAILongContextPricing,
 } from "@/lib/constants";
 import { buildMemoryPrompt, getUserMemoryState, maybeAutoSaveMemories } from "@/lib/memory";
 import { platformCapabilities } from "@/lib/platform-capabilities.server";
@@ -58,6 +56,11 @@ import { buildChatSystemPrompt } from "./_lib/prompt";
 import { ChatRequestSchema, setPendingState } from "./_lib/schema";
 
 const tokenCountFormatter = new Intl.NumberFormat("en-US");
+
+const MAX_STEPS = 50;
+// Guests are billed per request, not per token, so bound the tool loop a single
+// guest request can run.
+const GUEST_MAX_STEPS = 8;
 
 function formatChatStreamError(error: unknown, modelId: string): string {
   console.error("Chat request error", error);
@@ -90,9 +93,10 @@ function estimatePromptInputTokens({
 }
 
 /**
- * Reserve a bounded token budget for short chats. Long-context sessions
- * (>200K estimated input on OpenAI 1M models) reserve using the uncapped
- * estimate so the 2× premium is held before streaming starts.
+ * Reserve at least the estimated prompt before streaming starts, so a request
+ * whose input alone exceeds the remaining quota is rejected up front. Long-context
+ * sessions (>200K estimated input on OpenAI 1M models) also hold the 2× premium.
+ * Settlement reconciles to the provider-reported usage afterwards.
  */
 function estimateTokenReservation({
   modelMessages,
@@ -112,13 +116,7 @@ function estimateTokenReservation({
     proMode,
     fastMode,
   });
-  const isLongContext =
-    supportsOpenAILongContextPricing(modelId) &&
-    estimatedPromptTokens > OPENAI_LONG_CONTEXT_INPUT_THRESHOLD;
-
-  const baseUnits = isLongContext
-    ? Math.max(512, estimatedPromptTokens + 1_024)
-    : Math.max(512, Math.min(8_192, estimatedPromptTokens + 1_024));
+  const baseUnits = Math.max(512, estimatedPromptTokens + 1_024);
 
   return Math.ceil(baseUnits * effectiveMultiplier);
 }
@@ -136,8 +134,6 @@ function getUsageInputTokens(
     ? Math.max(0, usage.inputTokens)
     : 0;
 }
-
-const TOKEN_RECONCILE_OVERFLOW_BUFFER = 256;
 
 export async function POST(req: Request) {
   const headersList = await headers();
@@ -351,6 +347,8 @@ export async function POST(req: Request) {
     }
   };
 
+  // Settlement bills tokens that were already generated, so it may exceed the
+  // plan limit. Refusing it would let the request finish at the reservation price.
   const reconcileConsumedUsage = async (targetAmount: number) => {
     if (usageUnit !== "tokens") {
       return;
@@ -371,7 +369,7 @@ export async function POST(req: Request) {
         category: usageCategory,
         isAnonymous,
         amount: normalizedTargetAmount,
-        allowLimitOverflow: normalizedTargetAmount <= TOKEN_RECONCILE_OVERFLOW_BUFFER,
+        allowLimitOverflow: true,
       });
       pendingMaxModeAmount += consumed.maxModeAmount;
       consumedUsageAmount = normalizedTargetAmount;
@@ -387,7 +385,7 @@ export async function POST(req: Request) {
         category: usageCategory,
         isAnonymous,
         amount: delta,
-        allowLimitOverflow: delta <= TOKEN_RECONCILE_OVERFLOW_BUFFER,
+        allowLimitOverflow: true,
       });
       pendingMaxModeAmount += consumed.maxModeAmount;
     } else if (delta < 0) {
@@ -573,7 +571,7 @@ export async function POST(req: Request) {
       model: model,
       messages: requestMessages,
       abortSignal: generationAbortController.signal,
-      stopWhen: stepCountIs(50),
+      stopWhen: stepCountIs(isAnonymous ? GUEST_MAX_STEPS : MAX_STEPS),
       tools,
       // onFinish is not called by the SDK after an abort. Keep the usage of
       // completed steps so stopped/replaced generations still get reconciled.
@@ -720,7 +718,13 @@ export async function POST(req: Request) {
         );
         // Accounting belongs to this request, not to the current chat-row owner.
         // Stopping/replacing the generation must only suppress transcript writes.
-        await settleUsage();
+        try {
+          await settleUsage();
+        } catch (error) {
+          // The answer was already streamed; a billing failure must not drop it
+          // from the saved transcript.
+          console.error("Failed to settle chat usage", error);
+        }
 
         // Comparisons consume normal usage but never write chats or auto-memory.
         // The chosen transcript is saved explicitly by saveComparison later.

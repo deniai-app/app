@@ -310,6 +310,7 @@ export function ChatInterface({
     onMessageSent: () => {
       void utils.chat.getChats.invalidate();
     },
+    onDraft: setInput,
   });
 
   const model = modelOverride ?? seed?.model ?? projectDefaultModel ?? fallbackModel;

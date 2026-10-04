@@ -31,6 +31,7 @@ import {
   setAffiliateRewardPreference,
   consumeAffiliateResetCredit,
 } from "@/lib/affiliate";
+import { resolveClientIp } from "@/lib/client-ip";
 import { protectedProcedure, router } from "../trpc";
 import { isVerifiedAdmin, type AdminUser } from "@/lib/verified-admin";
 
@@ -115,8 +116,7 @@ export const affiliateRouter = router({
       }
 
       try {
-        const headerStore = await headers();
-        const claimIp = headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+        const claimIp = resolveClientIp(await headers()) ?? null;
         const result = await claimAffiliateReferral({ userId: ctx.userId, code, claimIp });
         cookieStore.delete(AFFILIATE_COOKIE_NAME);
         return result;

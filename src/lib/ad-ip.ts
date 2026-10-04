@@ -1,12 +1,15 @@
 import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
+import { resolveClientIp, type ClientIpOptions } from "@/lib/client-ip";
 import { env } from "@/env";
 
-/** The ingress proxy must overwrite client-supplied forwarding headers. */
-export function anonymousAdViewerId(headers: Headers): string | undefined {
-  const forwarded = headers.get("x-forwarded-for");
-  const ip = (forwarded !== null ? forwarded.split(",")[0] : headers.get("x-real-ip"))?.trim();
-  if (!ip || ip.includes("%") || !isIP(ip)) return undefined;
+/** Client IP resolution follows `CLIENT_IP_HEADER` / `TRUSTED_PROXY_HOPS` (see SETUP.md). */
+export function anonymousAdViewerId(
+  headers: Pick<Headers, "get">,
+  options?: ClientIpOptions,
+): string | undefined {
+  const ip = resolveClientIp(headers, options);
+  if (!ip) return undefined;
 
   // Canonicalize IPv6 spellings and IPv4-mapped IPv6 so they cannot evade deduplication.
   let normalized = isIP(ip) === 6 ? new URL(`http://[${ip}]`).hostname.slice(1, -1) : ip;

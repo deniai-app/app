@@ -12,6 +12,7 @@ import type { ComponentProps } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { toSafeRedirectPath } from "@/lib/auth-redirect";
 
 export type ProviderButtonProps = {
   provider: AuthSocialProvider;
@@ -32,7 +33,7 @@ export function ProviderButton({
 }: ProviderButtonProps) {
   const { authClient, baseURL, localization, redirectTo } = useAuth();
 
-  const callbackURL = `${baseURL}${redirectTo}`;
+  const callbackURL = `${baseURL}${toSafeRedirectPath(redirectTo)}`;
 
   const { mutate: signInSocial, isPending: signInSocialPending } = useSignInSocial(authClient);
 

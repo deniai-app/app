@@ -7,6 +7,7 @@ import { Shield, User2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { AccountSettings } from "./account/account-settings";
+import { AuthLinkError } from "./auth-link-error";
 import { SecuritySettings } from "./security/security-settings";
 
 export type SettingsProps = {
@@ -55,76 +56,79 @@ export function Settings({ className, view, path, hideNav }: SettingsProps) {
   }
 
   return (
-    <Tabs value={currentView} className={cn("w-full gap-4 md:gap-6", className)}>
-      <div className={cn(hideNav && "hidden")}>
-        <TabsList aria-label={localization.settings.settings}>
-          <TabsTrigger
-            value="account"
-            className="gap-1"
-            onClick={() =>
-              navigate({
-                to: `${basePaths.settings}/${viewPaths.settings.account}`,
-              })
-            }
-          >
-            <User2 className="text-muted-foreground" />
+    <>
+      <AuthLinkError />
+      <Tabs value={currentView} className={cn("w-full gap-4 md:gap-6", className)}>
+        <div className={cn(hideNav && "hidden")}>
+          <TabsList aria-label={localization.settings.settings}>
+            <TabsTrigger
+              value="account"
+              className="gap-1"
+              onClick={() =>
+                navigate({
+                  to: `${basePaths.settings}/${viewPaths.settings.account}`,
+                })
+              }
+            >
+              <User2 className="text-muted-foreground" />
 
-            {localization.settings.account}
-          </TabsTrigger>
+              {localization.settings.account}
+            </TabsTrigger>
 
-          <TabsTrigger
-            value="security"
-            className="gap-1"
-            onClick={() =>
-              navigate({
-                to: `${basePaths.settings}/${viewPaths.settings.security}`,
-              })
-            }
-          >
-            <Shield className="text-muted-foreground" />
+            <TabsTrigger
+              value="security"
+              className="gap-1"
+              onClick={() =>
+                navigate({
+                  to: `${basePaths.settings}/${viewPaths.settings.security}`,
+                })
+              }
+            >
+              <Shield className="text-muted-foreground" />
 
-            {localization.settings.security}
-          </TabsTrigger>
+              {localization.settings.security}
+            </TabsTrigger>
 
-          {plugins.flatMap(
-            (plugin) =>
-              plugin.settingsTabs?.map((settingsTab, index) => (
-                <TabsTrigger
-                  key={`${plugin.id}-${index.toString()}`}
-                  value={settingsTab.view}
-                  className="gap-1"
-                  onClick={() =>
-                    navigate({
-                      to: `${basePaths.settings}/${plugin.viewPaths?.settings?.[settingsTab.view]}`,
-                    })
-                  }
-                >
-                  {settingsTab.label}
-                </TabsTrigger>
-              )) ?? [],
-          )}
-        </TabsList>
-      </div>
+            {plugins.flatMap(
+              (plugin) =>
+                plugin.settingsTabs?.map((settingsTab, index) => (
+                  <TabsTrigger
+                    key={`${plugin.id}-${index.toString()}`}
+                    value={settingsTab.view}
+                    className="gap-1"
+                    onClick={() =>
+                      navigate({
+                        to: `${basePaths.settings}/${plugin.viewPaths?.settings?.[settingsTab.view]}`,
+                      })
+                    }
+                  >
+                    {settingsTab.label}
+                  </TabsTrigger>
+                )) ?? [],
+            )}
+          </TabsList>
+        </div>
 
-      <TabsContent value="account" tabIndex={-1}>
-        <AccountSettings />
-      </TabsContent>
+        <TabsContent value="account" tabIndex={-1}>
+          <AccountSettings />
+        </TabsContent>
 
-      <TabsContent value="security" tabIndex={-1}>
-        <SecuritySettings />
-      </TabsContent>
+        <TabsContent value="security" tabIndex={-1}>
+          <SecuritySettings />
+        </TabsContent>
 
-      {plugins.flatMap((plugin) =>
-        plugin.settingsTabs?.map((settingsTab, index) => (
-          <TabsContent
-            key={`${plugin.id}-${index.toString()}`}
-            value={settingsTab.view}
-            tabIndex={-1}
-          >
-            <settingsTab.component />
-          </TabsContent>
-        )),
-      )}
-    </Tabs>
+        {plugins.flatMap((plugin) =>
+          plugin.settingsTabs?.map((settingsTab, index) => (
+            <TabsContent
+              key={`${plugin.id}-${index.toString()}`}
+              value={settingsTab.view}
+              tabIndex={-1}
+            >
+              <settingsTab.component />
+            </TabsContent>
+          )),
+        )}
+      </Tabs>
+    </>
   );
 }

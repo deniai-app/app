@@ -31,6 +31,26 @@ test("uses x-real-ip only when x-forwarded-for is absent and rejects invalid add
   ).toBeUndefined();
 });
 
+test("uses the configured client IP source and keeps canonicalization", () => {
+  const edge = { header: "cf-connecting-ip" };
+  expect(
+    anonymousAdViewerId(
+      new Headers({ "cf-connecting-ip": "::ffff:192.0.2.1", "x-forwarded-for": "192.0.2.9" }),
+      edge,
+    ),
+  ).toBe(identity("192.0.2.1"));
+  expect(
+    anonymousAdViewerId(new Headers({ "x-forwarded-for": "192.0.2.1" }), edge),
+  ).toBeUndefined();
+
+  // Spoofed leftmost entries cannot change the identity behind an appending proxy.
+  const appended = (chain: string) =>
+    anonymousAdViewerId(new Headers({ "x-forwarded-for": chain }), { trustedProxyHops: 1 });
+  expect(appended("198.51.100.1, 192.0.2.1")).toBe(identity("192.0.2.1"));
+  expect(appended("198.51.100.2, 192.0.2.1")).toBe(identity("192.0.2.1"));
+  expect(appended("192.0.2.1, invalid")).toBeUndefined();
+});
+
 test("deduplicates public views per IP/10 minutes and clicks per IP/day", () => {
   const viewer = identity("192.0.2.1")!;
   expect(eventKey("ad", viewer, "view", 0)).toBe(eventKey("ad", viewer, "view", 599_999));

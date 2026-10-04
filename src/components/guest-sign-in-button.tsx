@@ -4,9 +4,13 @@ import type { VariantProps } from "class-variance-authority";
 import { useExtracted } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
+import { GuestCaptchaDialog } from "@/components/auth/guest-captcha-dialog";
+import { usePlatformCapabilities } from "@/components/platform-capabilities-provider";
 import { Button, type buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { clientEnv } from "@/env.client";
 import { authClient } from "@/lib/auth-client";
+import { openChatAfterGuestSignIn, signInAsGuest } from "@/lib/guest-sign-in";
 import { runWithLoading } from "@/lib/run-with-loading";
 import { User } from "lucide-react";
 
@@ -21,47 +25,58 @@ export function GuestSignInButton({
 }: GuestSignInButtonProps) {
   const t = useExtracted();
   const { data: session, isPending } = authClient.useSession();
+  const platformCapabilities = usePlatformCapabilities();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isChallengeOpen, setIsChallengeOpen] = useState(false);
 
-  if (session) {
+  // The server requires a Turnstile token for /sign-in/anonymous only when both
+  // keys are configured; the widget also needs the public site key here.
+  const requiresCaptcha =
+    platformCapabilities.auth.captcha && Boolean(clientEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
+
+  // Keep the challenge dialog mounted while the new guest session navigates to /chat.
+  if (session && !isChallengeOpen) {
     return null;
   }
 
   const handleClick = () => {
     if (isPending || isSubmitting) return;
-    void runWithLoading(setIsSubmitting, async () => {
-      try {
-        const { data, error } = await authClient.signIn.anonymous();
-        if (error || !data) {
-          toast.error(error?.message || t("Failed to sign in as guest. Please try again."));
-          return;
-        }
+    if (requiresCaptcha) {
+      setIsChallengeOpen(true);
+      return;
+    }
 
-        // A /chat prefetch made before sign-in can contain the unauthenticated
-        // redirect. Use a document navigation so that cached RSC redirects are
-        // not reused after the anonymous session cookie has been set.
-        window.location.assign("/chat");
-      } catch (error) {
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : t("Failed to sign in as guest. Please try again.");
-        toast.error(message);
+    void runWithLoading(setIsSubmitting, async () => {
+      const result = await signInAsGuest((request) => authClient.signIn.anonymous(request));
+      if (!result.ok) {
+        toast.error(result.message || t("Failed to sign in as guest. Please try again."));
+        return;
       }
+
+      openChatAfterGuestSignIn();
     });
   };
 
   return (
-    <Button
-      type="button"
-      size={size}
-      variant={variant}
-      className={className}
-      onClick={handleClick}
-      disabled={isPending || isSubmitting}
-    >
-      {isSubmitting ? <Spinner className="size-4" /> : <User className="size-4" />}
-      {t("Continue as Guest")}
-    </Button>
+    <>
+      <Button
+        type="button"
+        size={size}
+        variant={variant}
+        className={className}
+        onClick={handleClick}
+        disabled={isPending || isSubmitting || isChallengeOpen}
+      >
+        {isSubmitting ? <Spinner className="size-4" /> : <User className="size-4" />}
+        {t("Continue as Guest")}
+      </Button>
+      {requiresCaptcha ? (
+        <GuestCaptchaDialog
+          open={isChallengeOpen}
+          onOpenChange={setIsChallengeOpen}
+          onSignedIn={openChatAfterGuestSignIn}
+        />
+      ) : null}
+    </>
   );
 }

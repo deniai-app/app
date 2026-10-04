@@ -28,11 +28,18 @@ import {
   isFlashOfferPlan,
   SUBSCRIPTION_TRIAL_DAYS,
 } from "@/lib/billing-offers";
+import {
+  findPaidLifetimePurchase,
+  grantsSubscriptionAccess,
+  isPaidLifetimeRecord,
+  saveLifetimePlan,
+} from "@/lib/lifetime-plan";
 import { disableMaxMode, enableMaxMode, getMaxModeStatus } from "@/lib/max-mode";
 import { attachMaxModeMeteredItems } from "@/lib/max-mode-stripe";
 import { isTrialEligibleForCustomer } from "@/lib/billing-trials";
 import { escapeStripeSearchValue } from "@/lib/stripe-search";
 import { stripe } from "@/lib/stripe";
+import { createBillingPortalSession } from "@/lib/stripe-portal";
 import {
   checkoutCardPaymentMethodOptions,
   customCheckoutRequestOptions,
@@ -266,25 +273,65 @@ async function syncSubscription(ctx: ProtectedContext, userId: string) {
   const bestSub = pickLicensedSubscription(subscriptions.data, (status) =>
     ACTIVE_SUB_STATUSES.has(status),
   );
-  const subscriptionId = bestSub?.id;
-  if (!subscriptionId) {
+
+  if (!bestSub || !ACTIVE_SUB_STATUSES.has(bestSub.status)) {
+    // An ended subscription must never overwrite a paid one-time plan.
+    if (isPaidLifetimeRecord(billingRecord)) {
+      return billingRecord;
+    }
+    // A lifetime plan bought before a now-ended subscription takes over again.
+    if (billingRecord.firstPaidAt) {
+      const lifetime = await findPaidLifetimePurchase(billingRecord.stripeCustomerId);
+      if (lifetime) {
+        return saveLifetimePlan(ctx.db, {
+          userId,
+          customerId: billingRecord.stripeCustomerId,
+          purchase: lifetime,
+        });
+      }
+    }
+  }
+
+  if (!bestSub) {
+    // No subscription exists in Stripe, so a row that still claims one is stale.
+    if (billingRecord.stripeSubscriptionId && billingRecord.mode === "subscription") {
+      const [cleared] = await ctx.db
+        .update(billing)
+        .set({
+          stripeSubscriptionId: null,
+          status: "inactive",
+          cancelAt: null,
+          currentPeriodEnd: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
+        .returning();
+      return cleared ?? billingRecord;
+    }
     return billingRecord;
   }
 
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const subscription = await stripe.subscriptions.retrieve(bestSub.id);
   const updates: Partial<BillingRecord> = {};
 
   if (subscription) {
     const price = getLicensedPrice(subscription) ?? subscription.items.data.at(0)?.price ?? null;
-    const plan = findPlanById(subscription.metadata?.planId ?? "") ?? getPlanFromPrice(price);
+    // The billed price is authoritative; metadata is not updated by portal plan changes.
+    const plan = getPlanFromPrice(price) ?? findPlanById(subscription.metadata?.planId ?? "");
     const status = subscription.status;
 
     updates.stripeSubscriptionId = subscription.id;
     updates.priceId = price?.id;
     updates.planId = plan?.id ?? billingRecord.planId;
     updates.cancelAt = subscription.cancel_at;
+    // An ended subscription keeps its last period end, so "canceled" would read
+    // as a grace period. Match the webhook: ended subscriptions are inactive.
     updates.status =
-      subscription.cancel_at_period_end || subscription.cancel_at ? "canceled" : status;
+      status === "canceled"
+        ? "inactive"
+        : subscription.cancel_at_period_end || subscription.cancel_at
+          ? "canceled"
+          : status;
     updates.mode = deriveModeFromPrice(price);
     updates.currentPeriodEnd = getSubscriptionPeriodEndDate(subscription);
   }
@@ -612,29 +659,13 @@ export const billingRouter = router({
         customCheckoutRequestOptions,
       );
 
+      // Only remember the session for reuse. The plan changes once Stripe confirms
+      // payment; marking the row "pending" here would revoke a lifetime plan (or any
+      // current access) as soon as the user merely opened checkout.
       await ctx.db
-        .insert(billing)
-        .values({
-          userId: ctx.userId,
-          stripeCustomerId: billingRecord.stripeCustomerId,
-          planId: plan.id,
-          priceId: price.id,
-          status: "pending",
-          mode,
-          checkoutSessionId: session.id,
-        })
-        .onConflictDoUpdate({
-          target: billing.userId,
-          targetWhere: sql`organization_id IS NULL`,
-          set: {
-            planId: plan.id,
-            priceId: price.id,
-            status: "pending",
-            mode,
-            checkoutSessionId: session.id,
-            updatedAt: new Date(),
-          },
-        });
+        .update(billing)
+        .set({ checkoutSessionId: session.id, updatedAt: new Date() })
+        .where(and(eq(billing.userId, ctx.userId), isNull(billing.organizationId)));
 
       if (!session.client_secret) {
         throw new TRPCError({
@@ -685,6 +716,15 @@ export const billingRouter = router({
         });
       }
 
+      // Team and ad checkouts share client_reference_id; they must never be bound
+      // to the personal billing row.
+      if (session.metadata?.organizationId || session.metadata?.adCampaignId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This checkout session is not a personal plan purchase.",
+        });
+      }
+
       const billingRecord = await ensureBillingRecord(ctx, ctx.userId);
       const subscription =
         session.subscription && typeof session.subscription !== "string" && session.subscription;
@@ -698,8 +738,8 @@ export const billingRouter = router({
           : undefined);
 
       const plan =
-        findPlanById((session.metadata?.planId as string) ?? "") ??
-        getPlanFromPrice(linePrice ?? null);
+        getPlanFromPrice(linePrice ?? null) ??
+        findPlanById((session.metadata?.planId as string) ?? "");
 
       const resolvedMode =
         deriveModeFromPrice(linePrice ?? null) ??
@@ -766,6 +806,19 @@ export const billingRouter = router({
         }
       }
 
+      const grantsAccess = updates.status === "paid" || grantsSubscriptionAccess(updates.status);
+      // An unpaid session must not change the plan: the row's current status would
+      // otherwise vouch for whatever plan that session was opened for. A subscription
+      // that grants nothing (e.g. incomplete) must not replace a paid lifetime plan.
+      if (!updates.status || (!grantsAccess && isPaidLifetimeRecord(billingRecord))) {
+        return {
+          planId: billingRecord.planId ?? null,
+          status: billingRecord.status ?? null,
+          mode: billingRecord.mode ?? null,
+          currentPeriodEnd: billingRecord.currentPeriodEnd ?? null,
+        };
+      }
+
       const [saved] = await ctx.db
         .insert(billing)
         .values([
@@ -803,10 +856,10 @@ export const billingRouter = router({
   createPortalSession: billingEnabledProcedure.mutation(async ({ ctx }) => {
     const subscription = await syncSubscription(ctx, ctx.userId);
 
-    const portal = await stripe.billingPortal.sessions.create({
-      customer: subscription.stripeCustomerId,
-      return_url: new URL("/settings/billing", env.NEXT_PUBLIC_BETTER_AUTH_URL).toString(),
-    });
+    const portal = await createBillingPortalSession(
+      subscription.stripeCustomerId,
+      "/settings/billing",
+    );
 
     return { url: portal.url };
   }),

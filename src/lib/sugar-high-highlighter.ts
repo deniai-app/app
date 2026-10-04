@@ -30,10 +30,10 @@ function resolveLanguage(language: string): LanguageName {
   return lang(language) ?? "plaintext";
 }
 
+// Keyed by the full source: a sampled key (length + head + tail) returned another
+// block's highlighted HTML for code that only differed in the middle.
 function cacheKey(code: string, language: string) {
-  const start = code.slice(0, 80);
-  const end = code.length > 80 ? code.slice(-80) : "";
-  return `${language}:${code.length}:${start}:${end}`;
+  return `${language}\n${code}`;
 }
 
 export function highlightCode(code: string, language: string): string {

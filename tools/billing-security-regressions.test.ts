@@ -136,6 +136,18 @@ test("failed team upgrade retains the original team tier", async () => {
   state.record.planId = "pro_team_monthly";
   state.record.organizationId = "team";
   state.subscription.metadata = { planId: "pro_team_monthly" };
+  state.subscription.items = {
+    data: [
+      {
+        id: "item",
+        price: {
+          id: "team-price",
+          lookup_key: "pro_team_monthly",
+          recurring: { interval: "month" },
+        },
+      },
+    ],
+  };
   await expect(
     organizationRouter
       .createCaller(context())

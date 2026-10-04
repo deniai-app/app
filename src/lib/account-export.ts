@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/drizzle";
 import {
   affiliateProfile,
@@ -107,7 +107,7 @@ export async function buildAccountExport(userId: string) {
         createdAt: billing.createdAt,
       })
       .from(billing)
-      .where(eq(billing.userId, userId))
+      .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
       .limit(1)
       .then((rows) => rows[0] ?? null),
     db

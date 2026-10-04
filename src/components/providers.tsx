@@ -11,6 +11,7 @@ import { deleteUserPlugin } from "@/lib/auth/delete-user-plugin";
 import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin";
 import { passkeyPlugin } from "@/lib/auth/passkey-plugin";
 import { authClient } from "@/lib/auth-client";
+import { toSafeRedirectPath } from "@/lib/auth-redirect";
 import type { PlatformCapabilities } from "@/lib/platform-capabilities";
 import { getQueryClient } from "@/lib/query-client";
 import { CommonProviders } from "./common-providers";
@@ -30,9 +31,13 @@ export function AppProviders({
   const queryClient = getQueryClient();
   const localization = useAuthLocalization();
 
+  // Better Auth UI navigates to `?redirectTo=` after sign-in, which anyone can
+  // put in a link. External destinations would make sign-in an open redirect.
+  // (OAuth provider continuations leave via window.location, not this.)
   const navigate = ({ to, replace }: { to: string; replace?: boolean }) => {
-    if (replace) router.replace(to);
-    else router.push(to);
+    const target = toSafeRedirectPath(to);
+    if (replace) router.replace(target);
+    else router.push(target);
   };
 
   const avatarUpload = async (file: File) => {

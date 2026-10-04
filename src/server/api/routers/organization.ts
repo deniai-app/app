@@ -22,6 +22,7 @@ import { TEAM_SUBSCRIPTION_TRIAL_DAYS, TEAM_TRIAL_MAX_SEATS } from "@/lib/billin
 import { isTrialEligibleForCustomer } from "@/lib/billing-trials";
 import { escapeStripeSearchValue } from "@/lib/stripe-search";
 import { stripe } from "@/lib/stripe";
+import { createBillingPortalSession } from "@/lib/stripe-portal";
 import {
   checkoutCardPaymentMethodOptions,
   customCheckoutRequestOptions,
@@ -315,9 +316,10 @@ async function syncTeamSubscription(ctx: ProtectedContext, userId: string, organ
 
   if (subscription) {
     const price = getLicensedPrice(subscription) ?? subscription.items.data.at(0)?.price ?? null;
+    // The billed price is authoritative; metadata is not updated by portal plan changes.
     const plan =
-      findPlanById(subscription.metadata?.planId ?? "") ??
-      billingPlans.find((p) => p.lookupKey === price?.lookup_key);
+      billingPlans.find((p) => p.lookupKey === price?.lookup_key) ??
+      findPlanById(subscription.metadata?.planId ?? "");
     const status = subscription.status;
 
     updates.stripeSubscriptionId = subscription.id;
@@ -969,10 +971,10 @@ export const organizationRouter = router({
       await verifyOrgOwner(ctx, input.organizationId);
       const subscription = await syncTeamSubscription(ctx, ctx.userId, input.organizationId);
 
-      const portal = await stripe.billingPortal.sessions.create({
-        customer: subscription.stripeCustomerId,
-        return_url: new URL("/settings/team", env.NEXT_PUBLIC_BETTER_AUTH_URL).toString(),
-      });
+      const portal = await createBillingPortalSession(
+        subscription.stripeCustomerId,
+        "/settings/team",
+      );
 
       return { url: portal.url };
     }),

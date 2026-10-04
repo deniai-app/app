@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FieldDescription } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
+import { toSafeRedirectPath } from "@/lib/auth-redirect";
 import { cn } from "@/lib/utils";
 import { OpenEmailButton } from "./open-email-button";
 
@@ -108,7 +109,7 @@ export function VerifyEmail({ className }: VerifyEmailProps) {
                 onClick={() =>
                   sendVerificationEmail({
                     email,
-                    callbackURL: `${baseURL}${redirectTo}`,
+                    callbackURL: `${baseURL}${toSafeRedirectPath(redirectTo)}`,
                   })
                 }
               >

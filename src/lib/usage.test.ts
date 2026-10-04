@@ -260,3 +260,35 @@ test("empty guest quotas are protected by the account lock", async () => {
   expect(state.unit).toBe("requests");
   expect(state.locks).toBe(2);
 });
+
+test("settling past a member cap records the quota but bills only up to the cap", async () => {
+  state.team = true;
+  state.used = limit + 15;
+  state.ledger = 15;
+  const result = await consumeUsage({
+    userId: "user",
+    category: "basic",
+    amount: 20,
+    allowLimitOverflow: true,
+    now,
+  });
+  expect(result.maxModeAmount).toBe(5);
+  expect(state.used - limit).toBe(35);
+  expect(state.ledger).toBe(20);
+});
+
+test("settling once the member cap is exhausted bills nothing more", async () => {
+  state.team = true;
+  state.used = limit + 20;
+  state.ledger = 20;
+  const result = await consumeUsage({
+    userId: "user",
+    category: "basic",
+    amount: 20,
+    allowLimitOverflow: true,
+    now,
+  });
+  expect(result.maxModeAmount).toBe(0);
+  expect(state.used - limit).toBe(40);
+  expect(state.ledger).toBe(20);
+});

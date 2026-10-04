@@ -21,6 +21,7 @@
     "tools:codename": "tsx --env-file-if-exists=.env.local ./tools/codename-generator.ts",
     "tools:update-types": "tsx ./tools/update-types.ts",
     "tools:stripe-max-mode": "tsx --env-file-if-exists=.env.local ./tools/stripe-max-mode-setup.ts",
+    "tools:stripe-portal": "tsx --env-file-if-exists=.env.local ./tools/stripe-portal-setup.ts",
     "tools:commit": "tsx --env-file-if-exists=.env.local ./tools/commit.ts",
     "tools:purge-anonymous": "tsx --env-file=.env.production ./tools/purge-anonymous.ts",
     "disposable:refresh": "pnpm --filter @deni-ai/disposable-email-domains refresh",

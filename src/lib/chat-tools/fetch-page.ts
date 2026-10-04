@@ -394,6 +394,50 @@ async function fetchViaReader(
 }
 
 /**
+ * Fetch a public HTTP(S) page as markdown through markdown.new.
+ * Used for search result summarization; callers should fall back to fetchPageText on failure.
+ */
+export async function fetchPageMarkdown(
+  url: string,
+  options?: { maxChars?: number; timeoutMs?: number; signal?: AbortSignal },
+): Promise<FetchedPageText> {
+  const maxChars = clampMaxChars(options?.maxChars);
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_PAGE_FETCH_TIMEOUT_MS;
+  const parsed = await assertSafePublicHttpUrl(url);
+  const requestUrl = parsed.toString();
+
+  return withTimeoutSignal(timeoutMs, options?.signal, async (signal) => {
+    const response = await fetchWithAbortHandling(`https://markdown.new/${requestUrl}`, {
+      headers: {
+        Accept: "text/markdown,text/plain,*/*;q=0.8",
+        "User-Agent": "DeniAI-Reader/1.0",
+      },
+      signal,
+      redirect: "error",
+    });
+
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error(`markdown.new failed (${response.status}).`);
+    }
+
+    const content = (await readBoundedResponseText(response)).replace(/\n{3,}/g, "\n\n").trim();
+    if (looksLikeBlockedOrEmptyPage("markdown.new", content)) {
+      throw new Error("markdown.new returned no readable content.");
+    }
+
+    return {
+      url: requestUrl,
+      title: parsed.hostname,
+      content: content.slice(0, maxChars),
+      truncated: content.length > maxChars,
+      contentLength: content.length,
+      source: "reader",
+    };
+  });
+}
+
+/**
  * Fetch a public HTTP(S) page and return cleaned text content for agent tools.
  * Order: direct fetch, then r.jina.ai reader fallback.
  * Blocks private/local network targets and re-validates every redirect hop.

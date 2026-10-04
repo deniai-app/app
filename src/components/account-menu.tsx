@@ -48,11 +48,14 @@ function AccountUsageRow({
   const hasLimit = item.limit !== null && item.limit > 0;
   const usedPercent = hasLimit ? Math.min((item.used / (item.limit ?? 1)) * 100, 100) : 0;
   const remainingPercent = Math.max(100 - usedPercent, 0);
+  const isUnavailable = item.limit === 0;
   const valueLabel = maxModeEnabled
     ? t("Max Mode")
-    : hasLimit
-      ? t("{percent}% left", { percent: remainingPercent.toFixed(0) })
-      : t("Unlimited");
+    : isUnavailable
+      ? t("Sign in required")
+      : hasLimit
+        ? t("{percent}% left", { percent: remainingPercent.toFixed(0) })
+        : t("Unlimited");
 
   return (
     <div className="space-y-1">

@@ -77,8 +77,15 @@ function chatRowWhere(id: string, userId: string, expectedGenerationId?: string 
     : and(eq(chats.id, id), eq(chats.uid, userId));
 }
 
+/** Postgres jsonb rejects U+0000 (22P05); web search results can contain it. */
+function stringifyForJsonb(value: unknown) {
+  return JSON.stringify(value, (_key, v) =>
+    typeof v === "string" ? v.replaceAll("\u0000", "") : v,
+  );
+}
+
 function jsonbSetLastMessage(message: UIMessage) {
-  const payload = JSON.stringify(structuredClone(message));
+  const payload = stringifyForJsonb(message);
   return sql`jsonb_set(
     ${chats.messages},
     ARRAY[(jsonb_array_length(${chats.messages}) - 1)::text],
@@ -94,8 +101,8 @@ export async function updateChat(
   options?: ChatUpdateOptions,
 ) {
   const updates: ChatUpdateFields = {
-    // structuredClone keeps parts/metadata intact while ensuring the payload is serializable for JSONB
-    messages: structuredClone(messages),
+    // Round-trip keeps parts/metadata intact while stripping NULs and ensuring the payload is serializable for JSONB
+    messages: JSON.parse(stringifyForJsonb(messages)) as UIMessage[],
     updated_at: new Date(),
   };
 

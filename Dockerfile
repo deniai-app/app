@@ -116,7 +116,7 @@ ENV DATABASE_URL=$DATABASE_URL \
 # Persist Turbopack's filesystem cache across Dokploy deploys on this host.
 RUN --mount=type=bind,from=deps,source=/app/node_modules,target=/app/node_modules \
   --mount=type=cache,id=deni-ai-next,target=/app/.next/cache \
-  node ./node_modules/next/dist/bin/next build
+  NEXT_DEPLOYMENT_ID="${NEXT_DEPLOYMENT_ID:-$(date +%s)}" node ./node_modules/next/dist/bin/next build
 
 # Turbopack emits aliases for external packages under `.next/node_modules`.
 # External aliases can point to absolute paths in the builder's virtual

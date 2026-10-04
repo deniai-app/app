@@ -85,6 +85,25 @@ export function getSentryOptions(): SentryOptions {
       "The operation was aborted",
       // Injected by Safari/in-app browsers or extensions that parse JSON-LD; not our code.
       /\["@context"\]\.toLowerCase/,
+      // Globals referenced by scripts that in-app browsers and extensions inject.
+      /Can't find variable: CONFIG/,
+      /window\.webkit\.messageHandlers/,
+      // DOM rewritten under React by page translators or extensions.
+      /Failed to execute 'removeChild' on 'Node'/,
+      /The object can not be found here/,
+      // Transient network failures and blocked third-party scripts.
+      /^TypeError: Load failed$/,
+      /^Load failed$/,
+      /Failed to load Stripe\.js/,
+      // Service worker fetch failures (offline, deploy in progress, bots).
+      /Failed to update a ServiceWorker/,
+      /Script https?:\/\/\S+\/sw\.js load failed/,
+    ],
+    // Extension and in-app browser scripts that are not part of the app bundle.
+    denyUrls: [
+      /^app:\/\/\/executors\//,
+      /\/executors\/\d+\.js/,
+      /^(chrome|moz|safari(-web)?)-extension:\/\//,
     ],
     beforeSend: scrubEvent,
     beforeSendSpan: scrubSpan,

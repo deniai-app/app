@@ -2,10 +2,14 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
+import { isStaleDeploymentError, reloadForStaleDeployment } from "@/lib/stale-deployment";
 
 /** Last-resort boundary for errors thrown by the root layout. Keep it dependency-free. */
 export default function GlobalError({ error }: { error: Error & { digest?: string } }) {
   useEffect(() => {
+    if (isStaleDeploymentError(error) && reloadForStaleDeployment()) {
+      return;
+    }
     Sentry.captureException(error);
   }, [error]);
 

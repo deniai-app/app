@@ -75,6 +75,7 @@ ARG NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_BILLING_DISABLED
+ARG NEXT_PUBLIC_SENTRY_DSN
 
 # Promote ARG → ENV so `next build` / env.ts validation / NEXT_PUBLIC inlining
 # all see production values when Dokploy (or --build-arg) supplies them.
@@ -99,7 +100,8 @@ ENV DATABASE_URL=$DATABASE_URL \
   NEXT_PUBLIC_BETTER_AUTH_URL=$NEXT_PUBLIC_BETTER_AUTH_URL \
   NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY \
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY \
-  NEXT_PUBLIC_BILLING_DISABLED=$NEXT_PUBLIC_BILLING_DISABLED
+  NEXT_PUBLIC_BILLING_DISABLED=$NEXT_PUBLIC_BILLING_DISABLED \
+  NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 
 # Mount dependencies from the install stage instead of copying thousands of
 # files into the Node builder. This avoids a slow 40+ second node_modules COPY;
@@ -138,6 +140,8 @@ RUN set -eu; \
 FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 
+# NODE_OPTIONS caps the V8 heap at 75% of the container memory limit so GC runs before
+# the kernel OOM-kills the process (leaves headroom for buffers/native memory).
 # Dokploy / Traefik reach the container on this port.
 # HOSTNAME=0.0.0.0 is only the listen bind address (not the public site URL).
 # Never set NEXT_PUBLIC_BETTER_AUTH_URL to http://0.0.0.0:3000 — use the real
@@ -145,7 +149,8 @@ WORKDIR /app
 ENV PORT=3000 \
   HOSTNAME=0.0.0.0 \
   NEXT_TELEMETRY_DISABLED=1 \
-  NODE_ENV=production
+  NODE_ENV=production \
+  NODE_OPTIONS=--max-old-space-size-percentage=75
 
 # Official Node.js images include a non-root `node` user/group.
 COPY --from=builder --chown=node:node /app/public ./public

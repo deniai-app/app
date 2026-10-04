@@ -81,6 +81,7 @@ export const env = createEnv({
     NEXT_PUBLIC_BILLING_DISABLED: z.string().min(1).optional(),
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().min(1).optional(),
+    NEXT_PUBLIC_SENTRY_DSN: z.string().min(1).optional(),
   },
   // If you're using Next.js < 13.4.4, you'll need to specify the runtimeEnv manually
   runtimeEnv: {
@@ -101,6 +102,7 @@ export const env = createEnv({
     EXA_API_KEY: process.env.EXA_API_KEY,
     TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
+    NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
     STRIPE_FLASH_OFFER_COUPON_ID: process.env.STRIPE_FLASH_OFFER_COUPON_ID,
     STRIPE_PORTAL_CONFIGURATION_ID: process.env.STRIPE_PORTAL_CONFIGURATION_ID,
     AFFILIATE_ADMIN_EMAILS: process.env.AFFILIATE_ADMIN_EMAILS,

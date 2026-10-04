@@ -73,6 +73,9 @@ EXA_API_KEY=your-exa-api-key
 TURNSTILE_SECRET_KEY=your-turnstile-secret
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=your-turnstile-site-key
 
+# Error monitoring (optional; Sentry is disabled when empty and outside production)
+# NEXT_PUBLIC_SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
+
 # Stripe (optional; missing Stripe keys disable billing)
 STRIPE_SECRET_KEY=sk_test_your-stripe-key
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-publishable-key

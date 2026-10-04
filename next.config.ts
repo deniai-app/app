@@ -29,6 +29,10 @@ const nextConfig: NextConfig = {
     "cheerio",
     "prettier",
   ],
+  // The AI SDK loads `undici` at runtime via createRequire(), which bundlers
+  // cannot see. Keep it external so standalone output traces it into
+  // node_modules (otherwise: "Cannot find module 'undici'").
+  serverExternalPackages: ["undici"],
   // Tree-shake large icon/date packages more aggressively
   experimental: {
     optimizePackageImports: [

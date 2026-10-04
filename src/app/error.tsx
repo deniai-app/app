@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -62,6 +63,7 @@ export default function ErrorPage({ error, retry }: ErrorPageProps) {
 
   useEffect(() => {
     console.error(error);
+    Sentry.captureException(error);
   }, [error]);
 
   // No useMemo: the React Compiler memoizes this automatically.

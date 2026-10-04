@@ -2,7 +2,7 @@
 
 import type { ComponentProps, ReactNode } from "react";
 import { EyeIcon } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useExtracted } from "next-intl";
 import {
   CodeBlock,
   CodeBlockActions,
@@ -54,7 +54,7 @@ export function StreamdownInlineCode({ className, ...props }: ComponentProps<"co
 }
 
 export function StreamdownCode({ className, children, ...props }: StreamdownCodeProps) {
-  const previewT = useTranslations("artifactPreview");
+  const t = useExtracted();
   const { open } = useArtifactPreview();
   const isBlock = "data-block" in props;
 
@@ -86,7 +86,7 @@ export function StreamdownCode({ className, children, ...props }: StreamdownCode
               variant="ghost"
             >
               <EyeIcon className="size-3.5" />
-              <span className="sr-only">{previewT("title")}</span>
+              <span className="sr-only">{t("Preview")}</span>
             </Button>
           ) : null}
           <CodeBlockCopyButton size="icon-sm" variant="ghost" />

@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { AlertCircleIcon } from "lucide-react";
-import { startTransition, useEffect, useReducer, useRef } from "react";
-import { useTranslations } from "next-intl";
+import { startTransition, useEffect, useMemo, useReducer, useRef } from "react";
+import { useExtracted } from "next-intl";
 import { Spinner } from "@/components/ui/spinner";
 import { sha256Hex } from "@/lib/hash";
 import { cn } from "@/lib/utils";
@@ -35,7 +35,12 @@ type PreviewAction =
   | { type: "ready"; resetKey: string; srcDoc: string }
   | { type: "error"; error: Error };
 
-type PreviewTranslator = (key: string, values?: Record<string, string>) => string;
+type PreviewMessages = {
+  exportComponentError: string;
+  nothingToPreview: string;
+  unknownError: string;
+  unsupportedImports: (imports: string) => string;
+};
 
 const stripCodeFence = (code: string) =>
   code
@@ -62,21 +67,19 @@ const findUnsupportedImports = (source: string) =>
     },
   );
 
-const createUnsupportedImportsMessage = (t: PreviewTranslator, specifiers: string[]) =>
-  t("unsupportedImports", {
-    imports: specifiers.map((specifier) => `"${specifier}"`).join(", "),
-  });
+const createUnsupportedImportsMessage = (messages: PreviewMessages, specifiers: string[]) =>
+  messages.unsupportedImports(specifiers.map((specifier) => `"${specifier}"`).join(", "));
 
-const resolvePreviewSource = (rawCode: string, t: PreviewTranslator) => {
+const resolvePreviewSource = (rawCode: string, messages: PreviewMessages) => {
   const source = stripCodeFence(rawCode);
 
   if (!source) {
-    throw new Error(t("nothingToPreview"));
+    throw new Error(messages.nothingToPreview);
   }
 
   const unsupportedImports = findUnsupportedImports(source);
   if (unsupportedImports.length > 0) {
-    throw new Error(createUnsupportedImportsMessage(t, unsupportedImports));
+    throw new Error(createUnsupportedImportsMessage(messages, unsupportedImports));
   }
 
   if (DIRECT_JSX_REGEX.test(source)) {
@@ -289,11 +292,11 @@ return module.exports.default ?? exports.default ?? module.exports;\`,
   </body>
 </html>`;
 
-const evaluatePreview = async (rawCode: string, t: PreviewTranslator) => {
+const evaluatePreview = async (rawCode: string, messages: PreviewMessages) => {
   // TypeScript 7 no longer ships the classic compiler API (transpileModule).
   // Sucrase is a lightweight browser-friendly TS/TSX → JS transform for previews.
   const { transform } = await import("sucrase");
-  const source = resolvePreviewSource(rawCode, t);
+  const source = resolvePreviewSource(rawCode, messages);
 
   let transpiledCode: string;
   try {
@@ -313,9 +316,9 @@ const evaluatePreview = async (rawCode: string, t: PreviewTranslator) => {
     srcDoc: createPreviewDocument({
       previewId: resetKey,
       transpiledCode,
-      unsupportedImportsMessage: t("unsupportedImports", { imports: "{imports}" }),
-      exportComponentError: t("exportComponentError"),
-    }).replaceAll("{{unknownError}}", t("unknownError")),
+      unsupportedImportsMessage: messages.unsupportedImports("{imports}"),
+      exportComponentError: messages.exportComponentError,
+    }).replaceAll("{{unknownError}}", messages.unknownError),
   };
 };
 
@@ -345,7 +348,19 @@ function PreviewErrorMessage({
 }
 
 export function ArtifactLivePreview({ code }: { code: string }) {
-  const previewT = useTranslations("artifactPreview");
+  const t = useExtracted();
+  const messages = useMemo<PreviewMessages>(
+    () => ({
+      exportComponentError: t("The code must export a React component."),
+      nothingToPreview: t("There is nothing to preview."),
+      unknownError: t("Unknown error"),
+      unsupportedImports: (imports) =>
+        t("Only React imports are supported in previews. Unsupported imports: {imports}", {
+          imports,
+        }),
+    }),
+    [t],
+  );
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const activePreviewIdRef = useRef<string | null>(null);
   const [state, dispatchPreview] = useReducer(previewReducer, { status: "idle" });
@@ -386,7 +401,7 @@ export function ArtifactLivePreview({ code }: { code: string }) {
 
     dispatchPreview({ type: "loading" });
 
-    void evaluatePreview(code, previewT)
+    void evaluatePreview(code, messages)
       .then(({ resetKey, srcDoc }) => {
         if (cancelled) {
           return;
@@ -405,7 +420,7 @@ export function ArtifactLivePreview({ code }: { code: string }) {
         startTransition(() => {
           dispatchPreview({
             type: "error",
-            error: error instanceof Error ? error : new Error(previewT("failedTitle")),
+            error: error instanceof Error ? error : new Error(t("Preview failed")),
           });
         });
       });
@@ -414,13 +429,13 @@ export function ArtifactLivePreview({ code }: { code: string }) {
       cancelled = true;
       activePreviewIdRef.current = null;
     };
-  }, [code, previewT]);
+  }, [code, messages, t]);
 
   if (state.status === "idle" || state.status === "loading") {
     return (
       <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
         <Spinner className="size-4" />
-        <span>{previewT("building")}</span>
+        <span>{t("Building preview…")}</span>
       </div>
     );
   }
@@ -428,7 +443,7 @@ export function ArtifactLivePreview({ code }: { code: string }) {
   if (state.status === "error") {
     return (
       <div className="flex h-full items-center justify-center p-6">
-        <PreviewErrorMessage error={state.error} title={previewT("failedTitle")} />
+        <PreviewErrorMessage error={state.error} title={t("Preview failed")} />
       </div>
     );
   }
@@ -444,7 +459,7 @@ export function ArtifactLivePreview({ code }: { code: string }) {
       className="size-full border-0"
       sandbox="allow-scripts"
       srcDoc={state.srcDoc}
-      title={previewT("title")}
+      title={t("Preview")}
     />
   );
 }

@@ -229,6 +229,54 @@ export function ChatComposerVoiceInput({
   );
 }
 
+function ModeToggleButton({
+  icon: Icon,
+  label,
+  tooltip,
+  active,
+  locked,
+  activeClassName,
+  onToggle,
+}: {
+  icon: LucideIcon;
+  label: string;
+  tooltip: string;
+  active: boolean;
+  locked: boolean;
+  activeClassName: string;
+  onToggle: () => void;
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant={active ? "secondary" : "ghost"}
+              size="icon-sm"
+              aria-disabled={locked}
+              className={cn(
+                "size-8",
+                locked && "cursor-not-allowed opacity-50",
+                active ? activeClassName : "text-muted-foreground",
+              )}
+              aria-pressed={active}
+              aria-label={label}
+              onClick={() => !locked && onToggle()}
+            />
+          }
+        >
+          <Icon className="size-3.5" aria-hidden="true" />
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export function ChatComposerTools({
   webSearch,
   onSearchToggle,
@@ -304,66 +352,26 @@ export function ChatComposerTools({
           supportsReasoningEffort={supportsReasoningEffort}
         />
         {supportsFastMode && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant={fastMode && !isGuest ? "secondary" : "ghost"}
-                    size="icon-sm"
-                    aria-disabled={isGuest}
-                    className={cn(
-                      "size-8",
-                      isGuest && "cursor-not-allowed opacity-50",
-                      fastMode && !isGuest
-                        ? "bg-sky-500/15 text-sky-700 hover:bg-sky-500/20 dark:text-sky-400"
-                        : "text-muted-foreground",
-                    )}
-                    aria-pressed={fastMode && !isGuest}
-                    aria-label={t("Fast")}
-                    onClick={() => !isGuest && onFastModeChange(!fastMode)}
-                  />
-                }
-              >
-                <Zap className="size-3.5" aria-hidden="true" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{isGuest ? t("Log in to use Fast mode") : fastModeTitle}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <ModeToggleButton
+            icon={Zap}
+            label={t("Fast")}
+            tooltip={isGuest ? t("Log in to use Fast mode") : fastModeTitle}
+            active={fastMode && !isGuest}
+            locked={isGuest}
+            activeClassName="bg-sky-500/15 text-sky-700 hover:bg-sky-500/20 dark:text-sky-400"
+            onToggle={() => onFastModeChange(!fastMode)}
+          />
         )}
         {supportsProMode && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant={proMode && !isGuest ? "secondary" : "ghost"}
-                    size="icon-sm"
-                    aria-disabled={isGuest}
-                    className={cn(
-                      "size-8",
-                      isGuest && "cursor-not-allowed opacity-50",
-                      proMode && !isGuest
-                        ? "bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
-                        : "text-muted-foreground",
-                    )}
-                    aria-pressed={proMode && !isGuest}
-                    aria-label={t("Pro")}
-                    onClick={() => !isGuest && onProModeChange(!proMode)}
-                  />
-                }
-              >
-                <Lightbulb className="size-3.5" aria-hidden="true" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{isGuest ? t("Log in to use Pro mode") : proModeTitle}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <ModeToggleButton
+            icon={Lightbulb}
+            label={t("Pro")}
+            tooltip={isGuest ? t("Log in to use Pro mode") : proModeTitle}
+            active={proMode && !isGuest}
+            locked={isGuest}
+            activeClassName="bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
+            onToggle={() => onProModeChange(!proMode)}
+          />
         )}
       </div>
     </>

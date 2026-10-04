@@ -1,5 +1,6 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import SiAnthropic from "@icons-pack/react-simple-icons/icons/SiAnthropic";
 import SiDeepseek from "@icons-pack/react-simple-icons/icons/SiDeepseek";
@@ -159,6 +160,140 @@ function getProviderLabel(author: string, labels: ProviderLabels): string {
   }
 }
 
+function useModelDeprecationCopy(deprecation: ModelOption["deprecation"]) {
+  const t = useExtracted();
+  const locale = useLocale();
+  const date = deprecation ? formatModelDeprecationDate(deprecation.date, locale) : null;
+  if (!date) {
+    return { warning: null, label: null };
+  }
+  if (deprecation?.tentative) {
+    return {
+      warning: t("This model is not expected to retire before {date}.", { date }),
+      label: t("Earliest retirement {date}", { date }),
+    };
+  }
+  if (deprecation?.kind === "retirement") {
+    return {
+      warning: t("This model is scheduled to retire on {date}.", { date }),
+      label: t("Retires {date}", { date }),
+    };
+  }
+  return {
+    warning: t("This model is scheduled to be shut down on {date}.", { date }),
+    label: t("Shutdown {date}", { date }),
+  };
+}
+
+function ProviderSidebar({
+  providers,
+  counts,
+  selectedProvider,
+  labels,
+  onSelect,
+}: {
+  providers: string[];
+  counts: Record<string, ModelOption[]>;
+  selectedProvider: string;
+  labels: ProviderLabels;
+  onSelect: (provider: string) => void;
+}) {
+  return (
+    <div className="w-32 shrink-0 border-r flex flex-col gap-0.5 overflow-y-auto overscroll-contain bg-muted/30 p-1.5 [-webkit-overflow-scrolling:touch] sm:w-40">
+      {providers.map((provider) => {
+        const isActive = selectedProvider === provider;
+        const isFeatured = provider === "featured";
+        return (
+          <button
+            key={provider}
+            type="button"
+            onClick={() => onSelect(provider)}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isActive
+                ? "bg-background text-foreground font-medium shadow-sm"
+                : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
+              isFeatured && isActive && "text-yellow-600 dark:text-yellow-400",
+              isFeatured && !isActive && "hover:text-yellow-600 dark:hover:text-yellow-400",
+            )}
+          >
+            <span className="shrink-0 flex items-center [&_svg]:size-3.5">
+              <ProviderIcon author={provider} />
+            </span>
+            <span className="flex-1 truncate leading-none">
+              {getProviderLabel(provider, labels)}
+            </span>
+            <span className="tabular-nums text-xs opacity-50 shrink-0">
+              {counts[provider]?.length ?? 0}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ModelPickerNotice({
+  icon: Icon,
+  message,
+  href,
+  actionLabel,
+}: {
+  icon: LucideIcon;
+  message: string;
+  href: string;
+  actionLabel: string;
+}) {
+  return (
+    <div className="flex shrink-0 flex-col gap-2 border-t bg-muted/30 p-3 text-muted-foreground">
+      <div className="flex items-start gap-2">
+        <Icon className="size-5 shrink-0" aria-hidden="true" />
+        <p>{message}</p>
+      </div>
+      <Button
+        render={<Link href={href} />}
+        nativeButton={false}
+        variant="outline"
+        size="sm"
+        className="self-start"
+      >
+        {actionLabel}
+      </Button>
+    </div>
+  );
+}
+
+function ModelPickerFooter({
+  isAnonymous,
+  shouldVerifyCard,
+}: {
+  isAnonymous: boolean;
+  shouldVerifyCard: boolean;
+}) {
+  const t = useExtracted();
+
+  return (
+    <>
+      {isAnonymous && (
+        <ModelPickerNotice
+          icon={LogIn}
+          message={t("Log in to use more models")}
+          href="/auth/sign-in?redirectTo=/chat"
+          actionLabel={t("Log in")}
+        />
+      )}
+      {shouldVerifyCard && (
+        <ModelPickerNotice
+          icon={CreditCard}
+          message={t("Verify your card to unlock all models")}
+          href="/settings/billing"
+          actionLabel={t("Verify card")}
+        />
+      )}
+    </>
+  );
+}
+
 function ModelPickerItem({
   model,
   isSelected,
@@ -175,27 +310,13 @@ function ModelPickerItem({
   modelDescriptionCopy: Record<string, string>;
 }) {
   const t = useExtracted();
-  const locale = useLocale();
   const description =
     "description" in model
       ? translateModelDescription(model, modelDescriptionCopy)
       : getModelDescription(model.value, modelDescriptionLabels);
-  const deprecation = model.deprecation;
-  const deprecationDate = deprecation ? formatModelDeprecationDate(deprecation.date, locale) : null;
-  const deprecationWarning = deprecationDate
-    ? deprecation?.tentative
-      ? t("This model is not expected to retire before {date}.", { date: deprecationDate })
-      : deprecation?.kind === "retirement"
-        ? t("This model is scheduled to retire on {date}.", { date: deprecationDate })
-        : t("This model is scheduled to be shut down on {date}.", { date: deprecationDate })
-    : null;
-  const deprecationLabel = deprecationDate
-    ? deprecation?.tentative
-      ? t("Earliest retirement {date}", { date: deprecationDate })
-      : deprecation?.kind === "retirement"
-        ? t("Retires {date}", { date: deprecationDate })
-        : t("Shutdown {date}", { date: deprecationDate })
-    : null;
+  const { warning: deprecationWarning, label: deprecationLabel } = useModelDeprecationCopy(
+    model.deprecation,
+  );
   const highlightFeatures = model.features.filter((f) => f.includes("est"));
   const regularFeatures = model.features.filter((f) => !f.includes("est"));
 
@@ -288,6 +409,159 @@ function ModelPickerItem({
   );
 }
 
+function groupModelsByProvider(models: ModelOption[]): Record<string, ModelOption[]> {
+  const groups: Record<string, ModelOption[]> = {};
+  const featured = models.filter((m) => "featured" in m && m.featured === true);
+  if (featured.length > 0) {
+    groups["featured"] = featured;
+  }
+  for (const m of models) {
+    const key = m.author ?? "other";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(m);
+  }
+  return groups;
+}
+
+function filterProviderGroups(
+  groups: Record<string, ModelOption[]>,
+  query: string,
+  getDescription: (entry: ModelOption) => string | undefined,
+): Record<string, ModelOption[]> {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return groups;
+  }
+
+  const filtered: Record<string, ModelOption[]> = {};
+  for (const [provider, entries] of Object.entries(groups)) {
+    const matches = entries.filter((entry) =>
+      [entry.name, entry.value, entry.author, provider, getDescription(entry), ...entry.features]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedQuery),
+    );
+    if (matches.length > 0) {
+      filtered[provider] = matches;
+    }
+  }
+  return filtered;
+}
+
+function ModelPickerTriggerLabel({ selectedModel }: { selectedModel: ModelOption | undefined }) {
+  const t = useExtracted();
+  const { warning } = useModelDeprecationCopy(selectedModel?.deprecation);
+  const multiplier =
+    selectedModel && "tokenMultiplier" in selectedModel ? selectedModel.tokenMultiplier : undefined;
+
+  return (
+    <>
+      <span className="flex items-center [&_svg]:size-3.5">
+        <ModelIcon model={selectedModel ?? { author: "openai", premium: false }} />
+      </span>
+      <span className="max-w-30 truncate text-sm">{selectedModel?.name ?? t("Select model")}</span>
+      {warning && (
+        <Badge
+          variant="secondary"
+          className="bg-orange-500/15 text-orange-700 dark:text-orange-400 text-[10px] leading-none px-1 py-0.5 h-auto"
+          title={warning}
+          aria-label={warning}
+        >
+          <TriangleAlert className="size-3" aria-hidden="true" />
+        </Badge>
+      )}
+      {typeof multiplier === "number" && multiplier > 1 && (
+        <Badge
+          variant="secondary"
+          className="bg-amber-500/15 text-amber-700 dark:text-amber-400 text-[10px] leading-none px-1 py-0.5 h-auto"
+          title={t("Each token counts {multiplier}× toward your usage", {
+            multiplier: String(multiplier),
+          })}
+        >
+          <Coins className="size-3 mr-0.5" aria-hidden="true" />
+          {multiplier}x
+        </Badge>
+      )}
+      <ChevronDownIcon className="size-3 opacity-50 shrink-0" aria-hidden="true" />
+    </>
+  );
+}
+
+function ModelPickerList({
+  activeModels,
+  legacyModels,
+  selectedValue,
+  legacyOpen,
+  onLegacyOpenChange,
+  featureLabels,
+  modelDescriptionLabels,
+  modelDescriptionCopy,
+  onSelect,
+}: {
+  activeModels: ModelOption[];
+  legacyModels: ModelOption[];
+  selectedValue: string;
+  legacyOpen: boolean;
+  onLegacyOpenChange: (open: boolean) => void;
+  featureLabels: FeatureLabels;
+  modelDescriptionLabels: ModelDescriptionLabels;
+  modelDescriptionCopy: Record<string, string>;
+  onSelect: (value: string) => void;
+}) {
+  const t = useExtracted();
+
+  if (activeModels.length === 0 && legacyModels.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-8">{t("No models available")}</p>
+    );
+  }
+
+  const renderItem = (m: ModelOption) => (
+    <ModelPickerItem
+      key={m.value}
+      model={m}
+      isSelected={m.value === selectedValue}
+      featureLabels={featureLabels}
+      modelDescriptionLabels={modelDescriptionLabels}
+      modelDescriptionCopy={modelDescriptionCopy}
+      onSelect={() => onSelect(m.value)}
+    />
+  );
+
+  return (
+    <>
+      {activeModels.map(renderItem)}
+
+      {legacyModels.length > 0 && (
+        <Collapsible open={legacyOpen} onOpenChange={onLegacyOpenChange}>
+          <CollapsibleTrigger
+            render={
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            }
+          >
+            <ArchiveIcon className="size-4 shrink-0" aria-hidden="true" />
+            <span className="flex-1">
+              {t("{count, plural, one {# legacy model} other {# legacy models}}", {
+                count: legacyModels.length,
+              })}
+            </span>
+            <ChevronDownIcon
+              className={cn("size-4 shrink-0 transition-transform", legacyOpen && "rotate-180")}
+              aria-hidden="true"
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-1 flex flex-col gap-0.5">
+            {legacyModels.map(renderItem)}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+    </>
+  );
+}
+
 export interface ChatComposerModelPickerProps {
   model: string;
   onModelChange: (model: string) => void;
@@ -309,7 +583,6 @@ export function ChatComposerModelPicker({
 }: ChatComposerModelPickerProps) {
   const { shouldVerifyCard, isAnonymous } = useAvailableModels();
   const t = useExtracted();
-  const locale = useLocale();
   const modelDescriptionLabels: ModelDescriptionLabels = {
     xaiMostIntelligentModel: t("xAI's most intelligent model"),
     fastAndEfficientModel: t("Fast and efficient model"),
@@ -327,67 +600,17 @@ export function ChatComposerModelPicker({
   const providerLabels: ProviderLabels = {
     featured: t("Featured"),
   };
-  const selectedModelDeprecation = selectedModel?.deprecation;
-  const selectedModelDeprecationDate = selectedModelDeprecation
-    ? formatModelDeprecationDate(selectedModelDeprecation.date, locale)
-    : null;
-  const selectedModelDeprecationWarning = selectedModelDeprecationDate
-    ? selectedModelDeprecation?.tentative
-      ? t("This model is not expected to retire before {date}.", {
-          date: selectedModelDeprecationDate,
-        })
-      : selectedModelDeprecation?.kind === "retirement"
-        ? t("This model is scheduled to retire on {date}.", {
-            date: selectedModelDeprecationDate,
-          })
-        : t("This model is scheduled to be shut down on {date}.", {
-            date: selectedModelDeprecationDate,
-          })
-    : null;
   const [modelPopoverOpen, setModelPopoverOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<string>("featured");
   const [legacyModelsOpen, setLegacyModelsOpen] = useState(false);
   const [modelQuery, setModelQuery] = useState("");
 
-  const providerGroups: Record<string, ModelOption[]> = {};
-  const featuredModels = availableModels.filter((m) => "featured" in m && m.featured === true);
-  if (featuredModels.length > 0) {
-    providerGroups["featured"] = featuredModels;
-  }
-  for (const m of availableModels) {
-    const key = m.author ?? "other";
-    if (!providerGroups[key]) providerGroups[key] = [];
-    providerGroups[key].push(m);
-  }
-
-  const normalizedModelQuery = modelQuery.trim().toLowerCase();
-
-  const filteredProviderGroups = !normalizedModelQuery
-    ? providerGroups
-    : (Object.fromEntries(
-        Object.entries(providerGroups).flatMap(([provider, entries]) => {
-          const filteredEntries = entries.filter((entry) => {
-            const description =
-              "description" in entry
-                ? translateModelDescription(entry, modelDescriptionCopy)
-                : getModelDescription(entry.value, modelDescriptionLabels);
-            const haystack = [
-              entry.name,
-              entry.value,
-              entry.author,
-              provider,
-              description,
-              ...entry.features,
-            ]
-              .join(" ")
-              .toLowerCase();
-
-            return haystack.includes(normalizedModelQuery);
-          });
-
-          return filteredEntries.length > 0 ? [[provider, filteredEntries]] : [];
-        }),
-      ) as Record<string, ModelOption[]>);
+  const providerGroups = groupModelsByProvider(availableModels);
+  const filteredProviderGroups = filterProviderGroups(providerGroups, modelQuery, (entry) =>
+    "description" in entry
+      ? translateModelDescription(entry, modelDescriptionCopy)
+      : getModelDescription(entry.value, modelDescriptionLabels),
+  );
   const availableProviders = Object.keys(filteredProviderGroups);
   const currentProviderModels = filteredProviderGroups[selectedProvider] ?? [];
   const activeModels = currentProviderModels.filter((entry) => entry.default !== false);
@@ -428,38 +651,7 @@ export function ChatComposerModelPicker({
           />
         }
       >
-        <span className="flex items-center [&_svg]:size-3.5">
-          <ModelIcon model={selectedModel ?? { author: "openai", premium: false }} />
-        </span>
-        <span className="max-w-30 truncate text-sm">
-          {selectedModel?.name ?? t("Select model")}
-        </span>
-        {selectedModelDeprecationWarning && (
-          <Badge
-            variant="secondary"
-            className="bg-orange-500/15 text-orange-700 dark:text-orange-400 text-[10px] leading-none px-1 py-0.5 h-auto"
-            title={selectedModelDeprecationWarning}
-            aria-label={selectedModelDeprecationWarning}
-          >
-            <TriangleAlert className="size-3" aria-hidden="true" />
-          </Badge>
-        )}
-        {selectedModel &&
-          "tokenMultiplier" in selectedModel &&
-          typeof selectedModel.tokenMultiplier === "number" &&
-          selectedModel.tokenMultiplier > 1 && (
-            <Badge
-              variant="secondary"
-              className="bg-amber-500/15 text-amber-700 dark:text-amber-400 text-[10px] leading-none px-1 py-0.5 h-auto"
-              title={t("Each token counts {multiplier}× toward your usage", {
-                multiplier: String(selectedModel.tokenMultiplier),
-              })}
-            >
-              <Coins className="size-3 mr-0.5" aria-hidden="true" />
-              {selectedModel.tokenMultiplier}x
-            </Badge>
-          )}
-        <ChevronDownIcon className="size-3 opacity-50 shrink-0" aria-hidden="true" />
+        <ModelPickerTriggerLabel selectedModel={selectedModel} />
       </PopoverTrigger>
       <PopoverContent
         className="flex w-[calc(100vw-1rem)] max-w-125 max-h-[min(31rem,var(--available-height))] flex-col overflow-hidden p-0 shadow-lg sm:w-125"
@@ -484,140 +676,32 @@ export function ChatComposerModelPicker({
             </div>
           </div>
           <div className="flex min-h-0 flex-1 overflow-hidden">
-            <div className="w-32 shrink-0 border-r flex flex-col gap-0.5 overflow-y-auto overscroll-contain bg-muted/30 p-1.5 [-webkit-overflow-scrolling:touch] sm:w-40">
-              {availableProviders.map((provider) => {
-                const count = filteredProviderGroups[provider]?.length ?? 0;
-                const isActive = selectedProvider === provider;
-                return (
-                  <button
-                    key={provider}
-                    type="button"
-                    onClick={() => setSelectedProvider(provider)}
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      isActive
-                        ? "bg-background text-foreground font-medium shadow-sm"
-                        : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
-                      provider === "featured" && isActive && "text-yellow-600 dark:text-yellow-400",
-                      provider === "featured" &&
-                        !isActive &&
-                        "hover:text-yellow-600 dark:hover:text-yellow-400",
-                    )}
-                  >
-                    <span className="shrink-0 flex items-center [&_svg]:size-3.5">
-                      <ProviderIcon author={provider} />
-                    </span>
-                    <span className="flex-1 truncate leading-none">
-                      {getProviderLabel(provider, providerLabels)}
-                    </span>
-                    <span className="tabular-nums text-xs opacity-50 shrink-0">{count}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <ProviderSidebar
+              providers={availableProviders}
+              counts={filteredProviderGroups}
+              selectedProvider={selectedProvider}
+              labels={providerLabels}
+              onSelect={setSelectedProvider}
+            />
 
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain p-1.5 [-webkit-overflow-scrolling:touch]">
-                {currentProviderModels.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    {t("No models available")}
-                  </p>
-                ) : (
-                  <>
-                    {activeModels.map((m) => (
-                      <ModelPickerItem
-                        key={m.value}
-                        model={m}
-                        isSelected={m.value === model}
-                        featureLabels={featureLabels}
-                        modelDescriptionLabels={modelDescriptionLabels}
-                        modelDescriptionCopy={modelDescriptionCopy}
-                        onSelect={() => {
-                          onModelChange(m.value);
-                          setModelPopoverOpen(false);
-                        }}
-                      />
-                    ))}
-
-                    {legacyModels.length > 0 && (
-                      <Collapsible open={legacyModelsOpen} onOpenChange={setLegacyModelsOpen}>
-                        <CollapsibleTrigger
-                          render={
-                            <button
-                              type="button"
-                              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            />
-                          }
-                        >
-                          <ArchiveIcon className="size-4 shrink-0" aria-hidden="true" />
-                          <span className="flex-1">
-                            {t("{count, plural, one {# legacy model} other {# legacy models}}", {
-                              count: legacyModels.length,
-                            })}
-                          </span>
-                          <ChevronDownIcon
-                            className={cn(
-                              "size-4 shrink-0 transition-transform",
-                              legacyModelsOpen && "rotate-180",
-                            )}
-                            aria-hidden="true"
-                          />
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="mt-1 flex flex-col gap-0.5">
-                          {legacyModels.map((m) => (
-                            <ModelPickerItem
-                              key={m.value}
-                              model={m}
-                              isSelected={m.value === model}
-                              featureLabels={featureLabels}
-                              modelDescriptionLabels={modelDescriptionLabels}
-                              modelDescriptionCopy={modelDescriptionCopy}
-                              onSelect={() => {
-                                onModelChange(m.value);
-                                setModelPopoverOpen(false);
-                              }}
-                            />
-                          ))}
-                        </CollapsibleContent>
-                      </Collapsible>
-                    )}
-                  </>
-                )}
+                <ModelPickerList
+                  activeModels={activeModels}
+                  legacyModels={legacyModels}
+                  selectedValue={model}
+                  legacyOpen={legacyModelsOpen}
+                  onLegacyOpenChange={setLegacyModelsOpen}
+                  featureLabels={featureLabels}
+                  modelDescriptionLabels={modelDescriptionLabels}
+                  modelDescriptionCopy={modelDescriptionCopy}
+                  onSelect={(value) => {
+                    onModelChange(value);
+                    setModelPopoverOpen(false);
+                  }}
+                />
               </div>
-              {isAnonymous && (
-                <div className="flex shrink-0 flex-col gap-2 border-t bg-muted/30 p-3 text-muted-foreground">
-                  <div className="flex items-start gap-2">
-                    <LogIn className="size-5 shrink-0" aria-hidden="true" />
-                    <p>{t("Log in to use more models")}</p>
-                  </div>
-                  <Button
-                    render={<Link href="/auth/sign-in?redirectTo=/chat" />}
-                    nativeButton={false}
-                    variant="outline"
-                    size="sm"
-                    className="self-start"
-                  >
-                    {t("Log in")}
-                  </Button>
-                </div>
-              )}
-              {shouldVerifyCard && (
-                <div className="flex shrink-0 flex-col gap-2 border-t bg-muted/30 p-3 text-muted-foreground">
-                  <div className="flex items-start gap-2">
-                    <CreditCard className="size-5 shrink-0" aria-hidden="true" />
-                    <p>{t("Verify your card to unlock all models")}</p>
-                  </div>
-                  <Button
-                    render={<Link href="/settings/billing" />}
-                    nativeButton={false}
-                    variant="outline"
-                    size="sm"
-                    className="self-start"
-                  >
-                    {t("Verify card")}
-                  </Button>
-                </div>
-              )}
+              <ModelPickerFooter isAnonymous={isAnonymous} shouldVerifyCard={shouldVerifyCard} />
             </div>
           </div>
         </div>

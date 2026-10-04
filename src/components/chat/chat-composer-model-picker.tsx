@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import SiAnthropic from "@icons-pack/react-simple-icons/icons/SiAnthropic";
 import SiDeepseek from "@icons-pack/react-simple-icons/icons/SiDeepseek";
 import SiGooglegemini from "@icons-pack/react-simple-icons/icons/SiGooglegemini";
@@ -590,7 +591,8 @@ export function ChatComposerModelPicker({
                     <p>{t("Log in to use more models")}</p>
                   </div>
                   <Button
-                    render={<a href="/auth/sign-in?redirectTo=/chat" />}
+                    render={<Link href="/auth/sign-in?redirectTo=/chat" />}
+                    nativeButton={false}
                     variant="outline"
                     size="sm"
                     className="self-start"
@@ -606,7 +608,8 @@ export function ChatComposerModelPicker({
                     <p>{t("Verify your card to unlock all models")}</p>
                   </div>
                   <Button
-                    render={<a href="/settings/billing" />}
+                    render={<Link href="/settings/billing" />}
+                    nativeButton={false}
                     variant="outline"
                     size="sm"
                     className="self-start"

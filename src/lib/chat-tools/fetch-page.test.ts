@@ -1,6 +1,11 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { fetchSafePublicHttpUrl, assertSafePublicHttpUrl } from "@/lib/network-security";
-import { fetchPageText, MAX_PAGE_RESPONSE_BYTES, readBoundedResponseText } from "./fetch-page";
+import {
+  fetchPageMarkdown,
+  fetchPageText,
+  MAX_PAGE_RESPONSE_BYTES,
+  readBoundedResponseText,
+} from "./fetch-page";
 
 vi.mock("@/lib/network-security", () => ({
   assertSafePublicHttpUrl: vi.fn(async (url: string) => new URL(url)),
@@ -62,6 +67,27 @@ test("direct page retrieval enforces the body limit", async () => {
   await expect(
     fetchPageText("https://probe.example/", { allowReaderFallback: false }),
   ).rejects.toThrow("too large");
+});
+
+test("fetchPageMarkdown reads page markdown through markdown.new", async () => {
+  const fetch = vi.fn(
+    async () => new Response(`# Title\n\n${"Readable body text. ".repeat(10)}`, { status: 200 }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const page = await fetchPageMarkdown("https://probe.example/");
+  expect(fetch).toHaveBeenCalledWith(
+    "https://markdown.new/https://probe.example/",
+    expect.anything(),
+  );
+  expect(page.content).toContain("Readable body text.");
+});
+
+test("fetchPageMarkdown rejects non-OK responses", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 500 })),
+  );
+  await expect(fetchPageMarkdown("https://probe.example/")).rejects.toThrow("500");
 });
 
 test("reader fallback enforces the same body limit", async () => {

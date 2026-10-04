@@ -1,19 +1,18 @@
-import { generateText, type LanguageModel, tool } from "ai";
+import { tool } from "ai";
 import { z } from "zod";
 import { env } from "@/env";
-import { createDeniOpenRouter } from "@/lib/openrouter-provider";
 import { consumeUsage, getSearchToolUsageAmount, refundUsage, UsageLimitError } from "@/lib/usage";
-import { fetchPageText } from "./fetch-page";
+import { fetchPageMarkdown, fetchPageText } from "./fetch-page";
 import { fetchWithAbortHandling, isAbortError, withDeadline } from "./helpers";
 import type { ChatToolUsageContext, SearchResult } from "./types";
 
 const SEARCH_TOTAL_TIMEOUT_MS = 20_000;
 const EXA_TIMEOUT_MS = 8_000;
 const PAGE_FETCH_TIMEOUT_MS = 6_000;
-const SUMMARIZE_TIMEOUT_MS = 8_000;
-const SUMMARIZE_MAX_PAGES = 3;
+const PAGE_CONTENT_MAX_PAGES = 3;
+const PAGE_CONTENT_MAX_CHARS = 4_000;
 
-type SearchHit = SearchResult & { summary?: string };
+type SearchHit = SearchResult & { content?: string };
 
 type ExaSearchResponse = {
   results?: Array<{
@@ -55,43 +54,28 @@ async function refundSearchUsage(usage: ChatToolUsageContext, amount: number): P
   }
 }
 
-async function summarizeResult(
-  result: SearchHit,
-  summarizer: LanguageModel,
-  signal: AbortSignal,
-): Promise<SearchHit> {
+async function attachPageContent(result: SearchHit, signal: AbortSignal): Promise<SearchHit> {
   try {
-    const page = await fetchPageText(result.url, {
-      maxChars: 4_000,
+    const pageOptions = {
+      maxChars: PAGE_CONTENT_MAX_CHARS,
       timeoutMs: PAGE_FETCH_TIMEOUT_MS,
       signal,
-      allowReaderFallback: false,
+    };
+    const page = await fetchPageMarkdown(result.url, pageOptions).catch((error: unknown) => {
+      if (isAbortError(error)) throw error;
+      return fetchPageText(result.url, { ...pageOptions, allowReaderFallback: false });
     });
 
-    if (!page.content) {
-      return { ...result, summary: result.description };
-    }
-
-    const { text: summary } = await withDeadline(SUMMARIZE_TIMEOUT_MS, signal, (summarySignal) =>
-      generateText({
-        model: summarizer,
-        prompt: `Summarize the following webpage content in a short paragraph:\n\n${page.content}`,
-        maxOutputTokens: 400,
-        maxRetries: 0,
-        abortSignal: summarySignal,
-      }),
-    );
-
-    return { ...result, summary: summary.trim() || result.description };
+    return { ...result, content: page.content || result.description };
   } catch {
-    return { ...result, summary: result.description };
+    return { ...result, content: result.description };
   }
 }
 
 export function createSearchTool(usage?: ChatToolUsageContext) {
   return tool({
     description:
-      "Search the web and get short page summaries. Use this whenever current, local, or easily-changed facts would improve the answer — news, prices, docs, people, products, or anything you are not confident about — even if the user did not ask you to search. Skip it for casual chat or questions you can answer confidently from general knowledge. Each call consumes a fixed amount of the user's usage quota, so prefer one well-chosen query over several overlapping ones. Prefer the browse tool when you need the full content of a specific URL.",
+      "Search the web and get page content for the top results. Use this whenever current, local, or easily-changed facts would improve the answer — news, prices, docs, people, products, or anything you are not confident about — even if the user did not ask you to search. Skip it for casual chat or questions you can answer confidently from general knowledge. Each call consumes a fixed amount of the user's usage quota, so prefer one well-chosen query over several overlapping ones. Prefer the browse tool when you need the full content of a specific URL.",
     inputSchema: z.object({
       query: z.string().min(1).describe("Search query"),
       amount: z
@@ -160,28 +144,26 @@ export function createSearchTool(usage?: ChatToolUsageContext) {
             description: item.highlights?.join("\n\n") || item.text?.slice(0, 500) || "",
           }));
 
-          const openRouterApiKey = env.OPENROUTER_API_KEY?.trim();
-          if (!openRouterApiKey || results.length === 0 || signal.aborted) {
-            return results.map((result) => ({ ...result, summary: result.description }));
+          if (results.length === 0 || signal.aborted) {
+            return results.map((result) => ({ ...result, content: result.description }));
           }
 
-          const summarizer = createDeniOpenRouter({ apiKey: openRouterApiKey }).chat(
-            "openai/gpt-oss-20b",
-          );
-          const toSummarize = results.slice(0, SUMMARIZE_MAX_PAGES);
-          const remainder = results.slice(SUMMARIZE_MAX_PAGES);
-          const summarizedHead = await Promise.all(
-            toSummarize.map((result) => summarizeResult(result, summarizer, signal)),
+          const withContent = await Promise.all(
+            results
+              .slice(0, PAGE_CONTENT_MAX_PAGES)
+              .map((result) => attachPageContent(result, signal)),
           );
 
           return [
-            ...summarizedHead,
-            ...remainder.map((result) => ({ ...result, summary: result.description })),
+            ...withContent,
+            ...results
+              .slice(PAGE_CONTENT_MAX_PAGES)
+              .map((result) => ({ ...result, content: result.description })),
           ];
         });
       } catch (error) {
         if (results.length > 0) {
-          return results.map((result) => ({ ...result, summary: result.description }));
+          return results.map((result) => ({ ...result, content: result.description }));
         }
         if (chargedAmount > 0 && usage) {
           await refundSearchUsage(usage, chargedAmount);

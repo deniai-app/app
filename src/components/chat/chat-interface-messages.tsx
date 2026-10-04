@@ -32,7 +32,7 @@ import { AssistantMessage } from "@/components/chat/assistant-message";
 import type { ModelOption } from "@/components/chat/chat-composer";
 import type { GroupedMessage } from "@/hooks/use-chat-branches";
 import type { ReasoningEffort } from "@/lib/constants";
-import { toDisplayChatRequestError } from "@/lib/chat-request-error";
+import { useLocalizedChatError } from "@/hooks/use-localized-chat-error";
 import { shouldShowChatAd } from "@/lib/chat-ad-placement";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -182,6 +182,7 @@ export const ChatInterfaceMessages = memo(function ChatInterfaceMessages({
   onLoadOlder,
 }: ChatInterfaceMessagesProps) {
   const t = useExtracted();
+  const localizeChatError = useLocalizedChatError();
   const [lastAd, setLastAd] = useState<{ chatId: string; id: string } | null>(null);
   const rememberAd = useCallback(
     (id: string) => setLastAd({ chatId: requestBody.id, id }),
@@ -354,9 +355,7 @@ export const ChatInterfaceMessages = memo(function ChatInterfaceMessages({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-sm break-words">
-                {toDisplayChatRequestError(error, t("An unexpected error occurred."))}
-              </div>
+              <div className="text-sm break-words">{localizeChatError(error)}</div>
             </CardContent>
           </Card>
         )}

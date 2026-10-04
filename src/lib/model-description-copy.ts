@@ -15,6 +15,9 @@ export function useModelDescriptionCopy() {
     "High-end GPT-6 model for demanding reasoning, coding, and agentic work.": t(
       "High-end GPT-6 model for demanding reasoning, coding, and agentic work.",
     ),
+    "High-end GPT-6.1 model for demanding reasoning, coding, and agentic work.": t(
+      "High-end GPT-6.1 model for demanding reasoning, coding, and agentic work.",
+    ),
     "Fast, cost-efficient GPT-6 model for high-volume tasks.": t(
       "Fast, cost-efficient GPT-6 model for high-volume tasks.",
     ),
@@ -60,6 +63,7 @@ export function useModelDescriptionCopy() {
     "Most powerful open-weight model": t("Most powerful open-weight model"),
     "Medium-sized open-weight model": t("Medium-sized open-weight model"),
     "Best for complex tasks": t("Best for complex tasks"),
+    "Best for coding and agentic tasks": t("Best for coding and agentic tasks"),
     "Best for everyday tasks": t("Best for everyday tasks"),
     "Best for high volume tasks": t("Best for high volume tasks"),
     "Anthropic's flagship for agentic coding, computer use, and knowledge work.": t(
@@ -73,6 +77,9 @@ export function useModelDescriptionCopy() {
     ),
     "For complex agentic coding and enterprise work.": t(
       "For complex agentic coding and enterprise work.",
+    ),
+    "Fast, balanced model for coding, agents, and everyday knowledge work.": t(
+      "Fast, balanced model for coding, agents, and everyday knowledge work.",
     ),
     "Balanced Claude 5 model for coding, writing, and everyday agentic work.": t(
       "Balanced Claude 5 model for coding, writing, and everyday agentic work.",

@@ -391,6 +391,7 @@ export const models: readonly ModelDefinition[] = [
     tokenMultiplier: 1,
     author: "google",
     description: "Best for coding and agentic tasks",
+    featured: true,
     features: ["reasoning", "fast", "coding"],
     efforts: ["low", "medium", "high"],
     contextWindow: 1_000_000,
@@ -401,7 +402,6 @@ export const models: readonly ModelDefinition[] = [
     tokenMultiplier: 1,
     author: "google",
     description: "Best for coding and agentic tasks",
-    featured: true,
     features: ["reasoning", "fast", "coding"],
     efforts: ["low", "medium", "high"],
     contextWindow: 1_000_000,
@@ -671,8 +671,7 @@ export const defaultModel = models.find((model) => model.value === "gpt-6-luna")
 export const FREE_PLAN_MODEL_VALUES = [
   "gpt-6-luna",
   "claude-haiku-4.5",
-  "claude-opus-5.5",
-  "gemini-3.5-flash",
+  "gemini-3.8-flash",
 ] as const;
 
 export type FreePlanModelValue = (typeof FREE_PLAN_MODEL_VALUES)[number];

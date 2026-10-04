@@ -58,17 +58,17 @@ export function CardVerificationCard({ isFreeTier, hasVerifiedPaymentMethod }: P
               )}
             </div>
             <CardDescription>
-              {hasVerifiedPaymentMethod
-                ? t(
-                    "All models are unlocked with 25M basic / 10M premium tokens per month. We will not charge this card.",
-                  )
-                : (
-                    <span className="whitespace-pre-line">
-                      {t(
-                        "Add a card to unlock all models and lift your monthly limits to 25M basic / 10M premium tokens.\n We place a $1 hold that is released immediately — no actual charge.",
-                      )}
-                    </span>
+              {hasVerifiedPaymentMethod ? (
+                t(
+                  "All models are unlocked with 25M basic / 10M premium tokens per month. We will not charge this card.",
+                )
+              ) : (
+                <span className="whitespace-pre-line">
+                  {t(
+                    "Add a card to unlock all models and lift your monthly limits to 25M basic / 10M premium tokens.\n We place a $1 hold that is released immediately — no actual charge.",
                   )}
+                </span>
+              )}
             </CardDescription>
           </div>
         </div>

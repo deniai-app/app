@@ -75,6 +75,10 @@ NEXT_PUBLIC_TURNSTILE_SITE_KEY=your-turnstile-site-key
 
 # Error monitoring (optional; Sentry is disabled when empty and outside production)
 # NEXT_PUBLIC_SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
+# Readable stack traces: set at build time to upload source maps (org auth token)
+# SENTRY_AUTH_TOKEN=sntrys_...
+# SENTRY_ORG=your-org-slug
+# SENTRY_PROJECT=your-project-slug
 
 # Stripe (optional; missing Stripe keys disable billing)
 STRIPE_SECRET_KEY=sk_test_your-stripe-key

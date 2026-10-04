@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
+import { isStaleDeploymentError, reloadForStaleDeployment } from "@/lib/stale-deployment";
 import { versions } from "@/lib/version";
 
 type ErrorPageProps = {
@@ -62,6 +63,10 @@ export default function ErrorPage({ error, retry }: ErrorPageProps) {
   const t = COPY[locale];
 
   useEffect(() => {
+    // A tab left open across a redeploy cannot load the new chunks; reload instead of reporting.
+    if (isStaleDeploymentError(error) && reloadForStaleDeployment()) {
+      return;
+    }
     console.error(error);
     Sentry.captureException(error);
   }, [error]);

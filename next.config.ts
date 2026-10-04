@@ -1,3 +1,4 @@
+import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
@@ -181,4 +182,16 @@ const withNextIntl = createNextIntlPlugin({
   },
 });
 
-export default withNextIntl(nextConfig);
+const intlConfig = withNextIntl(nextConfig);
+
+// Upload client/server source maps so Sentry stack traces are readable. Only
+// active when SENTRY_AUTH_TOKEN is present at build time (SENTRY_ORG and
+// SENTRY_PROJECT are read from the environment); other builds are unchanged.
+export default process.env.SENTRY_AUTH_TOKEN
+  ? withSentryConfig(intlConfig, {
+      silent: !process.env.CI,
+      widenClientFileUpload: true,
+      sourcemaps: { deleteSourcemapsAfterUpload: true },
+      telemetry: false,
+    })
+  : intlConfig;

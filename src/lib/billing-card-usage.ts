@@ -286,7 +286,6 @@ export async function isTrialFingerprintEligible(
   },
 ) {
   if (!fingerprint) {
-    console.warn("[billing] Missing card fingerprint for trial eligibility check", context);
     return false;
   }
 

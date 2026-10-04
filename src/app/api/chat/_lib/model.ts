@@ -33,6 +33,8 @@ const OPENROUTER_CACHE_CONTROL = {
   ttl: "1h",
 } as const;
 
+const MAX_CACHED_MESSAGES = 2;
+
 type ResolveChatModelContextParams = {
   userId: string;
   isAnonymous: boolean;
@@ -74,13 +76,21 @@ export function addOpenRouterCacheControl(
     },
   } satisfies ChatProviderOptions;
 
+  // Anthropic allows at most 4 cache breakpoints per request: one on the system
+  // prompt plus the trailing messages, with the last text part of each.
+  const firstCachedIndex = messages.length - MAX_CACHED_MESSAGES;
+
   return {
     system: {
       role: "system",
       content: system,
       providerOptions: cacheProviderOptions,
     },
-    messages: messages.map((message) => {
+    messages: messages.map((message, index) => {
+      if (index < firstCachedIndex) {
+        return message;
+      }
+
       if (typeof message.content === "string") {
         return {
           ...message,
@@ -88,10 +98,15 @@ export function addOpenRouterCacheControl(
         } as ModelMessage;
       }
 
+      const lastTextIndex = message.content.findLastIndex((part) => part.type === "text");
+      if (lastTextIndex === -1) {
+        return message;
+      }
+
       return {
         ...message,
-        content: message.content.map((part) =>
-          part.type === "text"
+        content: message.content.map((part, partIndex) =>
+          partIndex === lastTextIndex && part.type === "text"
             ? {
                 ...part,
                 providerOptions: mergeProviderOptions(part.providerOptions, cacheProviderOptions),

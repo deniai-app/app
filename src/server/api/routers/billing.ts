@@ -109,6 +109,42 @@ async function getPriceForPlan(plan: BillingPlan) {
   return price;
 }
 
+/** Stripe accepts at most 10 lookup keys per `prices.list` call. */
+const STRIPE_LOOKUP_KEY_BATCH_SIZE = 10;
+
+/** Loads prices for several plans with one Stripe request per 10 lookup keys. */
+async function getPricesForPlans(plans: BillingPlan[]) {
+  const pricesByLookupKey = new Map<string, Stripe.Price>();
+  const lookupKeys = [...new Set(plans.map((plan) => plan.lookupKey))];
+
+  const batches: string[][] = [];
+  for (let index = 0; index < lookupKeys.length; index += STRIPE_LOOKUP_KEY_BATCH_SIZE) {
+    batches.push(lookupKeys.slice(index, index + STRIPE_LOOKUP_KEY_BATCH_SIZE));
+  }
+
+  const results = await Promise.all(
+    batches.map((batch) =>
+      stripe.prices.list({ lookup_keys: batch, active: true, limit: batch.length }),
+    ),
+  );
+  for (const price of results.flatMap((result) => result.data)) {
+    if (price.lookup_key && !pricesByLookupKey.has(price.lookup_key)) {
+      pricesByLookupKey.set(price.lookup_key, price);
+    }
+  }
+
+  return plans.map((plan) => {
+    const price = pricesByLookupKey.get(plan.lookupKey);
+    if (!price) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Unable to load ${plan.lookupKey} price. Configure lookup_key=${plan.lookupKey} in Stripe.`,
+      });
+    }
+    return price;
+  });
+}
+
 function getPlanFromPrice(price: Stripe.Price | null | undefined) {
   return findPlanByLookupKey(price?.lookup_key ?? undefined);
 }
@@ -426,34 +462,33 @@ export const billingRouter = router({
       ? (billingRecord.flashOfferEndsAt?.toISOString() ?? null)
       : null;
     const flashOfferCoupon = flashOfferEndsAt ? await getFlashOfferCoupon() : null;
-    const plans = await Promise.all(
-      individualPlans.map(async (plan) => {
-        const price = await getPriceForPlan(plan);
-        const mode = deriveModeFromPrice(price);
-        const discountedAmount =
-          flashOfferEndsAt && isFlashOfferPlan(plan.id)
-            ? applyCouponToAmount(price.unit_amount, flashOfferCoupon, price.currency)
-            : price.unit_amount;
-        return {
-          id: plan.id,
-          lookupKey: plan.lookupKey,
-          mode,
-          priceId: price.id,
-          amount: discountedAmount,
-          originalAmount: discountedAmount !== price.unit_amount ? price.unit_amount : null,
-          currency: price.currency,
-          interval: price.recurring?.interval ?? null,
-          intervalCount: price.recurring?.interval_count ?? 1,
-          isTeamPlan: false,
-          trialDays:
-            isProTrialPlan(plan.id, mode) && trialEligible && flashOfferActive
-              ? SUBSCRIPTION_TRIAL_DAYS
-              : null,
-          limitedTimeOfferEndsAt:
-            flashOfferEndsAt && isFlashOfferPlan(plan.id) ? flashOfferEndsAt : null,
-        };
-      }),
-    );
+    const prices = await getPricesForPlans(individualPlans);
+    const plans = individualPlans.map((plan, index) => {
+      const price = prices[index];
+      const mode = deriveModeFromPrice(price);
+      const discountedAmount =
+        flashOfferEndsAt && isFlashOfferPlan(plan.id)
+          ? applyCouponToAmount(price.unit_amount, flashOfferCoupon, price.currency)
+          : price.unit_amount;
+      return {
+        id: plan.id,
+        lookupKey: plan.lookupKey,
+        mode,
+        priceId: price.id,
+        amount: discountedAmount,
+        originalAmount: discountedAmount !== price.unit_amount ? price.unit_amount : null,
+        currency: price.currency,
+        interval: price.recurring?.interval ?? null,
+        intervalCount: price.recurring?.interval_count ?? 1,
+        isTeamPlan: false,
+        trialDays:
+          isProTrialPlan(plan.id, mode) && trialEligible && flashOfferActive
+            ? SUBSCRIPTION_TRIAL_DAYS
+            : null,
+        limitedTimeOfferEndsAt:
+          flashOfferEndsAt && isFlashOfferPlan(plan.id) ? flashOfferEndsAt : null,
+      };
+    });
 
     return { plans };
   }),

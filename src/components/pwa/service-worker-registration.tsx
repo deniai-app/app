@@ -27,7 +27,9 @@ async function registerServiceWorker() {
       scope: "/",
     });
 
-    void registration.update();
+    // Inside the try: update() rejects when sw.js cannot be fetched (offline,
+    // deploy in progress), which would otherwise surface as an unhandled rejection.
+    await registration.update();
   } catch (error) {
     console.error("Failed to register service worker.", error);
   }

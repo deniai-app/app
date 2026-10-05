@@ -103,7 +103,9 @@ function useChatPanePage(id: string, isActive: boolean, projectIdFromQuery: stri
     projectIdRef.current = projectIdFromQuery;
   });
 
-  const ensureChat = trpc.chat.ensureChat.useMutation({
+  // `mutate` is stable; the full mutation result changes identity on every
+  // status update, which re-ran the effect below and flooded ensureChat.
+  const { mutate: ensureChat } = trpc.chat.ensureChat.useMutation({
     retry: false,
     onSuccess: (row, variables) => {
       if (
@@ -131,11 +133,19 @@ function useChatPanePage(id: string, isActive: boolean, projectIdFromQuery: stri
     },
   });
 
+  // Request each (chat, project) pair once per pane, even if the effect re-runs.
+  const ensuredKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!shouldEnsure) {
       return;
     }
-    ensureChat.mutate({ id, projectId: projectIdFromQuery });
+    const key = `${id}:${projectIdFromQuery ?? ""}`;
+    if (ensuredKeyRef.current === key) {
+      return;
+    }
+    ensuredKeyRef.current = key;
+    ensureChat({ id, projectId: projectIdFromQuery });
   }, [ensureChat, id, projectIdFromQuery, shouldEnsure]);
 
   return pageQuery.data ?? null;

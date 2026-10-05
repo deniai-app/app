@@ -875,6 +875,10 @@ export const PromptInputTextarea = ({
         if (e.shiftKey) {
           return;
         }
+        // On touch-only devices, Enter inserts a newline; the send button submits.
+        if (window.matchMedia("(hover: none) and (pointer: coarse)").matches) {
+          return;
+        }
         e.preventDefault();
 
         // Check if the submit button is disabled before submitting
@@ -946,6 +950,7 @@ export const PromptInputTextarea = ({
   return (
     <InputGroupTextarea
       className={cn("field-sizing-content max-h-48 min-h-16", className)}
+      enterKeyHint="enter"
       name="message"
       onCompositionEnd={handleCompositionEnd}
       onCompositionStart={handleCompositionStart}

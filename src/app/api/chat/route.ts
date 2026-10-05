@@ -1,3 +1,4 @@
+import { suppressTracing } from "@sentry/nextjs";
 import {
   consumeStream,
   convertToModelMessages,
@@ -553,12 +554,16 @@ export async function POST(req: Request) {
   }
 
   if (!isComparison) {
+    // Cross-instance stop check. Untraced: a 1s poll would otherwise add one
+    // identical DB span per second and trip Sentry's N+1 query detector.
     generationWatch = setInterval(() => {
-      void isChatGenerationActive(id, userId, generationId).then((isActive) => {
-        if (!isActive) {
-          generationAbortController?.abort("stopped");
-        }
-      });
+      void suppressTracing(() => isChatGenerationActive(id, userId, generationId)).then(
+        (isActive) => {
+          if (!isActive) {
+            generationAbortController?.abort("stopped");
+          }
+        },
+      );
     }, 1000);
   }
 

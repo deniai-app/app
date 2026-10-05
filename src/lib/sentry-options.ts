@@ -91,6 +91,8 @@ export function getSentryOptions(): SentryOptions {
       // DOM rewritten under React by page translators or extensions.
       /Failed to execute 'removeChild' on 'Node'/,
       /The object can not be found here/,
+      // WebExtension messaging from a closed tab; the app never calls runtime.sendMessage.
+      /Invalid call to runtime\.sendMessage\(\)/,
       // Transient network failures and blocked third-party scripts.
       /^TypeError: Load failed$/,
       /^Load failed$/,

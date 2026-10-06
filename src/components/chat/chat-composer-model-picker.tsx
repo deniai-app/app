@@ -285,7 +285,7 @@ function ModelPickerFooter({
       {shouldVerifyCard && (
         <ModelPickerNotice
           icon={CreditCard}
-          message={t("Verify your card to unlock all models")}
+          message={t("Verify your card to unlock more models")}
           href="/settings/billing"
           actionLabel={t("Verify card")}
         />

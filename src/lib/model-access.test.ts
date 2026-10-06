@@ -5,6 +5,7 @@ import {
   getModelsForPlanTier,
   isFreePlanModel,
   isModelAllowedForAccount,
+  isProModeAllowedForAccount,
   models,
 } from "./constants";
 
@@ -20,11 +21,30 @@ describe("model access", () => {
     assert.equal(isModelAllowedForAccount(restrictedModel.value, "free"), false);
   });
 
-  test("verified free accounts and paid accounts can use the full catalog", () => {
-    assert.ok(restrictedModel);
-    assert.deepEqual(getModelsForPlanTier("free", true), models);
+  test("verified free accounts can use the catalog except paid-only models", () => {
+    const verifiedOnlyModel = models.find(
+      (model) => !model.paidOnly && !isFreePlanModel(model.value),
+    );
+    assert.ok(verifiedOnlyModel);
+    assert.deepEqual(
+      getModelsForPlanTier("free", true),
+      models.filter((model) => !model.paidOnly),
+    );
+    assert.equal(isModelAllowedForAccount(verifiedOnlyModel.value, "free", true), true);
+  });
+
+  test("paid-only models require a paid tier", () => {
+    assert.equal(isModelAllowedForAccount("gpt-6-astra", "free", true), false);
+    assert.equal(isModelAllowedForAccount("gpt-6-astra", "free"), false);
+    assert.equal(isModelAllowedForAccount("gpt-6-astra", "plus"), true);
     assert.deepEqual(getModelsForPlanTier("plus"), models);
-    assert.equal(isModelAllowedForAccount(restrictedModel.value, "free", true), true);
+  });
+
+  test("pro mode requires a paid tier", () => {
+    assert.equal(isProModeAllowedForAccount("free"), false);
+    assert.equal(isProModeAllowedForAccount(null), false);
+    assert.equal(isProModeAllowedForAccount("plus"), true);
+    assert.equal(isProModeAllowedForAccount("max"), true);
   });
 
   test("guest catalog remains restricted", () => {

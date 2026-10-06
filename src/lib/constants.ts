@@ -77,6 +77,11 @@ export type ModelDefinition = {
   description?: string;
   featured?: boolean;
   premium?: boolean;
+  /**
+   * When true, the model is limited to paid tiers (Plus / Pro / Max / Team).
+   * Card verification on the Free plan does not unlock it.
+   */
+  paidOnly?: boolean;
   default?: boolean;
   provider?: string;
   features: string[];
@@ -143,6 +148,7 @@ export const models: readonly ModelDefinition[] = [
     author: "openai",
     description: "OpenAI flagship for complex reasoning, coding, and agentic work.",
     premium: true,
+    paidOnly: true,
     featured: true,
     features: ["smartest", "reasoning", "coding", "smart"],
     efforts: ["low", "medium", "high", "max"],
@@ -465,6 +471,7 @@ export const models: readonly ModelDefinition[] = [
     description:
       "Successor to Claude Fable 5 for long-running agentic coding, knowledge work, and research.",
     premium: true,
+    paidOnly: true,
     featured: true,
     features: ["smartest", "reasoning", "coding", "smart"],
     efforts: ["low", "medium", "high", "max"],
@@ -477,6 +484,7 @@ export const models: readonly ModelDefinition[] = [
     author: "anthropic",
     description: "Anthropic's most capable model for long-horizon agentic work.",
     premium: true,
+    paidOnly: true,
     features: ["smartest", "reasoning", "coding", "smart"],
     efforts: ["low", "medium", "high", "max"],
     contextWindow: 1_000_000,
@@ -666,7 +674,8 @@ export const defaultModel = models.find((model) => model.value === "gpt-6-luna")
 
 /**
  * Models available on the Free plan.
- * Verified cards and paid tiers (Plus / Pro / Max / Team) unlock the full model catalog.
+ * Verified cards unlock the catalog except `paidOnly` models; paid tiers
+ * (Plus / Pro / Max / Team) unlock everything.
  */
 export const FREE_PLAN_MODEL_VALUES = [
   "gpt-6-luna",
@@ -687,6 +696,10 @@ export function isFreePlanModel(modelValue: string): boolean {
   return freePlanModelSet.has(modelValue);
 }
 
+export function isPaidOnlyModel(modelValue: string): boolean {
+  return models.some((model) => model.value === modelValue && model.paidOnly);
+}
+
 export function isGuestModel(modelValue: string): boolean {
   return guestModelSet.has(modelValue);
 }
@@ -700,9 +713,22 @@ export function isModelAllowedForAccount(
   tier: "free" | "plus" | "pro" | "max" | null | undefined,
   hasVerifiedPaymentMethod = false,
 ): boolean {
-  return (
-    Boolean(tier && tier !== "free") || hasVerifiedPaymentMethod || isFreePlanModel(modelValue)
-  );
+  if (tier && tier !== "free") {
+    return true;
+  }
+
+  if (isPaidOnlyModel(modelValue)) {
+    return false;
+  }
+
+  return hasVerifiedPaymentMethod || isFreePlanModel(modelValue);
+}
+
+/** Pro mode is limited to paid tiers; card verification on Free does not unlock it. */
+export function isProModeAllowedForAccount(
+  tier: "free" | "plus" | "pro" | "max" | null | undefined,
+): boolean {
+  return Boolean(tier && tier !== "free");
 }
 
 export function getModelsForPlanTier(

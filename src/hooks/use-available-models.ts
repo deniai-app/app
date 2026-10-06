@@ -1,7 +1,11 @@
 import { useMemo } from "react";
 import type { ModelOption } from "@/components/chat/chat-composer";
 import { authClient } from "@/lib/auth-client";
-import { getModelsForGuest, getModelsForPlanTier } from "@/lib/constants";
+import {
+  getModelsForGuest,
+  getModelsForPlanTier,
+  isProModeAllowedForAccount,
+} from "@/lib/constants";
 import { isModelProviderAvailable } from "@/lib/platform-capabilities";
 import { usePlatformCapabilities } from "@/components/platform-capabilities-provider";
 import { trpc } from "@/lib/trpc/react";
@@ -26,10 +30,15 @@ export function useAvailableModels() {
     const planModels = isAnonymous
       ? getModelsForGuest()
       : getModelsForPlanTier(planTier, hasVerifiedPaymentMethod);
-    return planModels.filter((model) => {
-      const provider = model.provider ?? model.author;
-      return isModelProviderAvailable(platformCapabilities, provider);
-    });
+    const proModeAllowed = !isAnonymous && isProModeAllowedForAccount(planTier);
+    return planModels
+      .filter((model) => {
+        const provider = model.provider ?? model.author;
+        return isModelProviderAvailable(platformCapabilities, provider);
+      })
+      .map((model) =>
+        model.supportsProMode && !proModeAllowed ? { ...model, supportsProMode: false } : model,
+      );
   }, [hasVerifiedPaymentMethod, isAnonymous, planTier, platformCapabilities]);
 
   return {

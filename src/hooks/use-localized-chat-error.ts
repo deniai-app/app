@@ -57,6 +57,10 @@ export function useLocalizedChatError() {
         return t(
           "This model is not available on the Free plan. Upgrade to Plus or higher to use it.",
         );
+      case "Pro mode is not available on the Free plan. Upgrade to Plus or higher to use it.":
+        return t(
+          "Pro mode is not available on the Free plan. Upgrade to Plus or higher to use it.",
+        );
       case "Only GPT-6 Luna is available for guest sessions.":
         return t("Only GPT-6 Luna is available for guest sessions. Log in to use more models.");
       case "Pro mode is not available for guest sessions.":

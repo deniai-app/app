@@ -6,6 +6,7 @@ import { env } from "@/env";
 import {
   isGuestModel,
   isModelAllowedForAccount,
+  isProModeAllowedForAccount,
   models,
   resolveReasoningEffort,
 } from "@/lib/constants";
@@ -181,6 +182,12 @@ export async function resolveChatModelContext({
     ) {
       throw new ChatRouteError(403, {
         error: "This model is not available on the Free plan. Upgrade to Plus or higher to use it.",
+      });
+    }
+
+    if (!isAnonymous && useProMode && !isProModeAllowedForAccount(usageSummary.tier)) {
+      throw new ChatRouteError(403, {
+        error: "Pro mode is not available on the Free plan. Upgrade to Plus or higher to use it.",
       });
     }
 

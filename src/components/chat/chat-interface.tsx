@@ -319,7 +319,9 @@ export function ChatInterface({
     reasoningEffortOverride ??
     seed?.reasoningEffort ??
     getPreferredReasoningEffort(defaultModel.efforts);
-  const proMode = proModeOverride ?? seed?.proMode ?? false;
+  const proMode =
+    Boolean(availableModels.find((entry) => entry.value === model)?.supportsProMode) &&
+    (proModeOverride ?? seed?.proMode ?? false);
   const fastMode = fastModeOverride ?? seed?.fastMode ?? false;
   const deepResearch = features.webSearch && (deepResearchOverride ?? seed?.deepResearch ?? false);
 

@@ -164,12 +164,10 @@ export function ChatComposerActionMenu({
           onCheckedChange={(checked) => onResearchToggle(Boolean(checked))}
         >
           <Sparkle className="size-4" aria-hidden="true" />
-          {t("Deep Research")}
-          {isGuest && (
-            <span className="block w-full">
-              <GuestLoginHint />
-            </span>
-          )}
+          <span className="flex flex-col items-start [&>span]:ml-0 [&>span]:pl-0">
+            <span>{t("Deep Research")}</span>
+            {isGuest && <GuestLoginHint />}
+          </span>
         </DropdownMenuCheckboxItem>
       )}
       {supportsFastMode && (
@@ -179,12 +177,10 @@ export function ChatComposerActionMenu({
           onCheckedChange={(checked) => onFastModeChange(Boolean(checked))}
         >
           <Zap className="size-4" aria-hidden="true" />
-          {t("Fast")}
-          {isGuest && (
-            <span className="block w-full">
-              <GuestLoginHint />
-            </span>
-          )}
+          <span className="flex flex-col items-start [&>span]:ml-0 [&>span]:pl-0">
+            <span>{t("Fast")}</span>
+            {isGuest && <GuestLoginHint />}
+          </span>
         </DropdownMenuCheckboxItem>
       )}
       {supportsProMode && (

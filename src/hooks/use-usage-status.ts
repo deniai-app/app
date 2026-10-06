@@ -1,4 +1,5 @@
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { toast } from "sonner";
 import type { ModelOption } from "@/components/chat/chat-composer";
 import { usePlatformCapabilities } from "@/components/platform-capabilities-provider";
@@ -12,6 +13,7 @@ export function useUsageStatus(params: {
   proMode?: boolean;
 }) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const { model, availableModels, proMode = false } = params;
   const { features } = usePlatformCapabilities();
 
@@ -73,7 +75,7 @@ export function useUsageStatus(params: {
         utils.billing.usage.invalidate(),
       ]);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   return {

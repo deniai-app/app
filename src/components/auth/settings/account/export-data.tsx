@@ -6,11 +6,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { triggerDownload } from "@/lib/chat-export";
 import { trpc } from "@/lib/trpc/react";
 
 export function ExportData() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const exportData = trpc.account.exportData.useMutation({
     onSuccess: (payload) => {
       triggerDownload(
@@ -21,7 +23,7 @@ export function ExportData() {
       toast.success(t("Your data export has been downloaded."));
     },
     onError: (error) => {
-      toast.error(error.message || t("Failed to export account data."));
+      toast.error(localizeError(error, t("Failed to export account data.")));
     },
   });
 

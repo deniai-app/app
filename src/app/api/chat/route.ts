@@ -25,6 +25,7 @@ import {
   updateChat,
 } from "@/lib/chat";
 import { mergeStoredAndClientMessages } from "@/lib/chat-messages";
+import { inlineTextAttachments } from "@/lib/chat-text-attachments";
 import { isComparisonConversation } from "@/lib/comparison-conversation";
 import {
   clearChatGeneration,
@@ -308,7 +309,8 @@ export async function POST(req: Request) {
     },
   });
 
-  const modelMessages = await convertToModelMessages(messages);
+  // Models accept images and PDFs as files, not text files, so inline those.
+  const modelMessages = await convertToModelMessages(await inlineTextAttachments(messages));
   const currentDate = new Date().toISOString().split("T")[0];
   const persistentMemory = platformCapabilities.features.memory
     ? buildMemoryPrompt(memoryState)

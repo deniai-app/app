@@ -16,6 +16,7 @@ import { useAvailableModels } from "@/hooks/use-available-models";
 import { useChatPageSync } from "@/hooks/use-chat-page-sync";
 import { useInitialMessage } from "@/hooks/use-initial-message";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useChatBranches } from "@/hooks/use-chat-branches";
 import { useMemorySaveNotice } from "@/hooks/use-memory-save-notice";
 import { useNewChat } from "@/hooks/use-new-chat";
@@ -75,16 +76,20 @@ async function uploadAttachment(file: UploadableFileUIPart): Promise<FileUIPart>
     body: formData,
   });
 
-  if (!uploadResponse.ok) {
-    throw new Error("Attachment upload failed.");
+  const payload = (await uploadResponse.json().catch(() => ({}))) as {
+    error?: string;
+    mediaType?: string;
+    url?: string;
+  };
+  if (!uploadResponse.ok || !payload.url) {
+    throw new Error(payload.error || "Attachment upload failed.");
   }
 
-  const payload = (await uploadResponse.json()) as { url?: string };
-  if (!payload.url) {
-    throw new Error("Attachment upload failed.");
-  }
-
-  return { ...file, url: payload.url };
+  return {
+    ...file,
+    url: payload.url,
+    ...(payload.mediaType ? { mediaType: payload.mediaType } : {}),
+  };
 }
 
 async function normalizeAttachments(files?: UploadableFileUIPart[]) {
@@ -165,6 +170,7 @@ async function submitComposerMessage(params: {
   invalidateChats: () => void;
   setAttachmentError: (error: string | null) => void;
   setInput: (value: string) => void;
+  localizeError: (error: unknown, fallback?: string) => string;
   uploadFailedLabel: string;
 }) {
   if (params.isSubmitBlocked) {
@@ -176,7 +182,7 @@ async function submitComposerMessage(params: {
   try {
     attachments = await normalizeAttachments(params.message.files);
   } catch (error) {
-    params.setAttachmentError(error instanceof Error ? error.message : params.uploadFailedLabel);
+    params.setAttachmentError(params.localizeError(error, params.uploadFailedLabel));
     return;
   }
 
@@ -236,6 +242,7 @@ export function ChatInterface({
   const [fastModeOverride, setFastMode] = useState<boolean | null>(null);
   const [deepResearchOverride, setDeepResearch] = useState<boolean | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const localizeError = useLocalizeError();
   const utils = trpc.useUtils();
   const { availableModels, platformCapabilities } = useAvailableModels();
   const { features } = platformCapabilities;
@@ -427,6 +434,7 @@ export function ChatInterface({
       },
       setAttachmentError,
       setInput,
+      localizeError,
       uploadFailedLabel: t("Failed to upload attachment."),
     });
 

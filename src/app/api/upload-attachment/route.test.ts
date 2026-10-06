@@ -43,6 +43,62 @@ test("stores a file under the type its contents prove", async () => {
   expect(mocks.uploadFile.mock.calls[0]?.[0].type).toBe("image/png");
 });
 
+test("accepts a file whose browser-reported type is empty", async () => {
+  const response = await upload(PNG, "");
+  expect(response.status).toBe(200);
+  expect(mocks.uploadFile.mock.calls[0]?.[0].type).toBe("image/png");
+});
+
+function uploadNamed(bytes: Uint8Array<ArrayBuffer>, name: string, type = "") {
+  const body = new FormData();
+  body.set("file", new File([bytes], name, { type }));
+  return POST(new Request("https://app.example/api/upload-attachment", { method: "POST", body }));
+}
+
+const text = (value: string) => new TextEncoder().encode(value);
+
+test("accepts a JSON file and stores it as application/json", async () => {
+  const response = await uploadNamed(text('{"a":1}'), "data.json", "application/json");
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    url: "https://files.example/upload",
+    mediaType: "application/json",
+  });
+  expect(mocks.uploadFile.mock.calls[0]?.[0].type).toBe("application/json");
+});
+
+test("stores HTML and source files as plain text so they never render", async () => {
+  for (const name of ["page.html", "script.py", "notes.txt"]) {
+    mocks.uploadFile.mockClear();
+    const response = await uploadNamed(text("<b>hi</b>"), name, "text/html");
+    expect(response.status).toBe(200);
+    expect(mocks.uploadFile.mock.calls[0]?.[0].type).toBe("text/plain");
+  }
+});
+
+test("converts Shift_JIS text to UTF-8 before storing it", async () => {
+  // "日本語" in Shift_JIS.
+  const sjis = new Uint8Array([0x93, 0xfa, 0x96, 0x7b, 0x8c, 0xea]);
+  const response = await uploadNamed(sjis, "data.csv", "text/csv");
+  expect(response.status).toBe(200);
+  const stored = mocks.uploadFile.mock.calls[0]?.[0] as File;
+  expect(stored.type).toBe("text/csv");
+  expect(await stored.text()).toBe("日本語");
+});
+
+test("rejects binary data, unknown extensions and unsafe types", async () => {
+  const binary = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04]);
+  expect((await uploadNamed(binary, "data.json")).status).toBe(415);
+  expect((await uploadNamed(text("MZ"), "run.exe")).status).toBe(415);
+  expect((await uploadNamed(text("<svg/>"), "image.svg", "image/svg+xml")).status).toBe(415);
+  expect(mocks.uploadFile).not.toHaveBeenCalled();
+});
+
+test("limits text files to 2 MB", async () => {
+  const large = new Uint8Array(2 * 1024 * 1024 + 1).fill(0x61);
+  expect((await uploadNamed(large, "big.txt")).status).toBe(413);
+});
+
 test("rate-limits uploads per account", async () => {
   mocks.allowed = false;
   const response = await upload(PNG, "image/png");

@@ -2,6 +2,7 @@
 
 import { Gift, RotateCcw } from "lucide-react";
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import type { AffiliateResetPlanTier } from "@/lib/affiliate-types";
@@ -27,6 +28,7 @@ type ResetTargetType = (typeof resetTargetTypes)[number];
 
 export function BillingResetCard() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const utils = trpc.useUtils();
   const [targetType, setTargetType] = useState<ResetTargetType>("all");
   const [planTier, setPlanTier] = useState<AffiliateResetPlanTier>("plus");
@@ -54,7 +56,7 @@ export function BillingResetCard() {
         toast.info(t("You have used your last reset credit."));
       }
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const grantResetCredits = trpc.affiliate.adminGrantResetCredits.useMutation({
@@ -67,7 +69,7 @@ export function BillingResetCard() {
       );
       await invalidateResetData();
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   if (statusQuery.error) {
@@ -76,7 +78,7 @@ export function BillingResetCard() {
         <CardHeader>
           <CardTitle>{t("Usage reset credits")}</CardTitle>
           <CardDescription className="text-destructive">
-            {statusQuery.error.message}
+            {localizeError(statusQuery.error)}
           </CardDescription>
         </CardHeader>
       </Card>

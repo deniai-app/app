@@ -14,6 +14,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { runWithLoading } from "@/lib/run-with-loading";
 import { formatCardBrand, formatPaymentMethodLabel } from "@/lib/stripe-checkout-receipt";
 import { cn } from "@/lib/utils";
@@ -102,6 +103,7 @@ function CheckoutStackSection({
 
 function CompactPromotion({ checkout }: { checkout: StripeCheckoutValue }) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const [promotionCode, setPromotionCode] = useState("");
   const [promotionError, setPromotionError] = useState<string | null>(null);
   const [isApplyingPromotion, setIsApplyingPromotion] = useState(false);
@@ -132,7 +134,7 @@ function CompactPromotion({ checkout }: { checkout: StripeCheckoutValue }) {
 
         setPromotionCode("");
       } catch (error) {
-        const message = error instanceof Error ? error.message : t("Unable to apply coupon code.");
+        const message = localizeError(error, t("Unable to apply coupon code."));
         setPromotionError(message);
         toast.error(message);
       }
@@ -156,7 +158,7 @@ function CompactPromotion({ checkout }: { checkout: StripeCheckoutValue }) {
           setPromotionCode("");
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : t("Unable to remove coupon code.");
+        const message = localizeError(error, t("Unable to remove coupon code."));
         setPromotionError(message);
         toast.error(message);
       }

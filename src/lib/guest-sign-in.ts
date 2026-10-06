@@ -18,7 +18,7 @@ type GuestSignInResponse = {
 
 export type GuestSignInResult =
   | { ok: true }
-  | { ok: false; captchaRejected: boolean; message: string | null };
+  | { ok: false; captchaRejected: boolean; code: string | null; message: string | null };
 
 /**
  * Starts an anonymous (guest) session through `signIn` (normally
@@ -41,12 +41,14 @@ export async function signInAsGuest(
     return {
       ok: false,
       captchaRejected: CAPTCHA_ERROR_CODES.has(error?.code ?? ""),
+      code: error?.code ?? null,
       message: error?.message || null,
     };
   } catch (error) {
     return {
       ok: false,
       captchaRejected: false,
+      code: null,
       message: error instanceof Error && error.message ? error.message : null,
     };
   }

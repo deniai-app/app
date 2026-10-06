@@ -2,6 +2,7 @@
 
 import { Check, Gift, KeyRound, Percent, RotateCcw } from "lucide-react";
 import { useLocale, useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ const EMPTY_COUPON_DRAFT = { code: "", note: "" };
 
 export function AffiliatePage() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const locale = useLocale();
   const utils = trpc.useUtils();
   const statusQuery = trpc.affiliate.status.useQuery(undefined, { staleTime: 30_000 });
@@ -49,7 +51,7 @@ export function AffiliatePage() {
         await utils.affiliate.status.invalidate();
       }
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const consumeResetCredit = trpc.affiliate.consumeResetCredit.useMutation({
@@ -64,7 +66,7 @@ export function AffiliatePage() {
         toast.info(t("You have used your last reset credit."));
       }
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const updateRewardPreference = trpc.affiliate.setRewardPreference.useMutation({
@@ -75,7 +77,7 @@ export function AffiliatePage() {
     },
     onError: (error) => {
       setRewardPreferenceDraft(null);
-      toast.error(error.message);
+      toast.error(localizeError(error));
     },
   });
 
@@ -91,7 +93,7 @@ export function AffiliatePage() {
         utils.affiliate.status.invalidate(),
       ]);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
   const rejectReward = trpc.affiliate.rejectResetReward.useMutation({
     onSuccess: async () => {
@@ -101,7 +103,7 @@ export function AffiliatePage() {
         utils.affiliate.status.invalidate(),
       ]);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
   const sendCoupon = trpc.affiliate.sendCouponEmail.useMutation({
     onSuccess: async ({ email }) => {
@@ -111,14 +113,14 @@ export function AffiliatePage() {
         utils.affiliate.status.invalidate(),
       ]);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   if (statusQuery.error) {
     return (
       <Alert variant="destructive">
         <AlertTitle>{t("Unable to load affiliate settings")}</AlertTitle>
-        <AlertDescription>{statusQuery.error.message}</AlertDescription>
+        <AlertDescription>{localizeError(statusQuery.error)}</AlertDescription>
       </Alert>
     );
   }
@@ -283,7 +285,7 @@ export function AffiliatePage() {
 
       {status.isAdmin ? (
         <AffiliateAdminDesk
-          errorMessage={adminQuery.error?.message ?? null}
+          errorMessage={adminQuery.error ? localizeError(adminQuery.error) : null}
           getDraft={getDraft}
           locale={locale}
           onApprove={(rewardId) => approveReward.mutate({ rewardId })}

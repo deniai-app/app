@@ -4,6 +4,7 @@ import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useState } from "react";
 import { toast } from "sonner";
 import { BlogEditorFields, type BlogEditorDraft } from "@/components/blog/blog-editor-fields";
@@ -39,6 +40,7 @@ function draftFromPost(post: BlogEditorDraft): BlogEditorDraft {
 
 export function BlogEditorPage({ postId }: { postId?: string }) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const router = useRouter();
   const utils = trpc.useUtils();
   const isNew = !postId;
@@ -58,7 +60,7 @@ export function BlogEditorPage({ postId }: { postId?: string }) {
       await utils.blog.list.invalidate();
       router.replace(`/settings/blog/${post.id}`);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
   const updatePost = trpc.blog.update.useMutation({
     onSuccess: async () => {
@@ -68,7 +70,7 @@ export function BlogEditorPage({ postId }: { postId?: string }) {
         postId ? utils.blog.get.invalidate({ id: postId }) : null,
       ]);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
   const publishPost = trpc.blog.publish.useMutation({
     onSuccess: async () => {
@@ -78,7 +80,7 @@ export function BlogEditorPage({ postId }: { postId?: string }) {
         postId ? utils.blog.get.invalidate({ id: postId }) : null,
       ]);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
   const setFeatured = trpc.blog.setFeatured.useMutation({
     onSuccess: async (post) => {
@@ -88,7 +90,7 @@ export function BlogEditorPage({ postId }: { postId?: string }) {
         postId ? utils.blog.get.invalidate({ id: postId }) : null,
       ]);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
   const unpublishPost = trpc.blog.unpublish.useMutation({
     onSuccess: async () => {
@@ -98,7 +100,7 @@ export function BlogEditorPage({ postId }: { postId?: string }) {
         postId ? utils.blog.get.invalidate({ id: postId }) : null,
       ]);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const serverDraft = postQuery.data ? draftFromPost(postQuery.data) : EMPTY_DRAFT;

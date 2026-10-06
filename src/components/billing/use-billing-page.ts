@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { startTransition, useState } from "react";
 import { toast } from "sonner";
 import type { BillingPlanId, ClientPlan, IndividualPlanId } from "@/lib/billing";
@@ -17,6 +18,7 @@ import type { SubscriptionReceiptData } from "./subscription-receipt-data";
 
 export function useBillingPage() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const { push } = useRouter();
   const [changeTarget, setChangeTarget] = useState<ClientPlan | null>(null);
   const [plusInterval, setPlusInterval] = useState<"monthly" | "yearly">("monthly");
@@ -55,7 +57,7 @@ export function useBillingPage() {
         push(`/settings/billing/checkout/${result.sessionId}`);
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("Unable to load checkout."));
+      toast.error(localizeError(error, t("Unable to load checkout.")));
     }
   };
 
@@ -76,7 +78,7 @@ export function useBillingPage() {
       }
       toast.error(t("Stripe did not return a billing portal URL."));
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const changePlan = trpc.billing.changePlan.useMutation({
@@ -86,7 +88,7 @@ export function useBillingPage() {
       await utils.billing.maxModeStatus.invalidate();
       await utils.billing.usage.invalidate();
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
     onSettled: () => {
       setChangeTarget(null);
       setPendingPlanId(null);
@@ -125,7 +127,7 @@ export function useBillingPage() {
       await utils.billing.maxModeStatus.invalidate();
       await utils.billing.usage.invalidate();
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const maxModeQuery = trpc.billing.maxModeStatus.useQuery(undefined, {
@@ -138,7 +140,7 @@ export function useBillingPage() {
       await utils.billing.maxModeStatus.invalidate();
       await utils.billing.usage.invalidate();
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const disableMaxMode = trpc.billing.disableMaxMode.useMutation({
@@ -147,7 +149,7 @@ export function useBillingPage() {
       await utils.billing.maxModeStatus.invalidate();
       await utils.billing.usage.invalidate();
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const handleMaxModeToggle = (enabled: boolean) => {

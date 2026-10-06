@@ -1,6 +1,7 @@
 "use client";
 
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useEffect, useReducer } from "react";
 import { toast } from "sonner";
 import { MemoryClearDialog } from "@/components/memory/memory-clear-dialog";
@@ -22,6 +23,7 @@ import { trpc } from "@/lib/trpc/react";
 
 export default function MemorySettingsPage() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const { features } = usePlatformCapabilities();
   const utils = trpc.useUtils();
   const memoryQuery = trpc.memory.get.useQuery(undefined, { enabled: features.memory });
@@ -73,7 +75,7 @@ export default function MemorySettingsPage() {
       toast.success(t("Memory added."));
     },
     onError: (error) => {
-      toast.error(error.message || t("Failed to add memory."));
+      toast.error(localizeError(error, t("Failed to add memory.")));
     },
   });
 
@@ -83,7 +85,7 @@ export default function MemorySettingsPage() {
       toast.success(t("Memory removed."));
     },
     onError: (error) => {
-      toast.error(error.message || t("Failed to remove memory."));
+      toast.error(localizeError(error, t("Failed to remove memory.")));
     },
   });
 
@@ -94,7 +96,7 @@ export default function MemorySettingsPage() {
       toast.success(t("All saved memories cleared."));
     },
     onError: (error) => {
-      toast.error(error.message || t("Failed to clear memories."));
+      toast.error(localizeError(error, t("Failed to clear memories.")));
     },
   });
 
@@ -107,7 +109,7 @@ export default function MemorySettingsPage() {
       },
       {
         onError: (error) => {
-          toast.error(error.message || t("Failed to save personalization."));
+          toast.error(localizeError(error, t("Failed to save personalization.")));
         },
       },
     );
@@ -126,7 +128,7 @@ export default function MemorySettingsPage() {
         toast.success(t("Personalization saved."));
       },
       onError: (error) => {
-        toast.error(error.message || t("Failed to save personalization."));
+        toast.error(localizeError(error, t("Failed to save personalization.")));
       },
     });
   };

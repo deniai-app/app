@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useExtracted, useLocale } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -336,6 +337,7 @@ function AppForm({
 
 export default function DeveloperAppsSettingsPage() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const locale = useLocale();
   const queryClient = useQueryClient();
   const { data: session, isPending: sessionPending } = authClient.useSession();
@@ -354,7 +356,7 @@ export default function DeveloperAppsSettingsPage() {
     queryKey: clientQueryKey,
     queryFn: async () => {
       const { data, error } = await authClient.oauth2.getClients();
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(localizeError(error));
       return data ?? [];
     },
     enabled: Boolean(session?.user) && !isAnonymous,
@@ -379,7 +381,7 @@ export default function DeveloperAppsSettingsPage() {
         response_types: ["code"],
         scope: input.scopes.join(" "),
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(localizeError(error));
       if (!data) throw new Error(t("The OAuth application could not be created."));
       return data;
     },
@@ -399,7 +401,7 @@ export default function DeveloperAppsSettingsPage() {
       });
       toast.success(t("OAuth application created."));
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const updateMutation = useMutation({
@@ -418,7 +420,7 @@ export default function DeveloperAppsSettingsPage() {
           scope: input.scopes.join(" "),
         },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(localizeError(error));
       return data;
     },
     onSuccess: () => {
@@ -426,13 +428,13 @@ export default function DeveloperAppsSettingsPage() {
       setEditTarget(null);
       toast.success(t("OAuth application updated."));
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (clientId: string) => {
       const { error } = await authClient.oauth2.deleteClient({ client_id: clientId });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(localizeError(error));
       return clientId;
     },
     onSuccess: (deletedClientId) => {
@@ -443,7 +445,7 @@ export default function DeveloperAppsSettingsPage() {
       setDeleteTarget(null);
       toast.success(t("OAuth application deleted."));
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const rotateMutation = useMutation({
@@ -451,7 +453,7 @@ export default function DeveloperAppsSettingsPage() {
       const { data, error } = await authClient.oauth2.client.rotateSecret({
         client_id: client.client_id,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(localizeError(error));
       if (!data?.client_secret) throw new Error(t("A new client secret was not returned."));
       return { client, secret: data.client_secret };
     },
@@ -464,7 +466,7 @@ export default function DeveloperAppsSettingsPage() {
       });
       toast.success(t("Client secret rotated."));
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const openCreate = () => {
@@ -583,7 +585,7 @@ export default function DeveloperAppsSettingsPage() {
                   <KeyRound />
                 </EmptyMedia>
                 <EmptyTitle>{t("Applications could not be loaded")}</EmptyTitle>
-                <EmptyDescription>{clientsQuery.error.message}</EmptyDescription>
+                <EmptyDescription>{localizeError(clientsQuery.error)}</EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
                 <Button variant="outline" onClick={() => void clientsQuery.refetch()}>

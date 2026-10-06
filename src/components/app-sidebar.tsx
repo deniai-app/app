@@ -5,6 +5,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import {
@@ -146,6 +147,7 @@ function updateCustomFolders(updater: (current: string[]) => string[]) {
 
 export function AppSidebar({ onOpenChatSearch }: { onOpenChatSearch: () => void }) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const { push } = useRouter();
   const pathname = usePathname();
   const isCheckoutRoute = isCheckoutSettingsRoute(pathname);
@@ -318,7 +320,7 @@ export function AppSidebar({ onOpenChatSearch }: { onOpenChatSearch: () => void 
 
         <AppSidebarChatList
           isLoading={isLoading}
-          errorMessage={error?.message ?? null}
+          errorMessage={error ? localizeError(error) : null}
           chats={chats}
           customFolders={customFolders}
           activeChatId={activeChatId}

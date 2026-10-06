@@ -7,6 +7,7 @@ import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { authClient } from "@/lib/auth-client";
 
 type Status = "idle" | "selectingKey" | "success" | "error";
@@ -72,6 +73,7 @@ async function approveDeviceAuth(code: string, revokeKeyId?: string): Promise<Ap
 
 function FlixaAuthorizeContent() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const searchParams = useSearchParams();
   const code = searchParams.get("code");
   const { data: session } = authClient.useSession();
@@ -92,7 +94,7 @@ function FlixaAuthorizeContent() {
       setSelectedKeyId(result.apiKeys[0]?.id ?? "");
       setStatus("selectingKey");
     } else if (result.type === "error") {
-      setErrorMessage(result.message);
+      setErrorMessage(localizeError(result.message));
       setStatus("error");
     } else {
       setApiKeys([]);

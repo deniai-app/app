@@ -67,6 +67,8 @@ export function AppProviders({
         queryClient={queryClient}
         redirectTo="/chat"
         socialProviders={platformCapabilities.auth.socialProviders}
+        // One account per provider: hide the "link" row once a provider is linked.
+        multipleAccountsPerProvider={false}
         localization={{
           auth: localization.auth,
           settings: localization.settings,

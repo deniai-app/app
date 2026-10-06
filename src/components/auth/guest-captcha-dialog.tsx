@@ -1,6 +1,7 @@
 "use client";
 
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +35,7 @@ function ignoreWidgetReset() {}
  */
 export function GuestCaptchaDialog({ open, onOpenChange, onSignedIn }: GuestCaptchaDialogProps) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const [phase, setPhase] = useState<ChallengePhase>("awaiting-token");
   const [error, setError] = useState<string | null>(null);
   const [widgetKey, setWidgetKey] = useState(0);
@@ -69,7 +71,9 @@ export function GuestCaptchaDialog({ open, onOpenChange, onSignedIn }: GuestCapt
     setError(
       result.captchaRejected
         ? challengeFailedMessage
-        : result.message || t("Failed to sign in as guest. Please try again."),
+        : result.message
+          ? localizeError({ code: result.code, message: result.message })
+          : t("Failed to sign in as guest. Please try again."),
     );
   };
 

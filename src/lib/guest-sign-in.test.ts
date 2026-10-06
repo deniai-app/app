@@ -31,6 +31,7 @@ test.each(["MISSING_RESPONSE", "VERIFICATION_FAILED"])(
     await expect(signInAsGuest(signIn, "used-token")).resolves.toEqual({
       ok: false,
       captchaRejected: true,
+      code,
       message: "Captcha verification failed",
     });
   },
@@ -45,6 +46,7 @@ test("other sign-in failures keep the server message", async () => {
   await expect(signInAsGuest(signIn, "token")).resolves.toEqual({
     ok: false,
     captchaRejected: false,
+    code: "TOO_MANY_REQUESTS",
     message: "Too many requests",
   });
 });
@@ -53,16 +55,22 @@ test("a missing session or thrown error is reported without a message", async ()
   await expect(signInAsGuest(async () => ({ data: null, error: null }))).resolves.toEqual({
     ok: false,
     captchaRejected: false,
+    code: null,
     message: null,
   });
   await expect(
     signInAsGuest(async () => {
       throw new Error("");
     }),
-  ).resolves.toEqual({ ok: false, captchaRejected: false, message: null });
+  ).resolves.toEqual({ ok: false, captchaRejected: false, code: null, message: null });
   await expect(
     signInAsGuest(async () => {
       throw new Error("Network down");
     }),
-  ).resolves.toEqual({ ok: false, captchaRejected: false, message: "Network down" });
+  ).resolves.toEqual({
+    ok: false,
+    captchaRejected: false,
+    code: null,
+    message: "Network down",
+  });
 });

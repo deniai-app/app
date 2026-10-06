@@ -10,6 +10,7 @@ import {
 } from "@better-auth-ui/react";
 import type { Account } from "better-auth";
 import { Link2, Link2Off, Plug } from "lucide-react";
+import { useExtracted } from "next-intl";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export type LinkedAccountProps = {
  * @returns A JSX element containing the linked account row
  */
 export function LinkedAccount({ account, provider }: LinkedAccountProps) {
+  const t = useExtracted();
   const { authClient, baseURL, localization } = useAuth();
 
   const { data: accountInfo, isPending: isLoadingInfo } = useAccountInfo(authClient, {
@@ -107,7 +109,7 @@ export function LinkedAccount({ account, provider }: LinkedAccountProps) {
             aria-label={localization.settings.unlinkProvider.replace("{{provider}}", providerName)}
           >
             {isUnlinking ? <Spinner /> : <Link2Off />}
-            {localization.settings.unlinkProvider.replace("{{provider}}", "").trim()}
+            {t("Unlink")}
           </Button>
         ) : (
           <Button

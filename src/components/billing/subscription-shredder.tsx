@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { useExtracted, useLocale } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { formatMinorCurrency } from "@/lib/currency";
 import { formatReceiptOrderId } from "@/lib/stripe-checkout-receipt";
 import { cn } from "@/lib/utils";
@@ -131,12 +132,15 @@ function SubscriptionShredderActive({
   const closeRef = useRef(onClose);
   const reduceMotionRef = useRef(shouldReduceMotion);
   const tRef = useRef(t);
+  const localizeError = useLocalizeError();
+  const localizeErrorRef = useRef(localizeError);
 
   useEffect(() => {
     confirmRef.current = onConfirm;
     closeRef.current = onClose;
     reduceMotionRef.current = shouldReduceMotion;
     tRef.current = t;
+    localizeErrorRef.current = localizeError;
   });
 
   useEffect(() => {
@@ -171,7 +175,7 @@ function SubscriptionShredderActive({
       } catch (error) {
         if (!cancelled) {
           toast.error(
-            error instanceof Error ? error.message : tRef.current("Failed to cancel subscription"),
+            localizeErrorRef.current(error, tRef.current("Failed to cancel subscription")),
           );
           closeRef.current();
         }

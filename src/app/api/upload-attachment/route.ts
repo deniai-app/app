@@ -1,5 +1,10 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import {
+  decodeTextAttachment,
+  MAX_TEXT_ATTACHMENT_BYTES,
+  textMediaTypeForName,
+} from "@/lib/attachment-types";
 import { auth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { uploadFile } from "@/lib/upload";
@@ -55,27 +60,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "File is required." }, { status: 400 });
   }
 
-  const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
-
-  if (!allowedTypes.has(submittedFile.type)) {
-    return NextResponse.json({ error: "Unsupported attachment type." }, { status: 415 });
-  }
-
   if (submittedFile.size > MAX_ATTACHMENT_BYTES) {
     return NextResponse.json({ error: "Attachment is too large." }, { status: 413 });
   }
 
+  // The claimed type is not checked: browsers and OSes report it inconsistently
+  // (empty, `image/jpg`, `application/octet-stream`), and the contents decide.
   const detectedType = detectAttachmentType(
     new Uint8Array(await submittedFile.slice(0, 16).arrayBuffer()),
   );
-  if (!detectedType) {
-    return NextResponse.json({ error: "Unsupported attachment type." }, { status: 415 });
+
+  let uploadedFile: File;
+  if (detectedType) {
+    // Store and serve the file under the type its contents prove, not the claimed one.
+    uploadedFile =
+      detectedType === submittedFile.type
+        ? submittedFile
+        : new File([submittedFile], submittedFile.name, { type: detectedType });
+  } else {
+    // No magic bytes: accept plain-text files by extension, provided they really decode as text.
+    const textType = textMediaTypeForName(submittedFile.name);
+    if (!textType) {
+      console.warn(
+        `[upload-attachment] unsupported content (claimed type: ${submittedFile.type || "none"}, size: ${submittedFile.size})`,
+      );
+      return NextResponse.json({ error: "Unsupported attachment type." }, { status: 415 });
+    }
+    if (submittedFile.size > MAX_TEXT_ATTACHMENT_BYTES) {
+      return NextResponse.json({ error: "Text file is too large (max 2 MB)." }, { status: 413 });
+    }
+    const text = decodeTextAttachment(new Uint8Array(await submittedFile.arrayBuffer()));
+    if (text === null) {
+      console.warn(`[upload-attachment] binary content in text file (size: ${submittedFile.size})`);
+      return NextResponse.json({ error: "Unsupported attachment type." }, { status: 415 });
+    }
+    // Always stored as UTF-8, whatever encoding the file arrived in.
+    uploadedFile = new File([text], submittedFile.name, { type: textType });
   }
-  // Store and serve the file under the type its contents prove, not the claimed one.
-  const uploadedFile =
-    detectedType === submittedFile.type
-      ? submittedFile
-      : new File([submittedFile], submittedFile.name, { type: detectedType });
 
   let url: string | null = null;
   try {
@@ -90,6 +111,9 @@ export async function POST(request: Request) {
   const maxDataUrlBytes = 512 * 1024;
   if (!url) {
     if (uploadedFile.size > maxDataUrlBytes) {
+      console.error(
+        `[upload-attachment] storage unavailable and file exceeds inline fallback (size: ${uploadedFile.size})`,
+      );
       return NextResponse.json(
         {
           error:
@@ -108,5 +132,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ url });
+  return NextResponse.json({ url, mediaType: uploadedFile.type });
 }

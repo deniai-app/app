@@ -3,6 +3,7 @@
 import { FilePlus2, Newspaper, Pencil, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useExtracted, useLocale } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useState } from "react";
 import { toast } from "sonner";
 import { SettingsPageShell } from "@/components/settings-page-shell";
@@ -24,6 +25,7 @@ import { trpc } from "@/lib/trpc/react";
 
 export function BlogSettingsPage() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const locale = useLocale();
   const utils = trpc.useUtils();
   const canManage = trpc.blog.canManage.useQuery();
@@ -37,7 +39,7 @@ export function BlogSettingsPage() {
       toast.success(post.featured ? t("Featured on the homepage") : t("Removed from homepage"));
       await utils.blog.list.invalidate();
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const deletePost = trpc.blog.delete.useMutation({
@@ -47,7 +49,7 @@ export function BlogSettingsPage() {
       await utils.blog.list.invalidate();
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(localizeError(error));
     },
   });
 

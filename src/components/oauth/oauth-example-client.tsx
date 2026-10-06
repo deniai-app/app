@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import {
   ArrowUpRight,
   Check,
@@ -86,6 +87,7 @@ function isValidRedirectUri(value: string): boolean {
 
 export function OAuthExampleClient() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const [clientId, setClientId] = useState("");
   const [redirectUri, setRedirectUri] = useState("");
   const [status, setStatus] = useState<FlowStatus>("idle");
@@ -175,9 +177,7 @@ export function OAuthExampleClient() {
         window.sessionStorage.removeItem(PLAYGROUND_STORAGE_KEY);
       } catch (error) {
         setStatus("error");
-        setStatusMessage(
-          error instanceof Error ? error.message : t("The OAuth flow could not be completed."),
-        );
+        setStatusMessage(localizeError(error, t("The OAuth flow could not be completed.")));
         window.sessionStorage.removeItem(PLAYGROUND_STORAGE_KEY);
       }
     };

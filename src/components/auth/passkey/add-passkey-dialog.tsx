@@ -1,8 +1,8 @@
 "use client";
 
-import type { PasskeyAuthClient } from "@better-auth-ui/core/plugins/passkey";
-import { useAuth, useAuthPlugin } from "@better-auth-ui/react";
-import { useAddPasskey } from "@better-auth-ui/react/plugins/passkey";
+import { addPasskeyOptions, type PasskeyAuthClient } from "@better-auth-ui/core/plugins/passkey";
+import { useAuth, useAuthPlugin, useSession } from "@better-auth-ui/react";
+import { useMutation } from "@tanstack/react-query";
 import { Fingerprint } from "lucide-react";
 import type { SyntheticEvent } from "react";
 
@@ -32,9 +32,21 @@ export function AddPasskeyDialog({ open, onOpenChange }: AddPasskeyDialogProps) 
   const { authClient, localization } = useAuth();
   const { localization: passkeyLocalization } = useAuthPlugin(passkeyPlugin);
 
-  const { mutate: addPasskey, isPending: isAdding } = useAddPasskey(
-    authClient as PasskeyAuthClient,
-  );
+  const passkeyClient = authClient as PasskeyAuthClient;
+  const { data: session } = useSession(authClient);
+
+  const { mutate: addPasskey, isPending: isAdding } = useMutation({
+    ...addPasskeyOptions(passkeyClient, session?.user.id),
+    // `addPasskey` resolves with `{ data: null, error }` for WebAuthn failures
+    // (cancelled prompt, unsupported authenticator) and for server verification
+    // failures. The stock mutation treats that as success, so the dialog
+    // closed without adding a passkey or showing any message.
+    mutationFn: async (variables?: Parameters<PasskeyAuthClient["passkey"]["addPasskey"]>[0]) => {
+      const result = await passkeyClient.passkey.addPasskey(variables);
+      if (result?.error) throw result.error;
+      return result;
+    },
+  });
 
   const handleSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();

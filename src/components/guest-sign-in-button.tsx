@@ -2,6 +2,7 @@
 
 import type { VariantProps } from "class-variance-authority";
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useState } from "react";
 import { toast } from "sonner";
 import { GuestCaptchaDialog } from "@/components/auth/guest-captcha-dialog";
@@ -24,6 +25,7 @@ export function GuestSignInButton({
   variant = "outline",
 }: GuestSignInButtonProps) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const { data: session, isPending } = authClient.useSession();
   const platformCapabilities = usePlatformCapabilities();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,7 +51,11 @@ export function GuestSignInButton({
     void runWithLoading(setIsSubmitting, async () => {
       const result = await signInAsGuest((request) => authClient.signIn.anonymous(request));
       if (!result.ok) {
-        toast.error(result.message || t("Failed to sign in as guest. Please try again."));
+        toast.error(
+          result.message
+            ? localizeError({ code: result.code, message: result.message })
+            : t("Failed to sign in as guest. Please try again."),
+        );
         return;
       }
 

@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { prepareAttachmentForUpload } from "@/lib/attachment-image";
 import { cn } from "@/lib/utils";
 import { CornerDownLeftIcon, ImageIcon, PlusIcon, SquareIcon, XIcon } from "lucide-react";
 import { nanoid } from "nanoid";
@@ -73,7 +74,16 @@ export type PromptInputFile = FileUIPart & {
   uploadStatus?: "idle" | "uploading" | "uploaded" | "error";
 };
 
-async function uploadAttachmentFile(file: File): Promise<string> {
+type UploadedAttachment = {
+  /** The file that was uploaded; differs from the input when it was converted. */
+  file: File;
+  url: string;
+  /** The type the server stored the file under (it may normalize the claimed one). */
+  mediaType?: string;
+};
+
+async function uploadAttachmentFile(original: File): Promise<UploadedAttachment> {
+  const file = await prepareAttachmentForUpload(original);
   const formData = new FormData();
   formData.set("file", file);
 
@@ -82,16 +92,47 @@ async function uploadAttachmentFile(file: File): Promise<string> {
     body: formData,
   });
 
-  if (!response.ok) {
-    throw new Error("Attachment upload failed.");
-  }
-
-  const payload = (await response.json()) as { error?: string; url?: string };
-  if (!payload.url) {
+  const payload = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    mediaType?: string;
+    url?: string;
+  };
+  if (!response.ok || !payload.url) {
     throw new Error(payload.error || "Attachment upload failed.");
   }
 
-  return payload.url;
+  return { file, url: payload.url, mediaType: payload.mediaType };
+}
+
+/**
+ * Fields to merge into an attachment once it is uploaded. When the upload was
+ * converted (e.g. HEIC to JPEG) the media type, name and preview follow the
+ * converted file, so the model is not told the old type for the new bytes.
+ */
+function uploadedAttachmentPatch(
+  item: PromptInputFile,
+  { file, url, mediaType }: UploadedAttachment,
+): Partial<PromptInputFile> {
+  const patch: Partial<PromptInputFile> = {
+    uploadError: undefined,
+    uploadStatus: "uploaded",
+    url,
+    // The server normalizes types (e.g. a browser's empty type for a .json file).
+    ...(mediaType ? { mediaType } : {}),
+  };
+  if (file === item.file) {
+    return patch;
+  }
+  if (item.previewUrl) {
+    URL.revokeObjectURL(item.previewUrl);
+  }
+  return {
+    ...patch,
+    file,
+    filename: file.name,
+    mediaType: file.type,
+    previewUrl: URL.createObjectURL(file),
+  };
 }
 
 function createPromptInputFile(file: File): PromptInputFile {
@@ -195,13 +236,10 @@ export const PromptInputProvider = ({
 
     for (const item of nextItems) {
       void uploadAttachmentFile(item.file as File)
-        .then((url) => {
+        .then((uploaded) => {
+          const patch = uploadedAttachmentPatch(item, uploaded);
           setAttachmentFiles((prev) =>
-            prev.map((file) =>
-              file.id === item.id
-                ? { ...file, uploadError: undefined, uploadStatus: "uploaded", url }
-                : file,
-            ),
+            prev.map((file) => (file.id === item.id ? { ...file, ...patch } : file)),
           );
         })
         .catch((error) => {
@@ -355,9 +393,10 @@ export type PromptInputActionAddAttachmentsProps = ComponentProps<typeof Dropdow
 };
 
 export const PromptInputActionAddAttachments = ({
-  label = "Add photos or files",
+  label,
   ...props
 }: PromptInputActionAddAttachmentsProps) => {
+  const t = useExtracted();
   const attachments = usePromptInputAttachments();
 
   const handleClick = useCallback(
@@ -370,7 +409,7 @@ export const PromptInputActionAddAttachments = ({
 
   return (
     <DropdownMenuItem {...props} onClick={handleClick}>
-      <ImageIcon className="size-4" /> {label}
+      <ImageIcon className="size-4" /> {label ?? t("Add photos or files")}
     </DropdownMenuItem>
   );
 };
@@ -415,6 +454,7 @@ export const PromptInput = ({
   children,
   ...props
 }: PromptInputProps) => {
+  const t = useExtracted();
   // Try to use a provider controller if present
   const controller = useOptionalPromptInputController();
   const usingProvider = !!controller;
@@ -500,13 +540,10 @@ export const PromptInput = ({
         const next = capped.map(createPromptInputFile);
         for (const item of next) {
           void uploadAttachmentFile(item.file as File)
-            .then((url) => {
+            .then((uploaded) => {
+              const patch = uploadedAttachmentPatch(item, uploaded);
               setItems((current) =>
-                current.map((file) =>
-                  file.id === item.id
-                    ? { ...file, uploadError: undefined, uploadStatus: "uploaded", url }
-                    : file,
-                ),
+                current.map((file) => (file.id === item.id ? { ...file, ...patch } : file)),
               );
             })
             .catch((error) => {
@@ -809,12 +846,12 @@ export const PromptInput = ({
     <>
       <input
         accept={accept}
-        aria-label="Upload files"
+        aria-label={t("Upload files")}
         className="hidden"
         multiple={multiple}
         onChange={handleChange}
         ref={inputRef}
-        title="Upload files"
+        title={t("Upload files")}
         type="file"
       />
       <form className={cn("w-full", className)} onSubmit={handleSubmit} ref={formRef} {...props}>
@@ -1088,6 +1125,7 @@ export const PromptInputSubmit = ({
   children,
   ...props
 }: PromptInputSubmitProps) => {
+  const t = useExtracted();
   const attachments = usePromptInputAttachments();
   const isGenerating = status === "submitted" || status === "streaming";
   const isUploading = attachments.isUploading;
@@ -1118,7 +1156,7 @@ export const PromptInputSubmit = ({
 
   return (
     <InputGroupButton
-      aria-label={isGenerating ? "Stop" : isUploading ? "Uploading" : "Submit"}
+      aria-label={isGenerating ? t("Stop") : isUploading ? t("Uploading") : t("Submit")}
       className={cn(className)}
       disabled={props.disabled || (!isGenerating && isUploading)}
       onClick={handleClick}

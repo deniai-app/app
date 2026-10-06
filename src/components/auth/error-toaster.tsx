@@ -3,9 +3,11 @@ import { matchMutation, matchQuery, useQueryClient } from "@tanstack/react-query
 import type { BetterFetchError } from "better-auth/react";
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 
 export function ErrorToaster() {
   const queryClient = useQueryClient();
+  const localizeError = useLocalizeError();
 
   useEffect(() => {
     const queryCache = queryClient.getQueryCache();
@@ -18,7 +20,7 @@ export function ErrorToaster() {
 
       const err = error as BetterFetchError;
       if (err?.error?.code === "EMAIL_NOT_VERIFIED") return;
-      if (err?.error) toast.error(err.error.message);
+      if (err?.error) toast.error(localizeError(err));
     };
 
     const mutationCache = queryClient.getMutationCache();
@@ -33,14 +35,14 @@ export function ErrorToaster() {
 
       const err = error as BetterFetchError;
       if (err.error?.code === "EMAIL_NOT_VERIFIED") return;
-      toast.error(err.error?.message || err.message);
+      toast.error(localizeError(err));
     };
 
     return () => {
       queryCache.config.onError = previousQueryOnError;
       mutationCache.config.onError = previousMutationOnError;
     };
-  }, [queryClient]);
+  }, [queryClient, localizeError]);
 
   return null;
 }

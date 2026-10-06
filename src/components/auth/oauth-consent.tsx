@@ -2,6 +2,7 @@
 
 import { ExternalLink, ShieldCheck } from "lucide-react";
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -18,6 +19,7 @@ type OAuthConsentProps = {
 
 export function OAuthConsent({ clientName, clientUri, requestedScopes }: OAuthConsentProps) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const displayClientName = clientName || t("the application");
 
@@ -43,14 +45,13 @@ export function OAuthConsent({ clientName, clientUri, requestedScopes }: OAuthCo
     try {
       const { data, error } = await authClient.oauth2.consent({ accept });
       if (error || !data?.url) {
-        toast.error(error?.message || t("Unable to complete this authorization request."));
+        toast.error(localizeError(error, t("Unable to complete this authorization request.")));
         return;
       }
 
       window.location.assign(data.url);
     } catch (error) {
-      const message = error instanceof Error ? error.message : undefined;
-      toast.error(message || t("Unable to complete this authorization request."));
+      toast.error(localizeError(error, t("Unable to complete this authorization request.")));
     } finally {
       setIsSubmitting(false);
     }

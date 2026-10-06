@@ -1,9 +1,11 @@
 "use client";
 
 import type { FileUIPart, SourceDocumentUIPart } from "ai";
+import { useExtracted } from "next-intl";
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
 import {
@@ -281,6 +283,8 @@ export const AttachmentInfo = ({
   ...props
 }: AttachmentInfoProps) => {
   const { data, variant } = useAttachmentContext();
+  const t = useExtracted();
+  const localizeError = useLocalizeError();
   const label = getAttachmentLabel(data);
   const uploadStatus =
     "uploadStatus" in data && typeof data.uploadStatus === "string" ? data.uploadStatus : null;
@@ -295,10 +299,12 @@ export const AttachmentInfo = ({
     <div className={cn("min-w-0 flex-1", className)} {...props}>
       <span className="block truncate">{label}</span>
       {uploadStatus === "uploading" ? (
-        <span className="block truncate text-muted-foreground text-xs">Uploading...</span>
+        <span className="block truncate text-muted-foreground text-xs">{t("Uploading...")}</span>
       ) : null}
       {uploadStatus === "error" && uploadError ? (
-        <span className="block truncate text-destructive text-xs">{uploadError}</span>
+        <span className="block truncate text-destructive text-xs">
+          {localizeError(uploadError)}
+        </span>
       ) : null}
       {showMediaType && data.mediaType && (
         <span className="block truncate text-muted-foreground text-xs">{data.mediaType}</span>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { fileToBase64 } from "@better-auth-ui/core";
 import { useAuth, useSession, useUpdateUser } from "@better-auth-ui/react";
 import { Trash2, Upload } from "lucide-react";
@@ -23,6 +24,7 @@ export type ChangeAvatarProps = {
 };
 
 export function ChangeAvatar({ className }: ChangeAvatarProps) {
+  const localizeError = useLocalizeError();
   const { authClient, localization, avatar } = useAuth();
   const { data: session } = useSession(authClient);
 
@@ -58,7 +60,7 @@ export function ChangeAvatar({ className }: ChangeAvatarProps) {
       );
     } catch (error) {
       if (error instanceof Error) {
-        toast.error(error.message);
+        toast.error(localizeError(error));
       }
     }
 

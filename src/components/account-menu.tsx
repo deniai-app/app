@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
@@ -81,6 +82,7 @@ function AccountUsageRow({
 
 export function AccountMenu() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const { push } = useRouter();
@@ -111,7 +113,7 @@ export function AccountMenu() {
       toast.success(t("Max Mode enabled."));
       await invalidateMaxMode();
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const disableMaxMode = trpc.billing.disableMaxMode.useMutation({
@@ -119,7 +121,7 @@ export function AccountMenu() {
       toast.success(t("Max Mode disabled."));
       await invalidateMaxMode();
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   const maxModePending = enableMaxMode.isPending || disableMaxMode.isPending;
@@ -131,13 +133,13 @@ export function AccountMenu() {
     try {
       const result = await authClient.signOut();
       if (result.error) {
-        toast.error(result.error.message);
+        toast.error(localizeError(result.error));
         return;
       }
       setIsMenuOpen(false);
       push("/");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      toast.error(localizeError(error, String(error)));
     } finally {
       setIsSigningOut(false);
     }

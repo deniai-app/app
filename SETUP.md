@@ -100,7 +100,9 @@ CLOUDFLARE_API_TOKEN=your-cloudflare-api-token
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 
-# File uploads (optional — falls back to base64 data URLs)
+# File uploads (optional — falls back to base64 data URLs, limited to 512 KB per file)
+# Accepted attachments: JPEG/PNG/WebP/PDF up to 10 MB, and text files (.json, .csv, .md, .txt,
+# source code, ...) up to 2 MB. Text files are inlined into the prompt.
 UPLOADTHING_TOKEN=
 
 # Client IP behind proxies (optional; see "Client IP behind proxies" below)

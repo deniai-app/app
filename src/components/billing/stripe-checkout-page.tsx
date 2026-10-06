@@ -12,6 +12,7 @@ import { usePlatformCapabilities } from "@/components/platform-capabilities-prov
 import type { BillingPlanId, ClientPlan, IndividualPlanId, TeamPlanId } from "@/lib/billing";
 import { findPlanById, getPlanTier, isMaxTeamPlan } from "@/lib/billing";
 import { stripeJsPromise } from "@/lib/stripe-js";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { makeTRPCClient } from "@/lib/trpc/client";
 import { type CheckoutSessionSummary as ReceiptCheckoutSessionSummary } from "@/lib/stripe-checkout-receipt";
 import { CheckoutReceiptForm, CheckoutReceiptFormPreview } from "./checkout-receipt-form";
@@ -267,6 +268,7 @@ function CheckoutForm({
   sessionPaidAt: string | null;
 }) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const { replace } = useRouter();
   const checkoutState = useCheckout();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -354,10 +356,7 @@ function CheckoutForm({
           replace(returnUrl);
         });
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : t("Unable to complete checkout. Please try again.");
+        const message = localizeError(error, t("Unable to complete checkout. Please try again."));
         setSubmitError(message);
         toast.error(message);
       }
@@ -481,6 +480,7 @@ function PreviewSubscriptionShred({
 
 export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const { features } = usePlatformCapabilities();
   const { replace } = useRouter();
   const trpcClient = makeTRPCClient();
@@ -627,7 +627,7 @@ export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
 
     bootstrap().catch((error: unknown) => {
       if (!cancelled) {
-        const message = error instanceof Error ? error.message : t("Unable to load checkout.");
+        const message = localizeError(error, t("Unable to load checkout."));
         dispatchBootstrap({ type: "failure", message });
       }
     });
@@ -640,6 +640,7 @@ export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
     features.billing,
     isReceiptPreview,
     isShredPreview,
+    localizeError,
     organizationId,
     planId,
     replace,

@@ -5,6 +5,7 @@ import type { Appearance } from "@stripe/stripe-js";
 import { CreditCard, ShieldCheck } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -94,6 +95,7 @@ function CardActions({
   setDialogOpen: (open: boolean) => void;
 }) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const utils = trpc.useUtils();
   const removeCard = trpc.billing.removeVerifiedCard.useMutation({
     onSuccess: async () => {
@@ -101,7 +103,7 @@ function CardActions({
       await utils.billing.usage.invalidate();
       await utils.billing.status.invalidate();
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(localizeError(error)),
   });
 
   return (
@@ -159,6 +161,7 @@ function CardSetupDialog({
 
 function CardSetupIntentLoader({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const { resolvedTheme } = useTheme();
   const createIntent = trpc.billing.createCardSetupIntent.useMutation();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -174,7 +177,7 @@ function CardSetupIntentLoader({ onOpenChange }: { onOpenChange: (open: boolean)
         setPaymentIntentId(data.paymentIntentId);
       })
       .catch((err) => {
-        toast.error(err?.message ?? t("Failed to start card verification."));
+        toast.error(localizeError(err, t("Failed to start card verification.")));
         onOpenChange(false);
       });
     return () => {
@@ -222,6 +225,7 @@ function CardSetupForm({
   onDone: () => void;
 }) {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const stripe = useStripe();
   const elements = useElements();
   const utils = trpc.useUtils();
@@ -257,7 +261,7 @@ function CardSetupForm({
         await utils.billing.status.invalidate();
         onDone();
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("Failed to confirm card."));
+        setError(localizeError(err, t("Failed to confirm card.")));
       }
     });
   };

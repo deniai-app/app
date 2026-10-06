@@ -62,7 +62,7 @@ export function ChangePassword({ className }: ChangePasswordProps) {
 }
 
 function SetPassword({ className }: { className?: string }) {
-  const { authClient, localization, plugins } = useAuth();
+  const { authClient, baseURL, basePaths, localization, plugins, viewPaths } = useAuth();
   const { data: session } = useSession(authClient);
   const { fetchOptions, resetFetchOptions } = useFetchOptions();
 
@@ -78,7 +78,13 @@ function SetPassword({ className }: { className?: string }) {
   const handleSetPassword = () => {
     if (!session) return;
 
-    requestPasswordReset({ email: session.user.email, fetchOptions });
+    // Without redirectTo the emailed link has no page to land on, so signed-in
+    // users end up on the chat screen instead of the reset form.
+    requestPasswordReset({
+      email: session.user.email,
+      redirectTo: `${baseURL}${basePaths.auth}/${viewPaths.auth.resetPassword}`,
+      fetchOptions,
+    });
   };
 
   return (

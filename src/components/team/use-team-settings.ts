@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useExtracted } from "next-intl";
 import { startTransition, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { authClient } from "@/lib/auth-client";
 import type { TeamPlanId } from "@/lib/billing";
 import { useReloadCooldown } from "@/hooks/use-reload-cooldown";
@@ -22,6 +23,7 @@ import { createTeamSlug, escapeCsvCell, parseTokenLimit } from "./team-utils";
 
 export function useTeamSettings() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const { push } = useRouter();
   const session = authClient.useSession();
   const searchParams = useSearchParams();
@@ -159,7 +161,7 @@ export function useTeamSettings() {
           slug: createTeamSlug(newOrgName),
         });
         if (result.error) {
-          toast.error(result.error.message || t("Failed to create organization"));
+          toast.error(localizeError(result.error, t("Failed to create organization")));
           return;
         }
         if (result.data) {
@@ -221,7 +223,7 @@ export function useTeamSettings() {
           organizationId: activeOrg.id,
         });
         if (result.error) {
-          toast.error(result.error.message || t("Failed to remove member"));
+          toast.error(localizeError(result.error, t("Failed to remove member")));
           return;
         }
         toast.success(t("Member removed"));
@@ -248,7 +250,7 @@ export function useTeamSettings() {
             organizationId: activeOrg.id,
           });
           if (result.error) {
-            toast.error(result.error.message || t("Failed to update role"));
+            toast.error(localizeError(result.error, t("Failed to update role")));
             return;
           }
           toast.success(t("Role updated"));
@@ -273,7 +275,7 @@ export function useTeamSettings() {
           data: { name: trimmedName },
         });
         if (result.error) {
-          toast.error(result.error.message || t("Failed to update team name"));
+          toast.error(localizeError(result.error, t("Failed to update team name")));
           return;
         }
         queryClient.setQueryData<Organization[]>(
@@ -307,8 +309,10 @@ export function useTeamSettings() {
         });
         if (result.error) {
           toast.error(
-            result.error.message ||
-              (logo ? t("Failed to update team icon") : t("Failed to remove team icon")),
+            localizeError(
+              result.error,
+              logo ? t("Failed to update team icon") : t("Failed to remove team icon"),
+            ),
           );
           return;
         }
@@ -375,7 +379,7 @@ export function useTeamSettings() {
         try {
           const result = await authClient.organization.acceptInvitation({ invitationId });
           if (result.error) {
-            toast.error(result.error.message || t("Failed to accept invitation"));
+            toast.error(localizeError(result.error, t("Failed to accept invitation")));
             return;
           }
           toast.success(t("Invitation accepted"));
@@ -399,7 +403,7 @@ export function useTeamSettings() {
         try {
           const result = await authClient.organization.rejectInvitation({ invitationId });
           if (result.error) {
-            toast.error(result.error.message || t("Failed to decline invitation"));
+            toast.error(localizeError(result.error, t("Failed to decline invitation")));
             return;
           }
           toast.success(t("Invitation declined"));
@@ -421,7 +425,7 @@ export function useTeamSettings() {
       try {
         const result = await authClient.organization.delete({ organizationId: deletedOrgId });
         if (result.error) {
-          toast.error(result.error.message || t("Failed to delete team"));
+          toast.error(localizeError(result.error, t("Failed to delete team")));
           return;
         }
         toast.success(t("Team deleted"));
@@ -457,7 +461,7 @@ export function useTeamSettings() {
       });
     } catch (error) {
       console.error("Failed to create checkout session", error);
-      toast.error(error instanceof Error ? error.message : t("Unable to load checkout."));
+      toast.error(localizeError(error, t("Unable to load checkout.")));
     }
   }
 
@@ -479,7 +483,7 @@ export function useTeamSettings() {
       ]);
     } catch (error) {
       console.error("Failed to change team plan", error);
-      toast.error(error instanceof Error ? error.message : t("Failed to change team plan."));
+      toast.error(localizeError(error, t("Failed to change team plan.")));
     }
   }
 
@@ -558,7 +562,7 @@ export function useTeamSettings() {
       ]);
     } catch (error) {
       console.error("Failed to update team Max Mode", error);
-      toast.error(error instanceof Error ? error.message : t("Failed to update Max Mode."));
+      toast.error(localizeError(error, t("Failed to update Max Mode.")));
     }
   }
 
@@ -582,7 +586,7 @@ export function useTeamSettings() {
       toast.success(t("Member Max Mode policy updated."));
     } catch (error) {
       console.error("Failed to update member Max Mode policy", error);
-      toast.error(error instanceof Error ? error.message : t("Failed to update Max Mode."));
+      toast.error(localizeError(error, t("Failed to update Max Mode.")));
     }
   }
 
@@ -601,7 +605,7 @@ export function useTeamSettings() {
       toast.success(t("Default Max Mode policy updated."));
     } catch (error) {
       console.error("Failed to update default Max Mode policy", error);
-      toast.error(error instanceof Error ? error.message : t("Failed to update Max Mode."));
+      toast.error(localizeError(error, t("Failed to update Max Mode.")));
     }
   }
 

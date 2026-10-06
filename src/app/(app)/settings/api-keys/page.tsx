@@ -2,6 +2,7 @@
 
 import { Check, Copy, Key, Plus, Trash2 } from "lucide-react";
 import { useExtracted, useLocale } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useState } from "react";
 import { toast } from "sonner";
 import { formatAppDate } from "@/lib/format-date";
@@ -35,6 +36,7 @@ import { trpc } from "@/lib/trpc/react";
 export default function ApiKeysSettingsPage() {
   const locale = useLocale();
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const utils = trpc.useUtils();
   const { data: session } = authClient.useSession();
   const isAnonymous = Boolean(session?.user?.isAnonymous);
@@ -47,7 +49,7 @@ export default function ApiKeysSettingsPage() {
       toast.success(t("API key created."));
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(localizeError(error));
     },
   });
   const revokeMutation = trpc.apiKeys.revoke.useMutation({
@@ -57,7 +59,7 @@ export default function ApiKeysSettingsPage() {
       toast.success(t("API key revoked."));
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(localizeError(error));
     },
   });
 

@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { type SyntheticEvent, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -39,6 +40,7 @@ export type DeleteAccountProps = {
 export function DeleteAccount({ className }: DeleteAccountProps) {
   const { authClient, basePaths, localization, viewPaths, navigate } = useAuth();
   const t = useExtracted();
+  const localizeError = useLocalizeError();
 
   const { localization: deleteUserLocalization, sendDeleteAccountVerification } =
     useAuthPlugin(deleteUserPlugin);
@@ -83,7 +85,7 @@ export function DeleteAccount({ className }: DeleteAccountProps) {
 
     deleteUser(params, {
       onError: (error) => {
-        toast.error(error.message);
+        toast.error(localizeError(error));
         void deletionStatus.refetch();
       },
       onSuccess: () => {

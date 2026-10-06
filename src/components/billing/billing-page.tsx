@@ -1,6 +1,7 @@
 "use client";
 
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { usePlatformCapabilities } from "@/components/platform-capabilities-provider";
 import { SettingsPageShell } from "../settings-page-shell";
 import { CardVerificationCard } from "./card-verification-card";
@@ -37,6 +38,7 @@ function BillingDisabled() {
 
 function BillingPageContent() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const {
     activePlanId,
     basicUsage,
@@ -125,7 +127,7 @@ function BillingPageContent() {
       <BillingUsageSection
         usageTierLabel={usageTierLabel}
         isLoading={usageQuery.isLoading}
-        errorMessage={usageQuery.error?.message}
+        errorMessage={usageQuery.error ? localizeError(usageQuery.error) : undefined}
         basicUsage={basicUsage}
         premiumUsage={premiumUsage}
         maxModeEnabled={maxModeQuery.data?.enabled}

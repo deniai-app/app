@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, FileJson, Upload } from "lucide-react";
 import { useExtracted } from "next-intl";
+import { useLocalizeError } from "@/hooks/use-localize-error";
 import { type ChangeEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ type ImportResult = {
 
 export default function ImportSettingsPage() {
   const t = useExtracted();
+  const localizeError = useLocalizeError();
   const utils = trpc.useUtils();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isReading, setIsReading] = useState(false);
@@ -42,7 +44,7 @@ export default function ImportSettingsPage() {
     },
     onError: (error) => {
       setLastResult(null);
-      toast.error(error.message || t("Import failed."));
+      toast.error(localizeError(error, t("Import failed.")));
     },
   });
 

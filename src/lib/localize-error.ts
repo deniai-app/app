@@ -23,6 +23,11 @@ type ErrorInfo = {
 const NETWORK_ERROR =
   /^(failed to fetch|load failed|networkerror|network request failed|fetch failed)/i;
 
+/** Own-property lookup, so keys like `constructor` never resolve to `Object.prototype` members. */
+function lookup(table: Record<string, string>, key: string): string | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
 /** Maps `text` to each of `keys`: lets several codes share one translation. */
 export function mapKeys(text: string, ...keys: string[]): Record<string, string> {
   return Object.fromEntries(keys.map((key) => [key, text]));
@@ -54,8 +59,9 @@ function readErrorInfo(error: unknown): ErrorInfo {
     return { trpc: false, zod: false };
   }
 
-  // better-auth results wrap the failure as `{ data: null, error: { code, message } }`.
-  if (isRecord(error.error) && !(error instanceof Error)) {
+  // better-auth results wrap the failure as `{ data: null, error: { code, message } }`,
+  // and its client throws a BetterFetchError (an Error) carrying the same `.error`.
+  if (isRecord(error.error)) {
     return readErrorInfo(error.error);
   }
 
@@ -87,7 +93,7 @@ export function resolveErrorMessage(
 
   if (message) {
     const trimmed = message.trim();
-    const byMessage = dictionary.byMessage[trimmed];
+    const byMessage = lookup(dictionary.byMessage, trimmed);
     if (byMessage) return byMessage;
 
     for (const { pattern, format } of dictionary.patterns) {
@@ -99,11 +105,11 @@ export function resolveErrorMessage(
   if (trpc) {
     // tRPC fills `message` with the code when the server gave none.
     if (code && (!message || message === code)) {
-      const byTrpcCode = dictionary.byTrpcCode[code];
+      const byTrpcCode = lookup(dictionary.byTrpcCode, code);
       if (byTrpcCode) return byTrpcCode;
     }
   } else if (code) {
-    const byCode = dictionary.byCode[code];
+    const byCode = lookup(dictionary.byCode, code);
     if (byCode) return byCode;
   }
 

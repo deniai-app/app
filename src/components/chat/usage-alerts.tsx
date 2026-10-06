@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 interface UsageAlertsProps {
   status: {
     isAnonymous: boolean;
+    /** The Free allowance is reduced until a payment method is verified. */
+    isSignupLimited: boolean;
     isUsageLow: boolean;
     isUsageBlocked: boolean;
     canEnableMaxMode: boolean;
@@ -28,6 +30,7 @@ interface UsageAlertsProps {
 
 export function UsageAlerts({ status, usage, enableMaxMode, onRefreshUsage }: UsageAlertsProps) {
   const t = useExtracted();
+  const showVerifyCard = status.isSignupLimited && !status.isAnonymous && !status.billingDisabled;
 
   return (
     <>
@@ -83,7 +86,20 @@ export function UsageAlerts({ status, usage, enableMaxMode, onRefreshUsage }: Us
                         },
                       )}
             </p>
+            {showVerifyCard && (
+              <p>
+                {t(
+                  "Your free allowance is currently limited. Verify a payment method to lift the limit. It is not charged.",
+                )}
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
+              {showVerifyCard && (
+                <Button size="sm" render={<Link href="/settings/billing" />} nativeButton={false}>
+                  {t("Verify a card")}
+                  <ArrowUpRight className="size-3.5" />
+                </Button>
+              )}
               {status.canEnableMaxMode && (
                 <Button
                   size="sm"

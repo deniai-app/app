@@ -13,5 +13,6 @@ export * from "./provider-keys";
 export * from "./provider-settings";
 export * from "./security-activity";
 export * from "./share";
+export * from "./signup-risk";
 export * from "./team-usage-policy";
 export * from "./usage";

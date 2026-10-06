@@ -1,5 +1,6 @@
 "use client";
 
+import { useExtracted } from "next-intl";
 import type { ComponentProps } from "react";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -17,16 +18,19 @@ export type SourcesTriggerProps = ComponentProps<typeof CollapsibleTrigger> & {
   count: number;
 };
 
-export const SourcesTrigger = ({ className, count, children, ...props }: SourcesTriggerProps) => (
-  <CollapsibleTrigger className={cn("flex items-center gap-2", className)} {...props}>
-    {children ?? (
-      <>
-        <p className="font-medium">Used {count} sources</p>
-        <ChevronDownIcon className="size-4" />
-      </>
-    )}
-  </CollapsibleTrigger>
-);
+export const SourcesTrigger = ({ className, count, children, ...props }: SourcesTriggerProps) => {
+  const t = useExtracted();
+  return (
+    <CollapsibleTrigger className={cn("flex items-center gap-2", className)} {...props}>
+      {children ?? (
+        <>
+          <p className="font-medium">{t("Used {count} sources", { count: String(count) })}</p>
+          <ChevronDownIcon className="size-4" />
+        </>
+      )}
+    </CollapsibleTrigger>
+  );
+};
 
 export type SourcesContentProps = ComponentProps<typeof CollapsibleContent>;
 

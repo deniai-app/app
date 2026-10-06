@@ -1,4 +1,4 @@
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, isNotNull, lt } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -8,7 +8,8 @@ import { MAX_API_KEYS, withApiKeyLock, type ApiKeyTransaction } from "@/lib/api-
 import { generateApiKey, getKeyPrefix, hashApiKey } from "@/lib/api-key-utils";
 import { auth } from "@/lib/auth";
 import { resolveClientIp } from "@/lib/client-ip";
-import { decryptFromB64 } from "@/lib/crypto";
+import { decryptFromB64, encryptToB64 } from "@/lib/crypto";
+import { isWithinRedeliveryWindow, keyRedeliveryCutoff } from "@/lib/device-auth-key";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { env } from "@/env";
 
@@ -100,7 +101,18 @@ async function handleInitiate(req: Request) {
     );
   }
 
-  await db.delete(deviceAuthCode).where(lt(deviceAuthCode.expiresAt, new Date()));
+  const now = new Date();
+  await db.delete(deviceAuthCode).where(lt(deviceAuthCode.expiresAt, now));
+  // Encrypted keys are only kept for the short redelivery window, even if the code is still valid.
+  await db
+    .update(deviceAuthCode)
+    .set({ issuedApiKeyEnc: null })
+    .where(
+      and(
+        isNotNull(deviceAuthCode.issuedApiKeyEnc),
+        lt(deviceAuthCode.issuedAt, keyRedeliveryCutoff(now)),
+      ),
+    );
   const userCode = generateUserCode();
   const deviceCode = generateDeviceCode();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
@@ -226,12 +238,33 @@ async function handlePoll(body: unknown) {
       return NextResponse.json({ error: "Code expired" }, { status: 410 });
     }
     if (row.issuedApiKeyEnc) {
-      const raw = await decryptFromB64(row.issuedApiKeyEnc);
+      const encryptedKey = row.issuedApiKeyEnc;
+      // One redelivery for a lost response: the copy is wiped whatever happens next.
       await transaction
         .update(deviceAuthCode)
         .set({ issuedApiKeyEnc: null })
         .where(eq(deviceAuthCode.id, row.id));
-      return NextResponse.json({ approved: true, apiKey: raw });
+      const [stillIssued] = row.issuedApiKeyId
+        ? await transaction
+            .select({ id: apiKey.id })
+            .from(apiKey)
+            .where(and(eq(apiKey.id, row.issuedApiKeyId), eq(apiKey.userId, userId)))
+            .limit(1)
+        : [];
+      // A key the user already revoked, or one past the window, is never handed out again.
+      if (!stillIssued || !isWithinRedeliveryWindow(row.issuedAt, new Date())) {
+        return NextResponse.json({ approved: true, apiKeyUnavailable: true });
+      }
+      try {
+        return NextResponse.json({
+          approved: true,
+          apiKey: await decryptFromB64(encryptedKey),
+          apiKeyId: row.issuedApiKeyId,
+        });
+      } catch (error) {
+        console.error("[device-auth] could not decrypt the issued key", error);
+        return NextResponse.json({ approved: true, apiKeyUnavailable: true });
+      }
     }
     if (row.issuedApiKeyId) {
       return NextResponse.json({ approved: true, apiKeyUnavailable: true });
@@ -253,7 +286,12 @@ async function handlePoll(body: unknown) {
       .returning({ id: apiKey.id });
     await transaction
       .update(deviceAuthCode)
-      .set({ issuedApiKeyId: inserted.id, issuedAt: new Date() })
+      .set({
+        issuedApiKeyId: inserted.id,
+        issuedAt: new Date(),
+        // Recoverable for a few minutes in case this response never reaches the extension.
+        issuedApiKeyEnc: await encryptToB64(raw),
+      })
       .where(eq(deviceAuthCode.id, row.id));
     return NextResponse.json({ approved: true, apiKey: raw, apiKeyId: inserted.id });
   });

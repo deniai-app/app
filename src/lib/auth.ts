@@ -32,6 +32,7 @@ import { PasswordResetEmail, passwordResetEmailSubject } from "@/emails/password
 import { VerificationEmail, verificationEmailSubject } from "@/emails/verification-email";
 import { env } from "@/env";
 import { resolveClientIp } from "@/lib/client-ip";
+import { checkSignupLimits, recordSignupRisk } from "@/lib/signup-risk";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { readEmailChangeToken } from "@/lib/email-change-token";
 import { deletePersonalStripeCustomers } from "@/lib/account-deletion-billing";
@@ -100,6 +101,24 @@ const captchaPlugin =
     : null;
 
 type OrgUpdateAuditMarker = { name: boolean; logo: boolean };
+
+const SIGNUP_RATE_LIMITED_MESSAGE =
+  "Too many accounts were created from this network. Please try again later.";
+
+type SignupContext = { request?: Request; headers?: Headers } | null | undefined;
+
+function signupHeaders(ctx: SignupContext) {
+  return ctx?.request?.headers ?? ctx?.headers;
+}
+
+function resolveSignupIp(ctx: SignupContext) {
+  const headers = signupHeaders(ctx);
+  return headers ? resolveClientIp(headers) : undefined;
+}
+
+function resolveSignupUserAgent(ctx: SignupContext) {
+  return signupHeaders(ctx)?.get("user-agent");
+}
 
 function assertAllowedSignupEmail(email: string) {
   const result = checkSignupEmail(email);
@@ -175,6 +194,8 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
+    // Includes advisory letters+digits addresses; the email policy permits them
+    // through this verification and the signup CAPTCHA above.
     requireEmailVerification: emailEnabled,
     sendResetPassword: emailEnabled
       ? async ({ user, url }) => {
@@ -466,6 +487,19 @@ export const auth = betterAuth({
           if (user.isAnonymous) return;
           if (!user.email) return;
 
+          // Every non-guest sign-up passes here (email, magic link, OAuth), so a batch
+          // from one network is stopped at a single point.
+          const limit = await checkSignupLimits({
+            email: user.email,
+            ip: resolveSignupIp(ctx),
+          });
+          if (!limit.allowed) {
+            throw new APIError("TOO_MANY_REQUESTS", {
+              message: SIGNUP_RATE_LIMITED_MESSAGE,
+              code: "SIGNUP_RATE_LIMITED",
+            });
+          }
+
           const path = typeof ctx?.path === "string" ? ctx.path : undefined;
           // OAuth (Google / GitHub) may use corporate domains — allow those.
           if (path?.startsWith("/callback/")) return;
@@ -473,6 +507,20 @@ export const auth = betterAuth({
           // Email/password, magic-link (new user), and other non-OAuth creates:
           // major providers + educational domains only (see email-domain-policy).
           assertAllowedSignupEmail(user.email);
+        },
+        after: async (user, ctx) => {
+          if (user.isAnonymous || !user.email) return;
+          try {
+            await recordSignupRisk({
+              userId: user.id,
+              email: user.email,
+              ip: resolveSignupIp(ctx),
+              userAgent: resolveSignupUserAgent(ctx),
+            });
+          } catch (error) {
+            // The account is already created; a failed assessment must not undo the sign-up.
+            console.error("Failed to record sign-up risk", error);
+          }
         },
       },
       update: {

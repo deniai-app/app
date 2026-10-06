@@ -74,7 +74,6 @@ export interface ChatInterfaceMessagesProps {
   isAnonymous: boolean;
   usageTier: string | null;
   error: Error | undefined;
-  attachmentError: string | null;
   initialProjectId?: string | null;
   requestBody: RequestBody;
   onRegenerate: (options?: { body?: RequestBody; messageId?: string }) => void;
@@ -167,7 +166,6 @@ export const ChatInterfaceMessages = memo(function ChatInterfaceMessages({
   isAnonymous,
   usageTier,
   error,
-  attachmentError,
   initialProjectId,
   requestBody,
   onRegenerate,
@@ -356,19 +354,6 @@ export const ChatInterfaceMessages = memo(function ChatInterfaceMessages({
             </CardHeader>
             <CardContent>
               <div className="text-sm break-words">{localizeChatError(error)}</div>
-            </CardContent>
-          </Card>
-        )}
-
-        {attachmentError && (
-          <Card className="!gap-0 bg-destructive/10">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span>{t("Error")}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm break-words">{attachmentError}</div>
             </CardContent>
           </Card>
         )}

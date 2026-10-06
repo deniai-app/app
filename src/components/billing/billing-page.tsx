@@ -136,6 +136,7 @@ function BillingPageContent() {
       <CardVerificationCard
         isFreeTier={usageTier === "free"}
         hasVerifiedPaymentMethod={usageQuery.data?.hasVerifiedPaymentMethod ?? false}
+        signupLimited={usageQuery.data?.signupLimited ?? false}
       />
 
       <BillingResetCard />

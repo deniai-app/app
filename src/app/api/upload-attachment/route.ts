@@ -29,6 +29,34 @@ function detectAttachmentType(bytes: Uint8Array) {
   return null;
 }
 
+/**
+ * Read the request body, stopping at the size cap. Content-Length can be absent
+ * (chunked uploads) or wrong, so it cannot be the only guard before the body is buffered.
+ */
+async function readBodyWithinLimit(request: Request): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!request.body) return new Uint8Array();
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > MAX_REQUEST_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return body;
+}
+
 export async function POST(request: Request) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.session) {
@@ -53,7 +81,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Attachment is too large." }, { status: 413 });
   }
 
-  const formData = await request.formData();
+  const body = await readBodyWithinLimit(request);
+  if (!body) {
+    return NextResponse.json({ error: "Attachment is too large." }, { status: 413 });
+  }
+
+  let formData: FormData;
+  try {
+    formData = await new Response(body, {
+      headers: { "content-type": request.headers.get("content-type") ?? "" },
+    }).formData();
+  } catch {
+    return NextResponse.json({ error: "File is required." }, { status: 400 });
+  }
   const submittedFile = formData.get("file");
 
   if (!(submittedFile instanceof File)) {

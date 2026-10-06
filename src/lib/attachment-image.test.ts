@@ -44,3 +44,10 @@ test("re-encodes a decodable GIF as PNG", async () => {
   expect(converted.name).toBe("anim.png");
   expect(close).toHaveBeenCalled();
 });
+
+test("passes JPEG type aliases through without re-encoding", async () => {
+  for (const type of ["image/jpg", "image/pjpeg"]) {
+    const photo = new File([new Uint8Array(4)], "photo.jpg", { type });
+    expect(await prepareAttachmentForUpload(photo)).toBe(photo);
+  }
+});

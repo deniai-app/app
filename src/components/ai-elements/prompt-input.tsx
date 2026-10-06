@@ -46,8 +46,8 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { prepareAttachmentForUpload } from "@/lib/attachment-image";
 import { cn } from "@/lib/utils";
+import { type UploadedAttachment, uploadAttachmentFile } from "@/lib/upload-attachment-client";
 import { CornerDownLeftIcon, ImageIcon, PlusIcon, SquareIcon, XIcon } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useExtracted } from "next-intl";
@@ -74,40 +74,11 @@ export type PromptInputFile = FileUIPart & {
   uploadStatus?: "idle" | "uploading" | "uploaded" | "error";
 };
 
-type UploadedAttachment = {
-  /** The file that was uploaded; differs from the input when it was converted. */
-  file: File;
-  url: string;
-  /** The type the server stored the file under (it may normalize the claimed one). */
-  mediaType?: string;
-};
-
-async function uploadAttachmentFile(original: File): Promise<UploadedAttachment> {
-  const file = await prepareAttachmentForUpload(original);
-  const formData = new FormData();
-  formData.set("file", file);
-
-  const response = await fetch("/api/upload-attachment", {
-    method: "POST",
-    body: formData,
-  });
-
-  const payload = (await response.json().catch(() => ({}))) as {
-    error?: string;
-    mediaType?: string;
-    url?: string;
-  };
-  if (!response.ok || !payload.url) {
-    throw new Error(payload.error || "Attachment upload failed.");
-  }
-
-  return { file, url: payload.url, mediaType: payload.mediaType };
-}
-
 /**
  * Fields to merge into an attachment once it is uploaded. When the upload was
- * converted (e.g. HEIC to JPEG) the media type, name and preview follow the
- * converted file, so the model is not told the old type for the new bytes.
+ * converted (e.g. HEIC to JPEG) the media type and name follow the converted
+ * file, so the model is not told the old type for the new bytes. The preview
+ * keeps showing the original, which the browser could already decode.
  */
 function uploadedAttachmentPatch(
   item: PromptInputFile,
@@ -123,15 +94,12 @@ function uploadedAttachmentPatch(
   if (file === item.file) {
     return patch;
   }
-  if (item.previewUrl) {
-    URL.revokeObjectURL(item.previewUrl);
-  }
   return {
     ...patch,
     file,
     filename: file.name,
     mediaType: file.type,
-    previewUrl: URL.createObjectURL(file),
+    ...(mediaType ? { mediaType } : {}),
   };
 }
 
@@ -527,42 +495,46 @@ export const PromptInput = ({
         return;
       }
 
-      setItems((prev) => {
-        const capacity =
-          typeof maxFiles === "number" ? Math.max(0, maxFiles - prev.length) : undefined;
-        const capped = typeof capacity === "number" ? sized.slice(0, capacity) : sized;
-        if (typeof capacity === "number" && sized.length > capacity) {
-          onError?.({
-            code: "max_files",
-            message: "Too many files. Some were not added.",
+      // Decided outside the state updater: updaters must stay pure, and each
+      // file here starts an upload and owns a blob URL.
+      const capacity =
+        typeof maxFiles === "number" ? Math.max(0, maxFiles - filesRef.current.length) : undefined;
+      const capped = typeof capacity === "number" ? sized.slice(0, capacity) : sized;
+      if (typeof capacity === "number" && sized.length > capacity) {
+        onError?.({
+          code: "max_files",
+          message: "Too many files. Some were not added.",
+        });
+      }
+      if (capped.length === 0) {
+        return;
+      }
+
+      const next = capped.map(createPromptInputFile);
+      setItems((prev) => [...prev, ...next]);
+      for (const item of next) {
+        void uploadAttachmentFile(item.file as File)
+          .then((uploaded) => {
+            const patch = uploadedAttachmentPatch(item, uploaded);
+            setItems((current) =>
+              current.map((file) => (file.id === item.id ? { ...file, ...patch } : file)),
+            );
+          })
+          .catch((error) => {
+            setItems((current) =>
+              current.map((file) =>
+                file.id === item.id
+                  ? {
+                      ...file,
+                      uploadError:
+                        error instanceof Error ? error.message : "Attachment upload failed.",
+                      uploadStatus: "error",
+                    }
+                  : file,
+              ),
+            );
           });
-        }
-        const next = capped.map(createPromptInputFile);
-        for (const item of next) {
-          void uploadAttachmentFile(item.file as File)
-            .then((uploaded) => {
-              const patch = uploadedAttachmentPatch(item, uploaded);
-              setItems((current) =>
-                current.map((file) => (file.id === item.id ? { ...file, ...patch } : file)),
-              );
-            })
-            .catch((error) => {
-              setItems((current) =>
-                current.map((file) =>
-                  file.id === item.id
-                    ? {
-                        ...file,
-                        uploadError:
-                          error instanceof Error ? error.message : "Attachment upload failed.",
-                        uploadStatus: "error",
-                      }
-                    : file,
-                ),
-              );
-            });
-        }
-        return [...prev, ...next];
-      });
+      }
     },
     [matchesAccept, maxFiles, maxFileSize, onError],
   );

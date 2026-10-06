@@ -29,9 +29,15 @@ import { Spinner } from "../ui/spinner";
 type Props = {
   isFreeTier: boolean;
   hasVerifiedPaymentMethod: boolean;
+  /** The Free allowance is reduced until a payment method is verified. */
+  signupLimited?: boolean;
 };
 
-export function CardVerificationCard({ isFreeTier, hasVerifiedPaymentMethod }: Props) {
+export function CardVerificationCard({
+  isFreeTier,
+  hasVerifiedPaymentMethod,
+  signupLimited = false,
+}: Props) {
   const t = useExtracted();
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -68,6 +74,11 @@ export function CardVerificationCard({ isFreeTier, hasVerifiedPaymentMethod }: P
                   {t(
                     "Add a card to unlock more models and lift your monthly limits to 25M basic / 10M premium tokens.\n We place a $1 hold that is released immediately — no actual charge.",
                   )}
+                </span>
+              )}
+              {signupLimited && !hasVerifiedPaymentMethod && (
+                <span className="mt-2 block font-medium text-foreground">
+                  {t("Your free allowance is currently limited. Adding a card lifts the limit.")}
                 </span>
               )}
             </CardDescription>

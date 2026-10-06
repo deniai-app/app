@@ -5,7 +5,6 @@ import { sendGAEvent } from "@next/third-parties/google";
 import type { FileUIPart, UIMessage } from "ai";
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai";
 import dynamic from "next/dynamic";
-import { useExtracted } from "next-intl";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { ArtifactPreviewProvider } from "@/components/chat/artifact-preview-context";
 import { ChatComposer, type ComposerMessage } from "@/components/chat/chat-composer";
@@ -16,7 +15,6 @@ import { useAvailableModels } from "@/hooks/use-available-models";
 import { useChatPageSync } from "@/hooks/use-chat-page-sync";
 import { useInitialMessage } from "@/hooks/use-initial-message";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
-import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useChatBranches } from "@/hooks/use-chat-branches";
 import { useMemorySaveNotice } from "@/hooks/use-memory-save-notice";
 import { useNewChat } from "@/hooks/use-new-chat";
@@ -49,70 +47,10 @@ interface ChatInterfaceProps {
   isActive?: boolean;
 }
 
-type UploadableFileUIPart = FileUIPart & { file?: File };
 type PendingMessageMetadata = {
   pending?: boolean;
   [key: string]: unknown;
 };
-
-async function uploadAttachment(file: UploadableFileUIPart): Promise<FileUIPart> {
-  if (!file.url || !file.file) {
-    return file;
-  }
-
-  if (
-    file.url.startsWith("https://") ||
-    file.url.startsWith("http://") ||
-    file.url.startsWith("data:")
-  ) {
-    return file;
-  }
-
-  const formData = new FormData();
-  formData.set("file", file.file);
-
-  const uploadResponse = await fetch("/api/upload-attachment", {
-    method: "POST",
-    body: formData,
-  });
-
-  const payload = (await uploadResponse.json().catch(() => ({}))) as {
-    error?: string;
-    mediaType?: string;
-    url?: string;
-  };
-  if (!uploadResponse.ok || !payload.url) {
-    throw new Error(payload.error || "Attachment upload failed.");
-  }
-
-  return {
-    ...file,
-    url: payload.url,
-    ...(payload.mediaType ? { mediaType: payload.mediaType } : {}),
-  };
-}
-
-async function normalizeAttachments(files?: UploadableFileUIPart[]) {
-  if (!files?.length) {
-    return undefined;
-  }
-
-  const normalized = await Promise.all(
-    files.map(async (file) => {
-      if (!file.url) {
-        return file;
-      }
-
-      if (file.url.startsWith("https://") || file.url.startsWith("http://")) {
-        return file;
-      }
-
-      return uploadAttachment(file);
-    }),
-  );
-
-  return normalized;
-}
 
 function getMessageRenderKeys(messages: UIMessage[]) {
   const occurrences = new Map<string, number>();
@@ -168,23 +106,16 @@ async function submitComposerMessage(params: {
   usageTier: string;
   sendMessage: ReturnType<typeof useChat>["sendMessage"];
   invalidateChats: () => void;
-  setAttachmentError: (error: string | null) => void;
   setInput: (value: string) => void;
-  localizeError: (error: unknown, fallback?: string) => string;
-  uploadFailedLabel: string;
 }) {
   if (params.isSubmitBlocked) {
     return;
   }
-  params.setAttachmentError(null);
 
-  let attachments: FileUIPart[] | undefined;
-  try {
-    attachments = await normalizeAttachments(params.message.files);
-  } catch (error) {
-    params.setAttachmentError(params.localizeError(error, params.uploadFailedLabel));
-    return;
-  }
+  // The composer uploads attachments as they are added, so they arrive here with stored URLs.
+  const attachments: FileUIPart[] | undefined = params.message.files?.length
+    ? params.message.files
+    : undefined;
 
   if (params.message.text || attachments?.length) {
     if (GA_ID) {
@@ -231,7 +162,6 @@ export function ChatInterface({
   initialProjectDefaultModel = null,
   isActive = true,
 }: ChatInterfaceProps) {
-  const t = useExtracted();
   const session = authClient.useSession();
   const isAnonymous = Boolean(session.data?.user?.isAnonymous);
   const [input, setInput] = useState("");
@@ -241,8 +171,6 @@ export function ChatInterface({
   const [proModeOverride, setProMode] = useState<boolean | null>(null);
   const [fastModeOverride, setFastMode] = useState<boolean | null>(null);
   const [deepResearchOverride, setDeepResearch] = useState<boolean | null>(null);
-  const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const localizeError = useLocalizeError();
   const utils = trpc.useUtils();
   const { availableModels, platformCapabilities } = useAvailableModels();
   const { features } = platformCapabilities;
@@ -336,6 +264,7 @@ export function ChatInterface({
     usageQuery,
     selectedModel,
     usageTier,
+    isSignupLimited,
     isUsageLow,
     isUsageBlocked,
     canEnableMaxMode,
@@ -432,10 +361,7 @@ export function ChatInterface({
       invalidateChats: () => {
         void utils.chat.getChats.invalidate();
       },
-      setAttachmentError,
       setInput,
-      localizeError,
-      uploadFailedLabel: t("Failed to upload attachment."),
     });
 
   // Adjust invalid model during render (avoids setState-in-effect cascade).
@@ -523,7 +449,6 @@ export function ChatInterface({
           isAnonymous={isAnonymous}
           usageTier={usageQuery.data?.tier ?? null}
           error={error}
-          attachmentError={attachmentError}
           initialProjectId={initialProjectId}
           requestBody={requestBody}
           onRegenerate={handleRegenerate}
@@ -543,6 +468,7 @@ export function ChatInterface({
         <UsageAlerts
           status={{
             isAnonymous,
+            isSignupLimited,
             isUsageLow,
             isUsageBlocked,
             canEnableMaxMode,

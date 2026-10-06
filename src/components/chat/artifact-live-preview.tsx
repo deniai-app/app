@@ -59,6 +59,19 @@ function previewReducer(_state: PreviewState, action: PreviewAction): PreviewSta
   }
 }
 
+const BACKSLASH = String.fromCharCode(92);
+const SCRIPT_UNSAFE_CHARS = new RegExp(`[<${String.fromCharCode(0x2028, 0x2029)}]`, "g");
+
+/**
+ * JSON for an inline <script>. `<` is escaped so a `</script>` or `<!--` inside
+ * the artifact's code cannot end the script early or open an HTML comment.
+ */
+const toScriptJson = (value: unknown) =>
+  (JSON.stringify(value) ?? "null").replace(
+    SCRIPT_UNSAFE_CHARS,
+    (char) => `${BACKSLASH}u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+
 const findUnsupportedImports = (source: string) =>
   Array.from(source.matchAll(/^\s*import[\s\S]*?from\s*["']([^"']+)["'];?\s*$/gm)).flatMap(
     (match) => {
@@ -165,10 +178,10 @@ const createPreviewDocument = ({
       import * as ReactJsxRuntime from "https://esm.sh/react@19/jsx-runtime";
       import * as ReactJsxDevRuntime from "https://esm.sh/react@19/jsx-dev-runtime";
 
-      const previewId = ${JSON.stringify(previewId)};
-      const transpiledCode = ${JSON.stringify(transpiledCode)};
-      const unsupportedImportsMessage = ${JSON.stringify(unsupportedImportsMessage)};
-      const exportComponentError = ${JSON.stringify(exportComponentError)};
+      const previewId = ${toScriptJson(previewId)};
+      const transpiledCode = ${toScriptJson(transpiledCode)};
+      const unsupportedImportsMessage = ${toScriptJson(unsupportedImportsMessage)};
+      const exportComponentError = ${toScriptJson(exportComponentError)};
 
       const rootElement = document.getElementById("root");
 

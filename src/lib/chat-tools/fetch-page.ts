@@ -106,6 +106,8 @@ function statusErrorMessage(status: number) {
   }
 }
 
+const BLOCK_PAGE_MAX_CHARS = 1500;
+
 function looksLikeBlockedOrEmptyPage(title: string, content: string) {
   const normalizedTitle = title.toLowerCase();
   const normalizedContent = content.toLowerCase();
@@ -118,15 +120,19 @@ function looksLikeBlockedOrEmptyPage(title: string, content: string) {
     "checking your browser",
     "verify you are human",
     "request blocked",
-    "forbidden",
+    "403 forbidden",
   ];
 
   if (!content || content.length < 80) {
     return true;
   }
 
+  // Block pages are short; matching the body of a long page would reject real
+  // articles that merely mention "access denied" or "403 forbidden".
+  const scanBody = content.length < BLOCK_PAGE_MAX_CHARS;
   return blockedMarkers.some(
-    (marker) => normalizedTitle.includes(marker) || normalizedContent.includes(marker),
+    (marker) =>
+      normalizedTitle.includes(marker) || (scanBody && normalizedContent.includes(marker)),
   );
 }
 

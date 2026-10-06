@@ -70,3 +70,17 @@ test("rebuilds messages that carry a variable part", () => {
     "未承認（requires_action）",
   );
 });
+
+test("reads the wrapped error of an Error subclass such as BetterFetchError", () => {
+  const thrown = Object.assign(new Error(""), {
+    status: 401,
+    error: { code: "INVALID_EMAIL_OR_PASSWORD", message: "Invalid email or password" },
+  });
+  expect(resolve(thrown)).toBe(resolve({ error: thrown.error }));
+  expect(resolve(thrown)).not.toBe("");
+});
+
+test("never resolves prototype keys to non-string values", () => {
+  expect(resolve(new Error("constructor"))).toBe("constructor");
+  expect(resolve({ code: "toString", message: "" }, "fallback")).toBe("fallback");
+});

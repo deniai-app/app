@@ -763,9 +763,9 @@ export function getModelTokenMultiplier(modelId: string): number {
 }
 
 /**
- * OpenAI 1M-class models bill long-context sessions at a premium when the
- * prompt exceeds this input-token threshold. Matches product policy:
- * 2× usage for the full session once input > 200K tokens.
+ * OpenAI 1M-class models bill each request at a premium when its prompt
+ * exceeds this input-token threshold: 2× usage for that request once input
+ * > 200K tokens. Tool-step prompts are separate requests.
  */
 export const OPENAI_LONG_CONTEXT_INPUT_THRESHOLD = 200_000;
 export const OPENAI_LONG_CONTEXT_MULTIPLIER = 2;

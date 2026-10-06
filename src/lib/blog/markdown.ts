@@ -34,7 +34,8 @@ function renderInline(value: string) {
         return label;
       }
       const external = safeHref.startsWith("http");
-      return `<a href="${escapeHtml(safeHref)}" class="font-medium text-foreground underline-offset-4 hover:underline"${external ? ' target="_blank" rel="noreferrer"' : ""}>${label}</a>`;
+      // `href` comes from text that is already escaped; escaping again would corrupt `&` in query strings.
+      return `<a href="${safeHref}" class="font-medium text-foreground underline-offset-4 hover:underline"${external ? ' target="_blank" rel="noreferrer"' : ""}>${label}</a>`;
     });
 }
 

@@ -1,5 +1,16 @@
-/** Types `/api/upload-attachment` accepts as-is. */
-const UPLOADABLE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+/**
+ * Types `/api/upload-attachment` accepts as-is. The server sniffs the contents,
+ * so the non-standard JPEG aliases some browsers report pass through too
+ * instead of being re-encoded as a much larger PNG.
+ */
+const UPLOADABLE_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/pjpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+]);
 
 const HEIC_TYPES = new Set([
   "image/heic",

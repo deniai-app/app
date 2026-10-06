@@ -13,8 +13,11 @@ import { type ErrorDictionary, mapKeys, resolveErrorMessage } from "@/lib/locali
 export function useLocalizeError() {
   const t = useExtracted();
 
-  const dictionary = useMemo<ErrorDictionary>(
-    () => ({
+  // Built on the first error, not on mount: the table has hundreds of entries and
+  // this hook is mounted in many components, most of which never see an error.
+  const getDictionary = useMemo(() => {
+    let cached: ErrorDictionary | undefined;
+    const build = (): ErrorDictionary => ({
       byCode: {
         ...mapKeys(t("User not found"), "USER_NOT_FOUND"),
         ...mapKeys(t("Failed to create user"), "FAILED_TO_CREATE_USER"),
@@ -36,6 +39,10 @@ export function useLocalizeError() {
           "LINKED_ACCOUNT_ALREADY_EXISTS",
         ),
         ...mapKeys(t("Sign-in provider not found"), "PROVIDER_NOT_FOUND"),
+        ...mapKeys(
+          t("Too many accounts were created from this network. Please try again later."),
+          "SIGNUP_RATE_LIMITED",
+        ),
         ...mapKeys(t("Invalid token"), "INVALID_TOKEN"),
         ...mapKeys(t("Token expired"), "TOKEN_EXPIRED"),
         ...mapKeys(t("Failed to get user info"), "FAILED_TO_GET_USER_INFO"),
@@ -589,12 +596,12 @@ export function useLocalizeError() {
       },
       network: t("Couldn't reach the server. Check your connection and try again."),
       invalidInput: t("Some of the input is invalid. Please check it and try again."),
-    }),
-    [t],
-  );
+    });
+    return () => (cached ??= build());
+  }, [t]);
 
   return useCallback(
-    (error: unknown, fallback?: string) => resolveErrorMessage(error, dictionary, fallback),
-    [dictionary],
+    (error: unknown, fallback?: string) => resolveErrorMessage(error, getDictionary(), fallback),
+    [getDictionary],
   );
 }

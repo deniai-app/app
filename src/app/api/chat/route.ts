@@ -43,10 +43,7 @@ import { platformCapabilities } from "@/lib/platform-capabilities.server";
 import { buildProjectPrompt } from "@/lib/project-context";
 import { reportMaxModeUsageToStripe } from "@/lib/max-mode";
 import { canCompareModels, consumeUsage, refundUsage, UsageLimitError } from "@/lib/usage";
-import {
-  computeWeightedUsageFromLanguageModelUsage,
-  type TokenUsageBreakdown,
-} from "@/lib/token-weighting";
+import { calculateChatUsageAmount, resolveFinalChatUsageAmount } from "@/lib/chat-usage-amount";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   classifyUpstreamError,
@@ -131,20 +128,6 @@ function estimateTokenReservation({
   const baseUnits = Math.max(512, estimatedPromptTokens + 1_024);
 
   return Math.ceil(baseUnits * effectiveMultiplier);
-}
-
-function getUsageInputTokens(
-  usage: {
-    inputTokens?: number | null;
-  },
-  breakdown: TokenUsageBreakdown | null,
-): number {
-  if (breakdown) {
-    return breakdown.input + breakdown.cacheRead + breakdown.cacheWrite;
-  }
-  return typeof usage.inputTokens === "number" && Number.isFinite(usage.inputTokens)
-    ? Math.max(0, usage.inputTokens)
-    : 0;
 }
 
 export async function POST(req: Request) {
@@ -289,9 +272,11 @@ export async function POST(req: Request) {
   const deepResearchEnabled = searchToolEnabled && deepResearch;
   // Explicit Search (or a retry that requests search) still forces at least one lookup.
   const forceWebSearchEnabled = searchToolEnabled && (forceWebSearch || webSearch);
-  // Net Max Mode overage for this request, including search-tool charges.
-  // Reported to Stripe once after reconciliation; meter events cannot be reduced.
+  // Net Max Mode overage for this request. Reported to Stripe once after
+  // reconciliation; meter events cannot be reduced. Search-tool charges are
+  // always "basic" usage, whatever the chat model is, so they are kept apart.
   let pendingMaxModeAmount = 0;
+  let pendingSearchMaxModeAmount = 0;
   const tools = createChatTools({
     // Comparison panes have no interactive questionnaire UI.
     interactive: !parsedBody.data.comparison,
@@ -301,10 +286,10 @@ export async function POST(req: Request) {
       userId,
       isAnonymous,
       onCharged: ({ maxModeAmount }) => {
-        pendingMaxModeAmount += maxModeAmount;
+        pendingSearchMaxModeAmount += maxModeAmount;
       },
       onRefunded: ({ maxModeRefunded }) => {
-        pendingMaxModeAmount = Math.max(0, pendingMaxModeAmount - maxModeRefunded);
+        pendingSearchMaxModeAmount = Math.max(0, pendingSearchMaxModeAmount - maxModeRefunded);
       },
     },
   });
@@ -446,14 +431,18 @@ export async function POST(req: Request) {
     }
     maxModeReported = true;
 
-    if (pendingMaxModeAmount <= 0) {
-      return;
-    }
-
-    try {
-      await reportMaxModeUsageToStripe(userId, usageCategory, pendingMaxModeAmount);
-    } catch (error) {
-      console.error("Failed to report Max Mode usage", error);
+    for (const [category, amount] of [
+      [usageCategory, pendingMaxModeAmount],
+      ["basic", pendingSearchMaxModeAmount],
+    ] as const) {
+      if (amount <= 0) {
+        continue;
+      }
+      try {
+        await reportMaxModeUsageToStripe(userId, category, amount);
+      } catch (error) {
+        console.error("Failed to report Max Mode usage", error);
+      }
     }
   };
 
@@ -559,13 +548,16 @@ export async function POST(req: Request) {
     // Cross-instance stop check. Untraced: a 1s poll would otherwise add one
     // identical DB span per second and trip Sentry's N+1 query detector.
     generationWatch = setInterval(() => {
-      void suppressTracing(() => isChatGenerationActive(id, userId, generationId)).then(
-        (isActive) => {
+      void suppressTracing(() => isChatGenerationActive(id, userId, generationId))
+        .then((isActive) => {
           if (!isActive) {
             generationAbortController?.abort("stopped");
           }
-        },
-      );
+        })
+        // A failed poll must not stop the generation; the next tick checks again.
+        .catch((error) => {
+          console.warn("[chat] generation ownership poll failed", error);
+        });
     }, 1000);
   }
 
@@ -600,18 +592,13 @@ export async function POST(req: Request) {
       // onFinish is not called by the SDK after an abort. Keep the usage of
       // completed steps so stopped/replaced generations still get reconciled.
       onStepFinish: ({ usage }) => {
-        const { weighted, breakdown } = computeWeightedUsageFromLanguageModelUsage(usage);
-        const inputTokens = getUsageInputTokens(usage, breakdown);
-        finalUsageAmount += Math.ceil(
-          weighted * getEffectiveTokenMultiplier(baseModel, inputTokens, { proMode, fastMode }),
-        );
+        finalUsageAmount += calculateChatUsageAmount(baseModel, usage, { proMode, fastMode });
       },
       onFinish: ({ totalUsage }) => {
-        const { weighted, breakdown } = computeWeightedUsageFromLanguageModelUsage(totalUsage);
-        const inputTokens = getUsageInputTokens(totalUsage, breakdown);
-        finalUsageAmount = Math.ceil(
-          weighted * getEffectiveTokenMultiplier(baseModel, inputTokens, { proMode, fastMode }),
-        );
+        finalUsageAmount = resolveFinalChatUsageAmount(finalUsageAmount, baseModel, totalUsage, {
+          proMode,
+          fastMode,
+        });
       },
       providerOptions,
       system: requestSystem,
@@ -622,6 +609,10 @@ export async function POST(req: Request) {
     // Nothing streamed, so there is no reconciliation left to wait for.
     await flushMaxModeUsage();
     clearGenerationLock();
+    // The token reservation can exceed what is left even when the pre-check passed.
+    if (error instanceof UsageLimitError) {
+      return NextResponse.json({ error: error.message, reason: "usage_limit" }, { status: 402 });
+    }
     return NextResponse.json({ error: formatChatStreamError(error, baseModel) }, { status: 500 });
   }
 
@@ -714,7 +705,9 @@ export async function POST(req: Request) {
         for await (const message of readUIMessageStream<UIMessage>({
           stream: persistenceStream,
         })) {
-          if (!(await ownsCurrentGeneration())) {
+          // In-memory only: this runs for every chunk. The database ownership check
+          // happens in the 1s poll above and again before each persisted write.
+          if (!isCurrentChatGeneration(id, generationId)) {
             break;
           }
           queuePartialPersist(message);

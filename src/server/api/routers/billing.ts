@@ -31,6 +31,7 @@ import {
 import {
   findPaidLifetimePurchase,
   grantsSubscriptionAccess,
+  resolveSubscriptionStatus,
   isPaidLifetimeRecord,
   saveLifetimePlan,
 } from "@/lib/lifetime-plan";
@@ -238,6 +239,19 @@ async function findOrCreateStripeCustomer({
 }
 
 async function ensureBillingRecord(ctx: ProtectedContext, userId: string) {
+  const [initial] = await ctx.db
+    .select()
+    .from(billing)
+    .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
+    .limit(1);
+  if (initial && (initial.firstPaidAt || initial.flashOfferEndsAt)) return initial;
+
+  // Release pooled reads before Stripe I/O. The account idempotency key keeps
+  // concurrent creators on one customer; the transaction below rechecks the row.
+  const profile = initial ? null : await fetchUserProfile(ctx, userId);
+  const customer = profile
+    ? await findOrCreateStripeCustomer({ email: profile.email, name: profile.name, userId })
+    : null;
   return ctx.db.transaction(async (tx) => {
     // Serialize creation for this account across concurrent checkout and card requests.
     await tx.execute(
@@ -267,12 +281,7 @@ async function ensureBillingRecord(ctx: ProtectedContext, userId: string) {
       return record;
     }
 
-    const profile = await fetchUserProfile(ctx, userId);
-    const customer = await findOrCreateStripeCustomer({
-      email: profile.email,
-      name: profile.name,
-      userId,
-    });
+    if (!customer) throw new Error("Personal billing record disappeared during creation");
 
     const [created] = await tx
       .insert(billing)
@@ -354,20 +363,13 @@ async function syncSubscription(ctx: ProtectedContext, userId: string) {
     const price = getLicensedPrice(subscription) ?? subscription.items.data.at(0)?.price ?? null;
     // The billed price is authoritative; metadata is not updated by portal plan changes.
     const plan = getPlanFromPrice(price) ?? findPlanById(subscription.metadata?.planId ?? "");
-    const status = subscription.status;
-
     updates.stripeSubscriptionId = subscription.id;
     updates.priceId = price?.id;
     updates.planId = plan?.id ?? billingRecord.planId;
     updates.cancelAt = subscription.cancel_at;
     // An ended subscription keeps its last period end, so "canceled" would read
     // as a grace period. Match the webhook: ended subscriptions are inactive.
-    updates.status =
-      status === "canceled"
-        ? "inactive"
-        : subscription.cancel_at_period_end || subscription.cancel_at
-          ? "canceled"
-          : status;
+    updates.status = resolveSubscriptionStatus(subscription);
     updates.mode = deriveModeFromPrice(price);
     updates.currentPeriodEnd = getSubscriptionPeriodEndDate(subscription);
   }
@@ -796,7 +798,7 @@ export const billingRouter = router({
           markTrialUsed: subscription.status === "trialing",
         });
         updates.stripeSubscriptionId = subscription.id;
-        updates.status = subscription.status;
+        updates.status = resolveSubscriptionStatus(subscription);
         updates.currentPeriodEnd = getSubscriptionPeriodEndDate(subscription);
         updates.firstPaidAt = billingRecord.firstPaidAt ?? new Date();
         updates.flashOfferEndsAt = null;

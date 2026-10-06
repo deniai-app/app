@@ -31,7 +31,6 @@ import {
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
-import { is } from "zod/v4/locales";
 
 export type ComposerMessage = PromptInputMessage;
 

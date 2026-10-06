@@ -488,31 +488,35 @@ export async function claimAffiliateReferral({
       claimIpHash,
     });
 
-    const [insertedReward] = await db
-      .insert(affiliateReward)
-      .values({
-        referrerId: referrerProfile.userId,
-        referralId: createdReferral.id,
-        type: AFFILIATE_REWARD_TYPES.registrationReset,
-        quantity: 1,
-        milestone,
-        status: autoApprove ? "approved" : "pending",
-        riskScore: risk.score,
-        riskFlags: risk.flags,
-        ...(autoApprove ? { approvedBy: "system:auto", approvedAt: claimedAt } : {}),
-      })
-      .onConflictDoNothing()
-      .returning({ id: affiliateReward.id, quantity: affiliateReward.quantity });
-
-    if (insertedReward && autoApprove) {
-      await db
-        .update(affiliateProfile)
-        .set({
-          resetCredits: sql`${affiliateProfile.resetCredits} + ${insertedReward.quantity}`,
-          updatedAt: claimedAt,
+    // One transaction: if the credit update failed after the reward row was
+    // inserted, a retry would see the existing row and never grant the credit.
+    await db.transaction(async (tx) => {
+      const [insertedReward] = await tx
+        .insert(affiliateReward)
+        .values({
+          referrerId: referrerProfile.userId,
+          referralId: createdReferral.id,
+          type: AFFILIATE_REWARD_TYPES.registrationReset,
+          quantity: 1,
+          milestone,
+          status: autoApprove ? "approved" : "pending",
+          riskScore: risk.score,
+          riskFlags: risk.flags,
+          ...(autoApprove ? { approvedBy: "system:auto", approvedAt: claimedAt } : {}),
         })
-        .where(eq(affiliateProfile.userId, referrerProfile.userId));
-    }
+        .onConflictDoNothing()
+        .returning({ id: affiliateReward.id, quantity: affiliateReward.quantity });
+
+      if (insertedReward && autoApprove) {
+        await tx
+          .update(affiliateProfile)
+          .set({
+            resetCredits: sql`${affiliateProfile.resetCredits} + ${insertedReward.quantity}`,
+            updatedAt: claimedAt,
+          })
+          .where(eq(affiliateProfile.userId, referrerProfile.userId));
+      }
+    });
   }
 
   // A user can apply a code after paying, as long as both windows still allow it.
@@ -589,8 +593,7 @@ export async function processAffiliatePurchase({
   const rewardPreference = isAffiliateRewardPreference(profile.rewardPreference)
     ? profile.rewardPreference
     : AFFILIATE_REWARD_PREFERENCES.resetCredits;
-  // Neon HTTP does not support Drizzle transactions. The unique reward
-  // indexes make webhook retries idempotent while these writes run in order.
+  // The unique reward indexes make webhook retries idempotent.
   const [updatedReferral] = await db
     .update(affiliateReferral)
     .set({ purchasePlanId: planId, purchaseAt: purchasedAt, updatedAt: new Date() })
@@ -621,30 +624,35 @@ export async function processAffiliatePurchase({
     };
   }
 
-  const [resetReward] = await db
-    .insert(affiliateReward)
-    .values({
-      referrerId: referral.referrerId,
-      referralId: referral.id,
-      type: AFFILIATE_REWARD_TYPES.purchaseReset,
-      quantity: 3,
-      status: "approved",
-      planId,
-      approvedBy: "system",
-      approvedAt: new Date(),
-    })
-    .onConflictDoNothing()
-    .returning({ id: affiliateReward.id });
-
-  if (resetReward) {
-    await db
-      .update(affiliateProfile)
-      .set({
-        resetCredits: sql`${affiliateProfile.resetCredits} + 3`,
-        updatedAt: new Date(),
+  // The reward row and its credits are written together, so a webhook retry
+  // cannot find the row and skip credits that were never added.
+  const resetReward = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(affiliateReward)
+      .values({
+        referrerId: referral.referrerId,
+        referralId: referral.id,
+        type: AFFILIATE_REWARD_TYPES.purchaseReset,
+        quantity: 3,
+        status: "approved",
+        planId,
+        approvedBy: "system",
+        approvedAt: new Date(),
       })
-      .where(eq(affiliateProfile.id, profile.id));
-  }
+      .onConflictDoNothing()
+      .returning({ id: affiliateReward.id });
+
+    if (inserted) {
+      await tx
+        .update(affiliateProfile)
+        .set({
+          resetCredits: sql`${affiliateProfile.resetCredits} + 3`,
+          updatedAt: new Date(),
+        })
+        .where(eq(affiliateProfile.id, profile.id));
+    }
+    return inserted;
+  });
 
   return {
     resetGranted: Boolean(resetReward),

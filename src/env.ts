@@ -32,6 +32,12 @@ export const env = createEnv({
      */
     DENI_API_KEY: z.string().min(1).optional(),
     DENI_API_BASE_URL: z.url().optional(),
+    // Optional strings preserve parseFloat prefix parsing and fallback defaults
+    // in token-weighting.ts; invalid/negative/non-finite values use defaults.
+    FLIXA_USAGE_WEIGHT_INPUT: z.string().optional(),
+    FLIXA_USAGE_WEIGHT_CACHE_READ: z.string().optional(),
+    FLIXA_USAGE_WEIGHT_CACHE_WRITE: z.string().optional(),
+    FLIXA_USAGE_WEIGHT_OUTPUT: z.string().optional(),
     EXA_API_KEY: z.string().min(1).optional(),
     TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
     /**
@@ -99,6 +105,10 @@ export const env = createEnv({
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     DENI_API_KEY: process.env.DENI_API_KEY,
     DENI_API_BASE_URL: process.env.DENI_API_BASE_URL,
+    FLIXA_USAGE_WEIGHT_INPUT: process.env.FLIXA_USAGE_WEIGHT_INPUT,
+    FLIXA_USAGE_WEIGHT_CACHE_READ: process.env.FLIXA_USAGE_WEIGHT_CACHE_READ,
+    FLIXA_USAGE_WEIGHT_CACHE_WRITE: process.env.FLIXA_USAGE_WEIGHT_CACHE_WRITE,
+    FLIXA_USAGE_WEIGHT_OUTPUT: process.env.FLIXA_USAGE_WEIGHT_OUTPUT,
     EXA_API_KEY: process.env.EXA_API_KEY,
     TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,

@@ -321,7 +321,9 @@ export async function getBillingFingerprintUpdates({
   }
 
   return {
-    paymentMethodFingerprint: fingerprint,
+    // `undefined` leaves the stored value alone: a failed or empty Stripe lookup
+    // must not erase the fingerprint that card-reuse and trial checks rely on.
+    paymentMethodFingerprint: fingerprint ?? undefined,
     cardFunding: fingerprint ? funding : undefined,
     trialPaymentMethodFingerprint: markTrialUsed && fingerprint ? fingerprint : undefined,
     trialUsedAt: markTrialUsed && fingerprint ? new Date() : undefined,

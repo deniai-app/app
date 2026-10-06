@@ -203,7 +203,7 @@ export default function RootLayout({
                 url: "https://deniai.app",
                 potentialAction: {
                   "@type": "SearchAction",
-                  target: "https://deniai.app/chat?q={search_term_string}",
+                  target: "https://deniai.app/new/{search_term_string}",
                   "query-input": "required name=search_term_string",
                 },
               },

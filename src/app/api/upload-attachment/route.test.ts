@@ -105,3 +105,27 @@ test("rate-limits uploads per account", async () => {
   expect(response.status).toBe(429);
   expect(mocks.uploadFile).not.toHaveBeenCalled();
 });
+
+test("rejects an oversized body that arrives without a Content-Length", async () => {
+  const chunk = new Uint8Array(1024 * 1024);
+  let sent = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      sent += 1;
+      controller.enqueue(chunk);
+      if (sent >= 40) controller.close();
+    },
+  });
+  const response = await POST(
+    new Request("https://app.example/api/upload-attachment", {
+      method: "POST",
+      body,
+      headers: { "content-type": "multipart/form-data; boundary=x" },
+      // @ts-expect-error Node's fetch requires `duplex` for streaming bodies.
+      duplex: "half",
+    }),
+  );
+  expect(response.status).toBe(413);
+  expect(sent).toBeLessThan(20);
+  expect(mocks.uploadFile).not.toHaveBeenCalled();
+});

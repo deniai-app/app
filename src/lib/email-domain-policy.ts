@@ -11,7 +11,10 @@
  *  - Gmail / Googlemail must use Google OAuth (aliases share one inbox;
  *    password/magic-link sign-up cannot prove primary ownership).
  *  - **All domains** reject alias-like local parts (`+` tags, fragmented
- *    dots, random farm blobs) so bot farms cannot hop providers.
+ *    dots) so bot farms cannot hop providers.
+ *  - Letters followed by digits are advisory only: legitimate names often
+ *    include a birth year. They use the existing CAPTCHA / email-verification
+ *    signup flow when configured, rather than being rejected as aliases.
  *
  * OAuth (Google / GitHub) is not gated by this module — those identities
  * are already provider-verified. Apply only on email-based registration
@@ -204,13 +207,12 @@ export function isAllowedEmailProviderDomain(domain: string): boolean {
 }
 
 /**
- * Alias / bot-farm local-part heuristics for **any** email domain.
+ * Alias local-part checks for **any** email domain.
  *
  * Blocks:
  *  - plus addressing (`user+tag@…`, `scented2check+f7qspz@icloud.com`)
  *  - fragmented dots (`e.l.adu.v.a.r.61.5@…`, `a.b.c.d@…`)
  *  - consecutive dots / empty segments
- *  - random alnum farm blobs (`muxjcx87394v@…`)
  *
  * Allows normal names: `john.doe@…`, `jane_smith@…`, `j.doe@…`.
  */
@@ -234,13 +236,17 @@ export function isAliasLikeLocalPart(local: string): boolean {
   const singleCharSegments = segments.filter((segment) => segment.length === 1).length;
   if (singleCharSegments >= 3) return true;
 
-  // Random-looking local: letters + digit run, no separators
-  // e.g. muxjcx87394v, zayaalaina6874
-  if (/^[a-z]{4,14}\d{3,8}[a-z]{0,3}$/i.test(l) && !l.includes(".") && !l.includes("_")) {
-    return true;
-  }
-
   return false;
+}
+
+/**
+ * Advisory signal for verification, never grounds to reject registration.
+ * Also matches real users such as taro1990 and yamada2001. Email signups
+ * already require Turnstile and mailbox verification when configured in auth.ts;
+ * without those services this predicate remains available to future callers.
+ */
+export function isRandomLookingLocalPart(local: string): boolean {
+  return /^[a-z]{4,14}\d{3,8}[a-z]{0,3}$/i.test(local.trim());
 }
 
 export type SignupEmailDenyReason =
@@ -267,7 +273,7 @@ export function checkSignupEmail(email: string): SignupEmailPolicyResult {
   const local = extractEmailLocalPart(email);
   if (!local) return { ok: false, reason: "invalid" };
 
-  // Alias / farm local parts rejected on every domain (provider, edu, etc.).
+  // Unambiguous alias local parts rejected on every domain (provider, edu, etc.).
   if (isAliasLikeLocalPart(local)) {
     return { ok: false, reason: "alias_not_allowed" };
   }

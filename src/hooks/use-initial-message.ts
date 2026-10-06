@@ -73,7 +73,13 @@ function readStoredInitialMessage(): StoredInitialMessage | null {
   if (typeof window === "undefined") {
     return null;
   }
-  const raw = sessionStorage.getItem(INITIAL_MESSAGE_STORAGE_KEY);
+  let raw: string | null;
+  try {
+    raw = sessionStorage.getItem(INITIAL_MESSAGE_STORAGE_KEY);
+  } catch {
+    // Blocked storage (private mode, site data disabled) throws; this runs during render.
+    return null;
+  }
   if (raw === cachedStoredRaw) {
     return cachedStoredValue;
   }
@@ -94,7 +100,8 @@ function seedFromStored(
   const selectedModel = models.find((entry) => entry.value === effectiveModel);
   return {
     webSearch: Boolean(stored.webSearch),
-    model: stored.model,
+    // Only a stored model that is available; otherwise leave it to the project or app default.
+    model: effectiveModel === stored.model ? stored.model : undefined,
     reasoningEffort:
       resolveReasoningEffort(selectedModel?.efforts ?? false, stored.reasoningEffort) ?? "high",
     proMode: Boolean(stored.proMode && selectedModel?.supportsProMode),
@@ -185,7 +192,11 @@ export function useInitialMessage(params: {
         id,
         seed: seedFromStored(storedData, modelRef.current, availableModelValuesRef.current),
       });
-      sessionStorage.removeItem(INITIAL_MESSAGE_STORAGE_KEY);
+      try {
+        sessionStorage.removeItem(INITIAL_MESSAGE_STORAGE_KEY);
+      } catch {
+        // Nothing to clear when storage is unavailable.
+      }
       emitInitialMessageStore();
 
       const files = Array.isArray(storedData.files)

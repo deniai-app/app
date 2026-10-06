@@ -11,6 +11,7 @@ import { isAffiliatePaidStatus, processAffiliatePurchase } from "@/lib/affiliate
 import {
   findPaidLifetimePurchase,
   grantsSubscriptionAccess,
+  resolveSubscriptionStatus,
   isLifetimePlanId,
   isPaidLifetimeRecord,
   saveLifetimePlan,
@@ -430,13 +431,26 @@ export async function POST(req: Request) {
       }
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        const subscription = event.data.object;
+        const eventSubscription = event.data.object;
         if (
-          typeof subscription !== "object" ||
-          subscription === null ||
-          subscription.object !== "subscription"
+          typeof eventSubscription !== "object" ||
+          eventSubscription === null ||
+          eventSubscription.object !== "subscription"
         ) {
           break;
+        }
+
+        // Stripe does not guarantee delivery order, and retries re-send old snapshots. Acting
+        // on the event's own copy could undo a newer cancellation, so read the current state.
+        let subscription: Stripe.Subscription;
+        try {
+          subscription = await stripe.subscriptions.retrieve(eventSubscription.id);
+        } catch (error) {
+          // The subscription no longer exists in Stripe; there is nothing to apply.
+          if ((error as { code?: unknown } | null)?.code === "resource_missing") {
+            break;
+          }
+          throw error;
         }
 
         const customerId =
@@ -457,16 +471,7 @@ export async function POST(req: Request) {
         const lookupKey = price?.lookup_key ?? null;
         const userId = await resolveUserIdFromCustomer(customerId, subscription.metadata?.userId);
         const organizationId = resolveOrganizationId(subscription.metadata);
-        const isCanceled =
-          subscription.status === "canceled" ||
-          subscription.cancel_at_period_end === true ||
-          Boolean(subscription.cancel_at);
-        const computedStatus =
-          subscription.status === "canceled"
-            ? "inactive"
-            : isCanceled
-              ? "canceled"
-              : (subscription.status ?? null);
+        const computedStatus = resolveSubscriptionStatus(subscription);
 
         if (!userId) {
           console.warn("[stripe:webhook] missing userId for subscription", {
@@ -548,11 +553,7 @@ export async function POST(req: Request) {
             resolveOrganizationId(session.metadata) ?? resolveOrganizationId(subscription.metadata);
 
           if (userId) {
-            const isCanceled =
-              subscription.status === "canceled" ||
-              subscription.cancel_at_period_end === true ||
-              Boolean(subscription.cancel_at);
-            const computedStatus = isCanceled ? "canceled" : subscription.status;
+            const computedStatus = resolveSubscriptionStatus(subscription);
 
             const price =
               subscription.items.data.at(0)?.price ?? session.line_items?.data.at(0)?.price ?? null;

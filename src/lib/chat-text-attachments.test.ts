@@ -1,6 +1,11 @@
 import type { UIMessage } from "ai";
 import { afterEach, expect, test, vi } from "vitest";
-import { inlineTextAttachments } from "./chat-text-attachments";
+
+vi.mock("@/env", () => ({
+  env: { UPLOADTHING_TOKEN: Buffer.from(JSON.stringify({ appId: "app" })).toString("base64") },
+}));
+
+const { inlineTextAttachments } = await import("./chat-text-attachments");
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -19,7 +24,7 @@ function userMessage(parts: UIMessage["parts"]): UIMessage {
 }
 
 test("replaces text attachments with their contents and keeps other parts", async () => {
-  const image = { type: "file", mediaType: "image/png", url: "https://x.ufs.sh/f/a" } as const;
+  const image = { type: "file", mediaType: "image/png", url: "https://app.ufs.sh/f/a" } as const;
   const [message] = await inlineTextAttachments([
     userMessage([
       { type: "text", text: "Summarize" },
@@ -64,12 +69,74 @@ test("never fetches URLs outside the attachment store", async () => {
         filename: "b.txt",
         url: "https://evil.example/ufs.sh",
       },
+      {
+        type: "file",
+        mediaType: "text/plain",
+        filename: "c.txt",
+        url: "https://other-tenant.ufs.sh/f/key",
+      },
     ]),
   ]);
 
   expect(fetchMock).not.toHaveBeenCalled();
   expect(textAt(message, 0)).toContain('"a.txt" could not be read');
   expect(textAt(message, 1)).toContain('"b.txt" could not be read');
+  expect(textAt(message, 2)).toContain('"c.txt" could not be read');
+});
+
+test("stops reading a stored file that streams past the size cap", async () => {
+  const chunk = new Uint8Array(1024 * 1024).fill(97);
+  let sent = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      sent += 1;
+      controller.enqueue(chunk);
+      if (sent >= 100) controller.close();
+    },
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(body)),
+  );
+
+  const [message] = await inlineTextAttachments([
+    userMessage([
+      {
+        type: "file",
+        mediaType: "text/plain",
+        filename: "big.txt",
+        url: "https://app.ufs.sh/f/big",
+      },
+    ]),
+  ]);
+
+  expect(textAt(message, 0)).toContain('"big.txt" could not be read');
+  expect(sent).toBeLessThan(10);
+});
+
+test("keeps the newest attachments when the total is too long", async () => {
+  const half = "a".repeat(300_000);
+  const [older, newer] = await inlineTextAttachments([
+    userMessage([
+      {
+        type: "file",
+        mediaType: "text/plain",
+        filename: "old.txt",
+        url: dataUrl(half, "text/plain"),
+      },
+    ]),
+    userMessage([
+      {
+        type: "file",
+        mediaType: "text/plain",
+        filename: "new.txt",
+        url: dataUrl(half, "text/plain"),
+      },
+    ]),
+  ]);
+
+  expect(textAt(newer, 0)).not.toContain("Truncated");
+  expect(textAt(older, 0)).toContain("[Truncated: only the first 100,000");
 });
 
 test("fetches stored attachments without following redirects", async () => {

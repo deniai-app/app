@@ -102,3 +102,29 @@ test("reader fallback enforces the same body limit", async () => {
   expect(fetch).toHaveBeenCalledWith("https://r.jina.ai/https://probe.example/", expect.anything());
   expect(cancel).toHaveBeenCalledOnce();
 });
+
+test("does not mistake a long article that mentions blocking for a block page", async () => {
+  const article = `${"The forbidden city and the phrase access denied appear in this long article. ".repeat(40)}`;
+  vi.mocked(fetchSafePublicHttpUrl).mockResolvedValue(
+    new Response(
+      `<html><head><title>History</title></head><body><article>${article}</article></body></html>`,
+      {
+        headers: { "content-type": "text/html" },
+      },
+    ),
+  );
+  const page = await fetchPageText("https://probe.example/", { allowReaderFallback: false });
+  expect(page.content).toContain("forbidden city");
+});
+
+test("still rejects a short block page", async () => {
+  vi.mocked(fetchSafePublicHttpUrl).mockResolvedValue(
+    new Response(
+      `<html><head><title>Just a moment...</title></head><body><main>${"Checking your browser before accessing the site. ".repeat(4)}</main></body></html>`,
+      { headers: { "content-type": "text/html" } },
+    ),
+  );
+  await expect(
+    fetchPageText("https://probe.example/", { allowReaderFallback: false }),
+  ).rejects.toThrow();
+});

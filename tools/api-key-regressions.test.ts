@@ -237,14 +237,20 @@ test("device polling and tRPC creation share the same account quota lock", async
   expect(issued).toBe(1);
 });
 
-test("repeated polling issues one key and returns it only once", async () => {
+test("repeated polling issues one key and redelivers it at most once", async () => {
   const responses = await Promise.all([
     deviceRequest("poll", { deviceCode: "first" }),
     deviceRequest("poll", { deviceCode: "first" }),
   ]);
   const bodies = await Promise.all(responses.map((response) => response.json()));
-  expect(bodies.filter((body) => body.apiKey)).toHaveLength(1);
-  expect(bodies.filter((body) => body.apiKeyUnavailable)).toHaveLength(1);
+  // The second poll is the recovery path for a lost response: same key, no second key.
+  expect(bodies.filter((body) => body.apiKey)).toHaveLength(2);
+  expect(new Set(bodies.map((body) => body.apiKey)).size).toBe(1);
+  expect(keys).toHaveLength(5);
+
+  const third = await (await deviceRequest("poll", { deviceCode: "first" })).json();
+  expect(third.apiKey).toBeUndefined();
+  expect(third.apiKeyUnavailable).toBe(true);
   expect(keys).toHaveLength(5);
 });
 

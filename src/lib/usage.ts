@@ -3,6 +3,7 @@ import { and, eq, isNotNull, isNull, like, or, sql } from "drizzle-orm";
 import { db } from "@/db/drizzle";
 import { billing, member, teamMemberUsagePolicy, teamUsagePolicy, usageQuota } from "@/db/schema";
 import { getPlanTier, isMaxTeamPlan } from "@/lib/billing";
+import { isSignupFlagged } from "@/lib/signup-risk";
 import { canonicalTeamBillingRow } from "@/lib/team-billing-record";
 
 import { isMaxModeEligible, recordMaxModeUsage, refundMaxModeUsage } from "./max-mode";
@@ -56,6 +57,14 @@ const VERIFIED_FREE_LIMITS: Record<UsageCategory, { limit: number; unit: UsageUn
   premium: { limit: 10_000_000, unit: "tokens" },
 };
 
+// Free accounts whose sign-up looked like part of a batch (see signup-risk.ts) get a
+// smaller allowance until a payment method is verified, which restores the normal
+// verified boost above. Enough to try the product; not enough to farm.
+const FLAGGED_FREE_LIMITS: Record<UsageCategory, { limit: number; unit: UsageUnit }> = {
+  basic: { limit: 3_000_000, unit: "tokens" },
+  premium: { limit: 500_000, unit: "tokens" },
+};
+
 export const GUEST_USAGE_MULTIPLIER = 2;
 
 /** Weighted basic tokens charged per successful `search` tool call. */
@@ -98,6 +107,8 @@ type TierInfo = {
   maxModeLimitBasic: number | null;
   maxModeLimitPremium: number | null;
   hasVerifiedPaymentMethod: boolean;
+  /** Free account flagged at sign-up as part of a batch; only looked up for unverified Free accounts. */
+  signupFlagged?: boolean;
 };
 
 function getDefaultPeriodEnd(now: Date) {
@@ -121,6 +132,14 @@ async function getTierInfo(
   now: Date,
   database: UsageDatabase = db,
 ): Promise<TierInfo> {
+  const info = await loadTierInfo(userId, now, database);
+  if (info.tier === "free" && !info.hasVerifiedPaymentMethod) {
+    info.signupFlagged = await isSignupFlagged(userId, database);
+  }
+  return info;
+}
+
+async function loadTierInfo(userId: string, now: Date, database: UsageDatabase): Promise<TierInfo> {
   // 1. Check personal billing (where organizationId is NULL)
   const [record] = await database
     .select({
@@ -302,6 +321,7 @@ async function calculateUsageState({
   existingRecord,
   isAnonymous = false,
   database = db,
+  tierInfo: providedTierInfo,
 }: {
   userId: string;
   category: UsageCategory;
@@ -309,15 +329,18 @@ async function calculateUsageState({
   existingRecord?: UsageRecord;
   isAnonymous?: boolean;
   database?: UsageDatabase;
+  tierInfo?: TierInfo;
 }) {
-  const tierInfo = await getTierInfo(userId, now, database);
+  const tierInfo = providedTierInfo ?? (await getTierInfo(userId, now, database));
   const baseConfig = isAnonymous
     ? GUEST_USAGE_LIMITS[category]
     : USAGE_LIMITS[category][tierInfo.tier];
   const config =
     !isAnonymous && tierInfo.tier === "free" && tierInfo.hasVerifiedPaymentMethod
       ? VERIFIED_FREE_LIMITS[category]
-      : baseConfig;
+      : !isAnonymous && tierInfo.tier === "free" && tierInfo.signupFlagged
+        ? FLAGGED_FREE_LIMITS[category]
+        : baseConfig;
   const { limit, unit } = config;
 
   const current =
@@ -702,6 +725,11 @@ export type UsageSummary = {
   maxModeEnabled: boolean;
   maxModeEligible: boolean;
   hasVerifiedPaymentMethod: boolean;
+  /**
+   * The Free allowance is reduced (see signup-risk.ts) and a verified payment method lifts it.
+   * Tells the user the way out without saying what triggered it.
+   */
+  signupLimited: boolean;
 };
 
 export async function getUsageSummary({
@@ -727,6 +755,7 @@ export async function getUsageSummary({
         now: nowDate,
         existingRecord: records.find((row) => row.category === category),
         isAnonymous,
+        tierInfo,
       });
 
       if (state.limit === null) {
@@ -762,5 +791,6 @@ export async function getUsageSummary({
     maxModeEnabled: tierInfo.maxModeEnabled,
     maxModeEligible: tierInfo.maxModeEligible,
     hasVerifiedPaymentMethod: tierInfo.hasVerifiedPaymentMethod,
+    signupLimited: Boolean(tierInfo.signupFlagged) && !tierInfo.hasVerifiedPaymentMethod,
   };
 }

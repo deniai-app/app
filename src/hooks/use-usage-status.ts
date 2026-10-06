@@ -30,6 +30,7 @@ export function useUsageStatus(params: {
   const usageLimit = categoryUsage?.limit;
   const usageUnit = categoryUsage?.unit ?? "requests";
   const usageTier = usageQuery.data?.tier ?? "free";
+  const isSignupLimited = usageQuery.data?.signupLimited ?? false;
 
   const remaining = remainingUsage;
   const limit = usageLimit;
@@ -82,6 +83,7 @@ export function useUsageStatus(params: {
     usageQuery,
     selectedModel,
     usageTier,
+    isSignupLimited,
     isUsageLow,
     isUsageBlocked,
     canEnableMaxMode,

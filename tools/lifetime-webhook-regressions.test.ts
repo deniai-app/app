@@ -4,6 +4,8 @@ const state = vi.hoisted(() => ({
   record: {} as Record<string, unknown>,
   event: {} as Record<string, unknown>,
   completedSessions: [] as Record<string, unknown>[],
+  /** What Stripe returns when the webhook reads the subscription; defaults to the event's own copy. */
+  currentSubscription: null as Record<string, unknown> | null,
 }));
 vi.mock("@/env", () => ({
   env: { STRIPE_SECRET_KEY: "sk_test", STRIPE_WEBHOOK_SECRET: "whsec_test" },
@@ -36,6 +38,11 @@ vi.mock("@/lib/stripe", () => ({
   stripe: {
     webhooks: { constructEvent: () => state.event },
     customers: { retrieve: async () => ({ metadata: { userId: "user" } }) },
+    // The webhook reads the live subscription instead of trusting the event's snapshot.
+    subscriptions: {
+      retrieve: async () =>
+        state.currentSubscription ?? (state.event.data as { object: unknown }).object,
+    },
     checkout: {
       sessions: {
         list: async () => ({ data: state.completedSessions }),
@@ -104,6 +111,7 @@ beforeEach(() => {
     firstPaidAt: null,
   };
   state.completedSessions = [];
+  state.currentSubscription = null;
 });
 
 test("a paid lifetime checkout is activated without the buyer returning", async () => {
@@ -190,4 +198,26 @@ test("an incomplete subscription never replaces a paid lifetime plan", async () 
   };
   expect((await deliver()).status).toBe(200);
   expect(state.record).toMatchObject({ planId: "pro_lifetime", status: "paid" });
+});
+
+test("a stale subscription event cannot undo a newer cancellation", async () => {
+  const subscription = {
+    id: "sub",
+    object: "subscription",
+    customer: "customer",
+    metadata: { userId: "user", planId: "max_monthly" },
+    items: {
+      data: [{ current_period_end: 1_900_000_000, price: { lookup_key: "max_monthly" } }],
+    },
+  };
+  Object.assign(state.record, { stripeSubscriptionId: "sub", planId: "max_monthly" });
+  // The delayed event still says active; Stripe already knows the subscription ended.
+  state.event = {
+    type: "customer.subscription.updated",
+    data: { object: { ...subscription, status: "active" } },
+  };
+  state.currentSubscription = { ...subscription, status: "canceled" };
+
+  expect((await deliver()).status).toBe(200);
+  expect(state.record).toMatchObject({ status: "inactive" });
 });

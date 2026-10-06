@@ -31,10 +31,13 @@ export function installAbortDiagnostics() {
   }
   installed = true;
 
+  // Registering a listener replaces Node's default reporting, so anything that
+  // is not an abort must still be logged here or it would vanish silently.
   process.on("unhandledRejection", (reason) => {
     if (isAbortError(reason)) {
       return;
     }
+    console.error("[unhandledRejection]", reason);
   });
 
   const originalError = console.error.bind(console);

@@ -12,7 +12,13 @@ import {
   user,
 } from "@/db/schema";
 import { env } from "@/env";
-import { type BillingPlan, billingPlans, findPlanById, isTeamPlan } from "@/lib/billing";
+import {
+  type BillingPlan,
+  billingPlans,
+  findPlanById,
+  isMaxTeamPlan,
+  isTeamPlan,
+} from "@/lib/billing";
 import {
   getCustomerPrimaryCardFingerprint,
   isTrialFingerprintEligible,
@@ -233,27 +239,22 @@ async function findOrCreateStripeCustomer({
   userId: string;
   organizationId: string;
 }) {
-  let customer: Stripe.Customer | undefined;
-
-  try {
-    const search = await stripe.customers.search({
-      query: `metadata['organizationId']:'${escapeStripeSearchValue(organizationId)}'`,
-      limit: 1,
-    });
-    customer = search.data[0];
-  } catch (error) {
-    console.warn("Stripe customer search failed, falling back to create", error);
-  }
-
-  if (customer) {
-    return customer;
-  }
-
-  return stripe.customers.create({
-    email,
-    name: name ? `${name} (Team)` : undefined,
-    metadata: { userId, organizationId },
+  // A search failure must not mint a second customer for an existing team.
+  const search = await stripe.customers.search({
+    query: `metadata['organizationId']:'${escapeStripeSearchValue(organizationId)}'`,
+    limit: 1,
   });
+  const customer = search.data[0];
+  if (customer) return customer;
+
+  return stripe.customers.create(
+    {
+      email,
+      name: name ? `${name} (Team)` : undefined,
+      metadata: { userId, organizationId },
+    },
+    { idempotencyKey: `billing-team-${organizationId}` },
+  );
 }
 
 async function ensureTeamBillingRecord(
@@ -261,16 +262,20 @@ async function ensureTeamBillingRecord(
   userId: string,
   organizationId: string,
 ) {
+  const initial = await findTeamBillingRecord(ctx.db, organizationId);
+  if (initial) return initial;
+  const profile = await fetchUserProfile(ctx, userId);
+  const customer = await findOrCreateStripeCustomer({
+    email: profile.email,
+    name: profile.name,
+    userId,
+    organizationId,
+  });
+  // Stripe I/O and profile reads finish before acquiring a pooled transaction.
+  // The organization idempotency key deduplicates concurrent Stripe creations.
   return withTeamBillingLock(ctx.db, organizationId, async (transaction) => {
     const existing = await findTeamBillingRecord(transaction, organizationId);
     if (existing) return existing;
-    const profile = await fetchUserProfile(ctx, userId);
-    const customer = await findOrCreateStripeCustomer({
-      email: profile.email,
-      name: profile.name,
-      userId,
-      organizationId,
-    });
     const [created] = await transaction
       .insert(billing)
       .values({
@@ -524,8 +529,9 @@ export const organizationRouter = router({
               .where(inArray(usageQuota.userId, memberIds))
           : [];
       const usageByMember = new Map<string, { basic: number; premium: number }>();
-      const basicIncluded = getUsageLimitConfig("basic", "pro").limit ?? 0;
-      const premiumIncluded = getUsageLimitConfig("premium", "pro").limit ?? 0;
+      const tier = isMaxTeamPlan(subscription.planId ?? "") ? "max" : "pro";
+      const basicIncluded = getUsageLimitConfig("basic", tier).limit ?? 0;
+      const premiumIncluded = getUsageLimitConfig("premium", tier).limit ?? 0;
 
       for (const row of usageRows) {
         const current = usageByMember.get(row.userId) ?? { basic: 0, premium: 0 };

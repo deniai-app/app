@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useExtracted, useLocale } from "next-intl";
 import type React from "react";
+import { DocumentTitle } from "@/components/document-title";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { usePlatformCapabilities } from "@/components/platform-capabilities-provider";
 import { authClient } from "@/lib/auth-client";
 import { formatAppDate } from "@/lib/format-date";
-import { isStandaloneSettingsRoute } from "@/lib/settings-routes";
+import { isCheckoutSettingsRoute, isStandaloneSettingsRoute } from "@/lib/settings-routes";
 import { trpc } from "@/lib/trpc/react";
 import { settingsUsageQueryOptions } from "@/lib/usage-query-options";
 import { cn, formatCompactUsageValue } from "@/lib/utils";
@@ -39,7 +40,12 @@ export default function SettingsWrapper({ children }: { children: React.ReactNod
   // segment and breaks Next.js instant-navigation validation
   // (instant-unrendered-segment).
   if (isStandaloneRoute) {
-    return <div className="mx-auto w-full max-w-5xl pb-12 pt-4">{children}</div>;
+    return (
+      <div className="mx-auto w-full max-w-5xl pb-12 pt-4">
+        <DocumentTitle title={isCheckoutSettingsRoute(pathname) ? t("Checkout") : t("Team")} />
+        {children}
+      </div>
+    );
   }
 
   const isUsageLoading =
@@ -114,11 +120,13 @@ export default function SettingsWrapper({ children }: { children: React.ReactNod
       (!billingDisabled || tab.value !== "billing") && (features.memory || tab.value !== "memory"),
   );
 
-  const currentTab =
-    settingsTabs.find((tab) => pathname?.startsWith(tab.href))?.value || settingsTabs[0].value;
+  const currentTabItem =
+    settingsTabs.find((tab) => pathname?.startsWith(tab.href)) ?? settingsTabs[0];
+  const currentTab = currentTabItem.value;
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 mx-auto w-full pb-12 pt-4 px-4 lg:px-0">
+      <DocumentTitle title={currentTabItem.label} />
       <div className="flex flex-col gap-2 w-full lg:max-w-xs shrink-0">
         {isUsageLoading ? (
           <div className="flex min-h-24 items-center justify-center rounded-xl border border-muted-foreground/10 bg-muted/60">

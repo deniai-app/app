@@ -165,7 +165,11 @@ export function ChatComposerActionMenu({
         >
           <Sparkle className="size-4" aria-hidden="true" />
           {t("Deep Research")}
-          {isGuest && <GuestLoginHint />}
+          {isGuest && (
+            <span className="block w-full">
+              <GuestLoginHint />
+            </span>
+          )}
         </DropdownMenuCheckboxItem>
       )}
       {supportsFastMode && (
@@ -176,7 +180,11 @@ export function ChatComposerActionMenu({
         >
           <Zap className="size-4" aria-hidden="true" />
           {t("Fast")}
-          {isGuest && <GuestLoginHint />}
+          {isGuest && (
+            <span className="block w-full">
+              <GuestLoginHint />
+            </span>
+          )}
         </DropdownMenuCheckboxItem>
       )}
       {supportsProMode && (

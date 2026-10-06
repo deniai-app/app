@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChatInterfaceSkeleton } from "@/components/chat/chat-interface-skeleton";
+import { DocumentTitle } from "@/components/document-title";
 import { trpc } from "@/lib/trpc/react";
 
 /**
@@ -27,7 +28,6 @@ const ChatInterface = dynamic(
 );
 
 const MAX_MOUNTED_CHATS = 5;
-const DOCUMENT_TITLE_SUFFIX = " | Deni AI";
 
 function ChatDocumentTitle({
   chatId,
@@ -43,18 +43,7 @@ function ChatDocumentTitle({
   const listTitle = data?.find((chat) => chat.id === chatId)?.title;
   const title = (listTitle ?? fallbackTitle)?.trim() || "New Chat";
 
-  useEffect(() => {
-    const next = `${title}${DOCUMENT_TITLE_SUFFIX}`;
-    const previous = document.title;
-    document.title = next;
-    return () => {
-      if (document.title === next) {
-        document.title = previous;
-      }
-    };
-  }, [title]);
-
-  return null;
+  return <DocumentTitle title={title} />;
 }
 
 function parseChatRoute(pathname: string): { kind: "home" } | { kind: "chat"; id: string } | null {
@@ -216,6 +205,7 @@ function ChatRouteHostInner() {
   if (route.kind === "home") {
     return (
       <div className="-m-4 flex min-h-0 flex-1 overflow-hidden">
+        <DocumentTitle />
         <ChatHome />
       </div>
     );

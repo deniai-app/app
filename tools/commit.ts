@@ -3,7 +3,7 @@ import { generateObject } from "ai";
 import { createDeniOpenRouter } from "../src/lib/openrouter-provider";
 import { z } from "zod";
 
-const DEFAULT_MODEL = "openai/gpt-5.6-luna";
+const DEFAULT_MODEL = "openai/gpt-6-luna";
 const DEFAULT_MAX_DIFF_CHARS = 20_000_000;
 
 type Options = {

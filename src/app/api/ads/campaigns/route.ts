@@ -1,8 +1,8 @@
-import { and, count, desc, eq, gt } from "drizzle-orm";
+import { and, count, desc, eq, gt, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { db } from "@/db/drizzle";
-import { adCampaign } from "@/db/schema";
+import { adCampaign, user } from "@/db/schema";
 import { env } from "@/env";
 import { reviewAd } from "@/lib/ad-review";
 import {
@@ -16,6 +16,7 @@ import { adPlans } from "@/lib/ads";
 import { isAllowedAdOrigin } from "@/lib/ad-origin";
 import { auth } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
+import { readRequestJson, RequestBodyTooLargeError } from "@/lib/request-body";
 
 const inputSchema = z
   .object({
@@ -87,21 +88,47 @@ export async function POST(request: Request) {
   if (!session?.session || session.user.isAnonymous) return new Response(null, { status: 401 });
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET || !env.OPENROUTER_API_KEY)
     return Response.json({ error: "Ads are unavailable" }, { status: 503 });
-  const input = inputSchema.safeParse(await request.json().catch(() => null));
+  let body: unknown = null;
+  try {
+    body = await readRequestJson(request, 32 * 1024);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) return new Response(null, { status: 413 });
+  }
+  const input = inputSchema.safeParse(body);
   if (!input.success)
     return Response.json({ error: "Invalid creative or budget" }, { status: 400 });
 
-  const [recent] = await db
-    .select({ total: count() })
-    .from(adCampaign)
-    .where(
-      and(
-        eq(adCampaign.userId, session.session.userId),
-        gt(adCampaign.createdAt, new Date(Date.now() - 86_400_000)),
-      ),
-    );
-  if ((recent?.total ?? 0) >= 10)
-    return Response.json({ error: "Daily submission limit reached" }, { status: 429 });
+  const reserved = await db.transaction(
+    async (transaction) => {
+      await transaction.execute(
+        sql`SELECT ${user.id} FROM ${user} WHERE ${user.id} = ${session.session.userId} FOR UPDATE`,
+      );
+      const [recent] = await transaction
+        .select({ total: count() })
+        .from(adCampaign)
+        .where(
+          and(
+            eq(adCampaign.userId, session.session.userId),
+            gt(adCampaign.createdAt, new Date(Date.now() - 86_400_000)),
+          ),
+        );
+      if ((recent?.total ?? 0) >= 10) return null;
+      const [campaign] = await transaction
+        .insert(adCampaign)
+        .values({
+          userId: session.session.userId,
+          ...creativeFields(input.data),
+          plan: input.data.plan,
+          budgetYen: input.data.budgetYen,
+          targetLanguages: input.data.targetLanguages,
+          status: "review",
+        })
+        .returning();
+      return campaign;
+    },
+    { isolationLevel: "read committed" },
+  );
+  if (!reserved) return Response.json({ error: "Daily submission limit reached" }, { status: 429 });
 
   // Never accept a previously reviewed creative ID from the browser. Each edit is a new review.
   let review;
@@ -109,19 +136,20 @@ export async function POST(request: Request) {
     review = await reviewAd(input.data);
   } catch (error) {
     console.error("Ad review failed", error);
+    await db
+      .update(adCampaign)
+      .set({ status: "rejected", reviewReason: null, updatedAt: new Date() })
+      .where(eq(adCampaign.id, reserved.id));
     return Response.json({ error: "Review unavailable; please try again later" }, { status: 503 });
   }
   const [campaign] = await db
-    .insert(adCampaign)
-    .values({
-      userId: session.session.userId,
-      ...creativeFields(input.data),
-      plan: input.data.plan,
-      budgetYen: input.data.budgetYen,
-      targetLanguages: input.data.targetLanguages,
+    .update(adCampaign)
+    .set({
       status: review.approved ? "approved" : "rejected",
       reviewReason: review.reason,
+      updatedAt: new Date(),
     })
+    .where(eq(adCampaign.id, reserved.id))
     .returning();
   return Response.json({ campaign }, { status: 201, headers: { "Cache-Control": "no-store" } });
 }

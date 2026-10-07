@@ -7,8 +7,8 @@
  * Docs: https://developers.cloudflare.com/email-service/api/send-emails/rest-api/
  */
 
-import { render } from "@react-email/render";
 import type { ReactElement } from "react";
+import { render } from "react-email";
 import { env } from "@/env";
 import { EMAIL_FROM } from "@/lib/constants";
 

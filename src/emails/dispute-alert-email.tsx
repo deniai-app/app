@@ -9,7 +9,7 @@ import {
   Preview,
   Section,
   Text,
-} from "@react-email/components";
+} from "react-email";
 
 export type DisputeAlertKind = "dispute_created" | "dispute_closed" | "early_fraud_warning";
 

@@ -3,9 +3,15 @@ import { z } from "zod";
 import { comparisonToolNames } from "@/lib/comparison-settings";
 
 export const ChatRequestSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).max(200),
   messages: z
     .array(z.record(z.string(), z.unknown()))
+    .max(2000)
+    .refine(
+      (messages) =>
+        messages.every((message) => !Array.isArray(message.parts) || message.parts.length <= 100),
+      "Too many message parts",
+    )
     .transform((value) => value as unknown as UIMessage[])
     .optional(),
   model: z.string(),
@@ -21,7 +27,7 @@ export const ChatRequestSchema = z.object({
   deepResearch: z.boolean().optional(),
   responseStyle: z.enum(["retry", "detailed", "concise"]).optional(),
   forceWebSearch: z.boolean().optional(),
-  additionalInstruction: z.string().trim().min(1).optional(),
+  additionalInstruction: z.string().trim().min(1).max(4000).optional(),
 });
 
 type PendingMessageMetadata = {

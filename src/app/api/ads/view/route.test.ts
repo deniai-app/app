@@ -58,6 +58,38 @@ test("rejects foreign origins", async () => {
   expect(mocks.record).not.toHaveBeenCalled();
 });
 
+test("rejects oversized anonymous view bodies before token verification or billing", async () => {
+  const req = request();
+  req.headers.set("content-length", "4097");
+  expect((await POST(req)).status).toBe(413);
+  expect(mocks.record).not.toHaveBeenCalled();
+});
+
+test("caps anonymous chunked view bodies with a dishonest length", async () => {
+  const cancel = vi.fn();
+  let chunks = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (chunks++ < 4) controller.enqueue(new Uint8Array(2048));
+      else controller.close();
+    },
+    cancel,
+  });
+  const req = new Request("http://internal-proxy/api/ads/view", {
+    method: "POST",
+    headers: {
+      origin: new URL(env.NEXT_PUBLIC_BETTER_AUTH_URL).origin,
+      "x-forwarded-for": "192.0.2.1",
+      "content-length": "1",
+    },
+    body,
+    duplex: "half",
+  } as RequestInit);
+  expect((await POST(req)).status).toBe(413);
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(mocks.record).not.toHaveBeenCalled();
+});
+
 test("keeps signed-in account tracking", async () => {
   mocks.session.mockResolvedValue({ session: { userId: "user" }, user: { isAnonymous: false } });
   const token = signAdDelivery(id, "user", "https://example.com");

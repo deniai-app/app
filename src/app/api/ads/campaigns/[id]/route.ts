@@ -14,6 +14,7 @@ import { reviewAd } from "@/lib/ad-review";
 import { isAllowedAdOrigin } from "@/lib/ad-origin";
 import { auth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { readRequestJson, RequestBodyTooLargeError } from "@/lib/request-body";
 
 const editSchema = z
   .strictObject({
@@ -35,7 +36,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ error: "Review unavailable" }, { status: 503 });
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) return new Response(null, { status: 404 });
-  const input = editSchema.safeParse(await request.json().catch(() => null));
+  let body: unknown = null;
+  try {
+    body = await readRequestJson(request, 32 * 1024);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) return new Response(null, { status: 413 });
+  }
+  const input = editSchema.safeParse(body);
   if (!input.success) return Response.json({ error: "Invalid creative" }, { status: 400 });
   const { previous, targetLanguages, ...creative } = input.data;
   const [existing] = await db

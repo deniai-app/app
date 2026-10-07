@@ -15,9 +15,11 @@ import {
   isLifetimePlanId,
   isPaidLifetimeRecord,
   saveLifetimePlan,
+  revokeReversedLifetimeCharge,
 } from "@/lib/lifetime-plan";
-import { resetMaxModeUsage } from "@/lib/max-mode";
+import { syncMaxModeMeterPeriod } from "@/lib/max-mode";
 import { stripe } from "@/lib/stripe";
+import { readRequestBody, RequestBodyTooLargeError } from "@/lib/request-body";
 import { saveTeamBillingRecord } from "@/lib/team-billing-record";
 import {
   handleChargeDisputeClosed,
@@ -68,10 +70,18 @@ async function saveSubscription(payload: SubscriptionPayload) {
       planId: billing.planId,
       status: billing.status,
       mode: billing.mode,
+      stripeSubscriptionId: billing.stripeSubscriptionId,
     })
     .from(billing)
     .where(whereClause)
     .limit(1);
+
+  if (
+    !grantsSubscriptionAccess(payload.status) &&
+    existingRecord?.stripeSubscriptionId &&
+    existingRecord.stripeSubscriptionId !== payload.subscriptionId
+  )
+    return;
 
   // A subscription that grants nothing (incomplete, ended, ...) must not replace a
   // paid lifetime plan, and an ended one hands the row back to that lifetime plan.
@@ -86,6 +96,7 @@ async function saveSubscription(payload: SubscriptionPayload) {
           userId: payload.userId,
           customerId: payload.customerId,
           purchase: lifetime,
+          expectedSubscriptionId: payload.subscriptionId,
         });
         return;
       }
@@ -112,14 +123,14 @@ async function saveSubscription(payload: SubscriptionPayload) {
     trialUsedAt: fingerprintUpdates.trialUsedAt,
   };
 
-  const isRenewal =
-    existingRecord?.currentPeriodEnd &&
-    updates.currentPeriodEnd &&
-    existingRecord.currentPeriodEnd.getTime() !== updates.currentPeriodEnd.getTime() &&
-    updates.currentPeriodEnd.getTime() > existingRecord.currentPeriodEnd.getTime();
-
   if (organizationId) {
-    await saveTeamBillingRecord(db, payload.userId, organizationId, updates);
+    await saveTeamBillingRecord(
+      db,
+      payload.userId,
+      organizationId,
+      updates,
+      grantsSubscriptionAccess(payload.status) ? undefined : payload.subscriptionId,
+    );
   } else
     await db
       .insert(billing)
@@ -136,6 +147,12 @@ async function saveSubscription(payload: SubscriptionPayload) {
           ...updates,
           updatedAt: new Date(),
         },
+        setWhere: grantsSubscriptionAccess(payload.status)
+          ? undefined
+          : or(
+              isNull(billing.stripeSubscriptionId),
+              eq(billing.stripeSubscriptionId, payload.subscriptionId),
+            ),
       });
 
   if (!organizationId && plan?.id && isAffiliatePaidStatus(payload.status)) {
@@ -145,26 +162,57 @@ async function saveSubscription(payload: SubscriptionPayload) {
       purchasedAt: updates.firstPaidAt ?? new Date(),
     });
   }
-
-  // If this is a renewal and Max Mode is enabled, reset usage counters
-  if (isRenewal && existingRecord?.maxModeEnabled) {
-    await resetMaxModeUsage(payload.userId);
-    console.log("[stripe:webhook] Reset Max Mode usage for renewal", { userId: payload.userId });
-  }
 }
 
 async function clearPlanData({
   userId,
   customerId,
   organizationId,
+  subscriptionId,
 }: {
   userId: string;
   customerId: string;
   organizationId?: string | null;
+  subscriptionId: string;
 }) {
   const orgId = organizationId ?? null;
   if (orgId) {
-    await saveTeamBillingRecord(db, userId, orgId, {
+    const saved = await saveTeamBillingRecord(
+      db,
+      userId,
+      orgId,
+      {
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: null,
+        priceId: null,
+        planId: null,
+        status: "inactive",
+        mode: null,
+        currentPeriodEnd: null,
+        checkoutSessionId: null,
+        cancelAt: null,
+      },
+      subscriptionId,
+    );
+    return Boolean(saved);
+  }
+
+  // The subscription ended; a lifetime plan bought earlier takes over again.
+  const lifetime = await findPaidLifetimePurchase(customerId);
+  if (lifetime) {
+    return Boolean(
+      await saveLifetimePlan(db, {
+        userId,
+        customerId,
+        purchase: lifetime,
+        expectedSubscriptionId: subscriptionId,
+      }),
+    );
+  }
+
+  const [saved] = await db
+    .update(billing)
+    .set({
       stripeCustomerId: customerId,
       stripeSubscriptionId: null,
       priceId: null,
@@ -174,46 +222,17 @@ async function clearPlanData({
       currentPeriodEnd: null,
       checkoutSessionId: null,
       cancelAt: null,
-    });
-    return;
-  }
-
-  // The subscription ended; a lifetime plan bought earlier takes over again.
-  const lifetime = await findPaidLifetimePurchase(customerId);
-  if (lifetime) {
-    await saveLifetimePlan(db, { userId, customerId, purchase: lifetime });
-    return;
-  }
-
-  await db
-    .insert(billing)
-    .values({
-      userId,
-      organizationId: orgId,
-      stripeCustomerId: customerId,
-      stripeSubscriptionId: null,
-      priceId: null,
-      planId: null,
-      status: "inactive",
-      mode: null,
-      currentPeriodEnd: null,
-      checkoutSessionId: null,
+      updatedAt: new Date(),
     })
-    .onConflictDoUpdate({
-      target: orgId ? [billing.userId, billing.organizationId] : billing.userId,
-      targetWhere: orgId ? sql`organization_id IS NOT NULL` : sql`organization_id IS NULL`,
-      set: {
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: null,
-        priceId: null,
-        planId: null,
-        status: "inactive",
-        mode: null,
-        currentPeriodEnd: null,
-        checkoutSessionId: null,
-        updatedAt: new Date(),
-      },
-    });
+    .where(
+      and(
+        eq(billing.userId, userId),
+        isNull(billing.organizationId),
+        eq(billing.stripeSubscriptionId, subscriptionId),
+      ),
+    )
+    .returning({ id: billing.id });
+  return Boolean(saved);
 }
 
 /**
@@ -229,12 +248,7 @@ async function savePaidLifetimeCheckout(
   if (!customerId) return;
 
   const [existing] = await db
-    .select({
-      status: billing.status,
-      mode: billing.mode,
-      stripeSubscriptionId: billing.stripeSubscriptionId,
-      firstPaidAt: billing.firstPaidAt,
-    })
+    .select()
     .from(billing)
     .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
     .limit(1);
@@ -262,6 +276,7 @@ async function savePaidLifetimeCheckout(
       priceId: lineItems.data.at(0)?.price?.id ?? null,
       checkoutSessionId: session.id,
     },
+    expectedBillingRecord: existing ?? null,
     extra: {
       firstPaidAt: existing?.firstPaidAt ?? new Date(),
       flashOfferEndsAt: null,
@@ -353,12 +368,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
-  const body = Buffer.from(await req.arrayBuffer());
-
   let event: Stripe.Event;
   try {
+    const body = Buffer.from(await readRequestBody(req, 4 * 1024 * 1024));
     event = stripe.webhooks.constructEvent(body, signature, env.STRIPE_WEBHOOK_SECRET);
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError)
+      return NextResponse.json({ error: "Webhook body is too large" }, { status: 413 });
     console.error("Stripe webhook signature verification failed", error);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
@@ -401,13 +417,14 @@ export async function POST(req: Request) {
         // Read the plan before clearPlanData wipes it, for the audit log below.
         const previousTeamBilling = organizationId ? await getTeamBilling(organizationId) : null;
 
-        await clearPlanData({
+        const cleared = await clearPlanData({
           userId,
           customerId,
           organizationId,
+          subscriptionId: subscription.id,
         });
 
-        if (organizationId) {
+        if (organizationId && cleared) {
           // Best-effort: if the organization was deleted as part of this same
           // cancellation (beforeDeleteOrganization cancels the subscription,
           // which triggers this webhook asynchronously afterwards), the
@@ -461,6 +478,7 @@ export async function POST(req: Request) {
           break;
         }
 
+        await syncMaxModeMeterPeriod(subscription);
         if (isMaxModeOnlySubscription(subscription)) {
           break;
         }
@@ -602,17 +620,21 @@ export async function POST(req: Request) {
         break;
       }
       case "charge.refunded": {
+        await revokeReversedLifetimeCharge(event.data.object);
         await pauseReversedAdCharge(event.data.object);
         break;
       }
       case "charge.dispute.created": {
         const dispute = event.data.object;
-        if (typeof dispute.charge === "string") {
-          await pauseReversedAdCharge(await stripe.charges.retrieve(dispute.charge));
-        }
         if (typeof dispute !== "object" || dispute === null || dispute.object !== "dispute") {
           break;
         }
+        const charge =
+          typeof dispute.charge === "string"
+            ? await stripe.charges.retrieve(dispute.charge)
+            : dispute.charge;
+        await revokeReversedLifetimeCharge(charge);
+        await pauseReversedAdCharge(charge);
         await handleChargeDisputeCreated(dispute);
         break;
       }

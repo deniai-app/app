@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/drizzle";
 import { signupRisk } from "@/db/schema";
@@ -34,13 +35,25 @@ export type SignupAssessment = { score: number; flags: string[]; flagged: boolea
 
 /** IPv4 as is; IPv6 reduced to its /64, because one subscriber controls a whole /64. */
 export function networkKey(ip: string): string {
-  if (!ip.includes(":")) return ip;
-  const groups = ip.toLowerCase().split(":");
-  if (ip.includes("::")) {
-    const head = groups.slice(0, groups.indexOf(""));
-    return head.slice(0, 4).join(":") || ip;
+  if (isIP(ip) !== 6) return ip;
+  // URL canonicalization also converts dotted IPv4 tails into hex groups.
+  const canonical = new URL(`http://[${ip.split("%")[0]}]/`).hostname.slice(1, -1);
+  const [head, tail] = canonical.split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const groups = (
+    tail === undefined
+      ? left
+      : [...left, ...Array<string>(8 - left.length - right.length).fill("0"), ...right]
+  ).map((group) => Number.parseInt(group, 16));
+  // IPv4-mapped addresses must share the native IPv4 limit, not one global /64.
+  if (groups.slice(0, 5).every((group) => group === 0) && groups[5] === 0xffff) {
+    return [groups[6] >> 8, groups[6] & 255, groups[7] >> 8, groups[7] & 255].join(".");
   }
-  return groups.slice(0, 4).join(":");
+  return groups
+    .slice(0, 4)
+    .map((group) => group.toString(16))
+    .join(":");
 }
 
 const AUTOMATION_CLIENT =
@@ -170,7 +183,8 @@ export async function recordSignupRisk({
         userId,
         score: assessment.score,
         flags: assessment.flags,
-        ipHash: hashClaimIp(ip ?? null),
+        // Hashed per network (IPv6 by /64), the same grouping the sign-up limits use.
+        ipHash: hashClaimIp(ip ? networkKey(ip) : null),
       })
       .onConflictDoNothing();
   }

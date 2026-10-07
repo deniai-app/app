@@ -1,7 +1,14 @@
-import { and, eq, isNotNull, isNull, like, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, like, or, sql } from "drizzle-orm";
+import type Stripe from "stripe";
 
 import { db } from "@/db/drizzle";
-import { billing, member, teamMemberUsagePolicy, teamUsagePolicy } from "@/db/schema";
+import {
+  billing,
+  member,
+  teamMemberUsagePolicy,
+  teamUsagePolicy,
+  usageReservation,
+} from "@/db/schema";
 import { isProOrHigherTier } from "@/lib/billing";
 import { isBillingDisabled } from "@/lib/billing-config";
 import {
@@ -10,10 +17,10 @@ import {
   getMaxModePriceAmounts,
   type MaxModeCurrency,
 } from "@/lib/max-mode-stripe";
-import { stripe } from "@/lib/stripe";
 import { canonicalTeamBillingRow } from "@/lib/team-billing-record";
+import { isMeteredMaxModePrice } from "@/lib/stripe-subscriptions";
+import { deliverMaxModeMeterEvents, enqueueMaxModeMeterEvent } from "@/lib/max-mode-meter-events";
 
-import type { UsageCategory } from "./usage";
 type MaxModeDatabase = Pick<typeof db, "select" | "update">;
 
 // Max Mode pricing in minor currency units per token unit. Chat usage sends
@@ -58,6 +65,7 @@ async function getEffectiveBillingRecord(userId: string, database: MaxModeDataba
     organizationId: billing.organizationId,
     planId: billing.planId,
     status: billing.status,
+    deletionPending: billing.deletionPending,
     stripeCustomerId: billing.stripeCustomerId,
     stripeSubscriptionId: billing.stripeSubscriptionId,
     stripeMeteredBasicItemId: billing.stripeMeteredBasicItemId,
@@ -136,7 +144,8 @@ export async function getMaxModeStatus(userId: string): Promise<MaxModeStatus> {
     basic: stripePriceAmounts.basic ?? MAX_MODE_PRICING.basic,
     premium: stripePriceAmounts.premium ?? MAX_MODE_PRICING.premium,
   };
-  const eligible = isMaxModeEligible(record.planId) && record.status === "active";
+  const eligible =
+    !record.deletionPending && isMaxModeEligible(record.planId) && record.status === "active";
   const [memberPolicy, defaultPolicy] = record.organizationId
     ? await Promise.all([
         db
@@ -184,6 +193,7 @@ export async function enableMaxMode(userId: string): Promise<{ success: boolean;
   if (!record) {
     return { success: false, error: "No billing record found." };
   }
+  if (record.deletionPending) return { success: false, error: "Account deletion is in progress." };
 
   if (!isMaxModeEligible(record.planId)) {
     return {
@@ -220,9 +230,7 @@ export async function enableMaxMode(userId: string): Promise<{ success: boolean;
     .update(billing)
     .set({
       maxModeEnabled: true,
-      maxModePeriodStart: new Date(),
-      maxModeUsageBasic: 0,
-      maxModeUsagePremium: 0,
+      maxModePeriodStart: sql`coalesce(${billing.maxModePeriodStart}, ${new Date().toISOString()}::timestamp)`,
       stripeSubscriptionId: attached.subscriptionId,
       stripeMeteredBasicItemId: attached.basicItemId,
       stripeMeteredPremiumItemId: attached.premiumItemId,
@@ -259,144 +267,76 @@ export async function disableMaxMode(
   return { success: true };
 }
 
-async function applyMaxModeUsageDelta(
-  userId: string,
-  category: UsageCategory,
-  expression: (
-    column: typeof billing.maxModeUsageBasic | typeof billing.maxModeUsagePremium,
-  ) => ReturnType<typeof sql>,
-  database: MaxModeDatabase,
-): Promise<{ success: boolean; newUsage: number }> {
-  const record = await getEffectiveBillingRecord(userId, database);
-
-  if (!record) {
-    return { success: false, newUsage: 0 };
-  }
-
-  const column = category === "basic" ? billing.maxModeUsageBasic : billing.maxModeUsagePremium;
-  const field = category === "basic" ? "maxModeUsageBasic" : "maxModeUsagePremium";
-
-  const [updated] = await database
-    .update(billing)
-    .set({
-      [field]: expression(column),
-    })
-    .where(eq(billing.id, record.id))
-    .returning({
-      maxModeUsageBasic: billing.maxModeUsageBasic,
-      maxModeUsagePremium: billing.maxModeUsagePremium,
-    });
-
-  if (!updated) {
-    // The billing row can disappear between the lookup and the update.
-    return { success: false, newUsage: 0 };
-  }
-
-  return {
-    success: true,
-    newUsage: category === "basic" ? updated.maxModeUsageBasic : updated.maxModeUsagePremium,
-  };
+async function prepareMaxModeMeterEvent(event: Parameters<typeof enqueueMaxModeMeterEvent>[0]) {
+  if (!event.stripeCustomerId)
+    throw new Error("Max Mode meter event has no original Stripe customer.");
+  // Meter hosts are configured when Max Mode is enabled. A retry must never
+  // transfer an old charge or create a new subscription for a former member.
+  return event.stripeCustomerId;
 }
 
-/**
- * Records Max Mode overage in the local ledger only.
- *
- * Deliberately does *not* report to Stripe: callers reserve an estimate up front
- * and reconcile down to actual usage afterwards, and a meter event cannot be
- * partially reduced (Stripe only cancels a whole event by identifier, within 24h).
- * Reporting here would bill the estimate permanently. Use
- * {@link reportMaxModeUsageToStripe} once, after reconciliation.
- */
-export async function recordMaxModeUsage(
-  userId: string,
-  category: UsageCategory,
-  amount = 1,
-  database: MaxModeDatabase = db,
-) {
-  if (amount <= 0) {
-    return { success: false, newUsage: 0 };
-  }
-  return applyMaxModeUsageDelta(userId, category, (column) => sql`${column} + ${amount}`, database);
+export async function retryMaxModeUsageReports() {
+  if (isBillingDisabled) return { delivered: 0, failed: 0, requiresReview: 0 };
+  return deliverMaxModeMeterEvents(prepareMaxModeMeterEvent);
 }
 
-/** Reverses a local Max Mode ledger entry, e.g. when an over-reserved estimate is refunded. */
-export async function refundMaxModeUsage(
-  userId: string,
-  category: UsageCategory,
-  amount = 1,
-  database: MaxModeDatabase = db,
-) {
-  if (amount <= 0) {
-    return { success: false, newUsage: 0 };
-  }
-  return applyMaxModeUsageDelta(
-    userId,
-    category,
-    (column) => sql`GREATEST(${column} - ${amount}, 0)`,
-    database,
+export async function deliverMaxModeUsageReport(identifier: string) {
+  if (isBillingDisabled) return;
+  return deliverMaxModeMeterEvents(prepareMaxModeMeterEvent, { id: identifier, limit: 1 });
+}
+
+/** Reset the actual meter host's monthly ledger once, including yearly plan hosts. */
+export async function syncMaxModeMeterPeriod(subscription: Stripe.Subscription) {
+  if (!ACTIVE_STATUSES.has(subscription.status)) return;
+  const meters = subscription.items.data.filter((item) => isMeteredMaxModePrice(item.price));
+  const starts = meters.map((item) => item.current_period_start).filter((value) => value > 0);
+  if (!meters.length || !starts.length) return;
+  const periodStart = new Date(Math.min(...starts) * 1000);
+  const itemIds = meters.map((item) => item.id);
+  await db.transaction(
+    async (transaction) => {
+      const records = await transaction
+        .select({ id: billing.id })
+        .from(billing)
+        .where(
+          and(
+            or(
+              inArray(billing.stripeMeteredBasicItemId, itemIds),
+              inArray(billing.stripeMeteredPremiumItemId, itemIds),
+            ),
+            or(
+              isNull(billing.maxModePeriodStart),
+              sql`${billing.maxModePeriodStart} < ${periodStart.toISOString()}::timestamp`,
+            ),
+          ),
+        )
+        .for("update");
+      for (const record of records) {
+        // Read after acquiring the billing lock, so a settlement committed while
+        // this webhook waited is included in the new month's ledger.
+        const [totals] = await transaction
+          .select({
+            basic: sql<number>`coalesce(sum(${usageReservation.maxModeAmount}) filter (where ${usageReservation.category} = 'basic'), 0)`,
+            premium: sql<number>`coalesce(sum(${usageReservation.maxModeAmount}) filter (where ${usageReservation.category} = 'premium'), 0)`,
+          })
+          .from(usageReservation)
+          .where(
+            and(
+              eq(usageReservation.billingId, record.id),
+              isNotNull(usageReservation.settledAt),
+              sql`${usageReservation.createdAt} >= ${periodStart.toISOString()}::timestamptz`,
+            ),
+          );
+        await transaction
+          .update(billing)
+          .set({
+            maxModeUsageBasic: Number(totals?.basic ?? 0),
+            maxModeUsagePremium: Number(totals?.premium ?? 0),
+            maxModePeriodStart: periodStart,
+          })
+          .where(eq(billing.id, record.id));
+      }
+    },
+    { isolationLevel: "read committed" },
   );
-}
-
-/**
- * Reports metered Max Mode overage to Stripe. Call once per request with the
- * final reconciled amount — meter events are append-only.
- */
-export async function reportMaxModeUsageToStripe(
-  userId: string,
-  category: UsageCategory,
-  amount: number,
-) {
-  if (amount <= 0 || isBillingDisabled) {
-    return;
-  }
-
-  const record = await getEffectiveBillingRecord(userId);
-
-  if (!record?.stripeCustomerId) {
-    // Local ledger already has the overage; without a customer we cannot bill it.
-    console.error("Max Mode usage not reported to Stripe: no customer", {
-      userId,
-      category,
-      amount,
-    });
-    return;
-  }
-
-  if (!record.stripeMeteredBasicItemId || !record.stripeMeteredPremiumItemId) {
-    const attached = await attachMaxModeMeteredItems(record, userId);
-    if (!attached.ok) {
-      console.error("Max Mode usage not billed: metered prices missing", attached.error, {
-        userId,
-        category,
-        amount,
-      });
-    }
-  }
-
-  try {
-    await stripe.billing.meterEvents.create({
-      event_name: `max_mode_${category}`,
-      payload: {
-        stripe_customer_id: record.stripeCustomerId,
-        value: String(amount),
-      },
-    });
-  } catch (error) {
-    // Log but don't fail - we've already recorded locally
-    console.error("Failed to report usage to Stripe:", error);
-  }
-}
-
-export async function resetMaxModeUsage(userId: string): Promise<void> {
-  const record = await getEffectiveBillingRecord(userId);
-  if (!record) return;
-
-  await db
-    .update(billing)
-    .set({
-      maxModeUsageBasic: 0,
-      maxModeUsagePremium: 0,
-      maxModePeriodStart: new Date(),
-    })
-    .where(eq(billing.id, record.id));
 }

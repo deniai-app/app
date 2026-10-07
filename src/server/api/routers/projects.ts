@@ -1,9 +1,10 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { chats, projects } from "@/db/schema";
+import { chats, member, projects } from "@/db/schema";
 import {
   getAccessibleProject,
+  currentProjectManagementWhere,
   listUserMemberships,
   projectAccessWhere,
   userIsOrgMember,
@@ -121,7 +122,7 @@ export const projectsRouter = router({
           defaultModel: fields.defaultModel ?? null,
           updatedAt: new Date(),
         })
-        .where(eq(projects.id, id))
+        .where(and(eq(projects.id, id), currentProjectManagementWhere(ctx.userId)))
         .returning();
 
       return project ?? null;
@@ -144,7 +145,13 @@ export const projectsRouter = router({
       const [updated] = await ctx.db
         .update(projects)
         .set({ organizationId: input.organizationId, updatedAt: new Date() })
-        .where(eq(projects.id, input.id))
+        .where(
+          and(
+            eq(projects.id, input.id),
+            currentProjectManagementWhere(ctx.userId),
+            sql`exists (select 1 from ${member} where ${member.organizationId} = ${input.organizationId} and ${member.userId} = ${ctx.userId})`,
+          ),
+        )
         .returning();
 
       return updated ?? null;
@@ -157,7 +164,7 @@ export const projectsRouter = router({
       const [updated] = await ctx.db
         .update(projects)
         .set({ organizationId: null, updatedAt: new Date() })
-        .where(eq(projects.id, input.id))
+        .where(and(eq(projects.id, input.id), currentProjectManagementWhere(ctx.userId)))
         .returning();
 
       return updated ?? null;
@@ -170,7 +177,7 @@ export const projectsRouter = router({
       const [project] = await ctx.db
         .update(projects)
         .set({ archivedAt: new Date(), updatedAt: new Date() })
-        .where(eq(projects.id, input.id))
+        .where(and(eq(projects.id, input.id), currentProjectManagementWhere(ctx.userId)))
         .returning();
 
       return project ?? null;
@@ -183,7 +190,7 @@ export const projectsRouter = router({
       const [project] = await ctx.db
         .update(projects)
         .set({ archivedAt: null, updatedAt: new Date() })
-        .where(eq(projects.id, input.id))
+        .where(and(eq(projects.id, input.id), currentProjectManagementWhere(ctx.userId)))
         .returning();
 
       return project ?? null;
@@ -193,7 +200,10 @@ export const projectsRouter = router({
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       await requireManageableProject(ctx, input.id);
-      const [deleted] = await ctx.db.delete(projects).where(eq(projects.id, input.id)).returning();
+      const [deleted] = await ctx.db
+        .delete(projects)
+        .where(and(eq(projects.id, input.id), currentProjectManagementWhere(ctx.userId)))
+        .returning();
 
       return deleted ?? null;
     }),

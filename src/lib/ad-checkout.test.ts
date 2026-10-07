@@ -4,7 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type Stripe from "stripe";
 import { beforeEach, expect, test, vi } from "vitest";
 import { POST } from "@/app/api/ads/campaigns/checkout/route";
-import { activatePaidAd } from "./ad-checkout";
+import { activatePaidAd, pauseReversedAdCharge } from "./ad-checkout";
 
 const state = vi.hoisted(() => ({
   database: {} as Record<string, unknown>,
@@ -35,8 +35,15 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/ad-origin", () => ({ isAllowedAdOrigin: () => true }));
 vi.mock("@/lib/stripe", () => ({
   stripe: {
-    checkout: { sessions: { create: state.create, retrieve: state.retrieve } },
+    checkout: {
+      sessions: {
+        create: state.create,
+        retrieve: state.retrieve,
+        list: async () => ({ data: [{ id: "paid-session" }] }),
+      },
+    },
     refunds: { create: state.refund },
+    paymentIntents: { retrieve: async () => ({ metadata: { adCampaignId: first } }) },
   },
 }));
 
@@ -94,6 +101,7 @@ function database() {
           const { sql, params } = dialect.sqlToQuery(condition);
           for (const row of state.ads) {
             if (row.id !== params[0]) continue;
+            if (sql.includes('"status" in') && !params.slice(1).includes(row.status)) continue;
             if (sql.includes('"stripe_session_id" =') && row.stripeSessionId !== params[1])
               continue;
             if (sql.includes('"review_reason" =') && row.reviewReason !== params[3]) continue;
@@ -274,4 +282,27 @@ test("duplicate paid webhooks activate a free fixed slot only once", async () =>
   await Promise.all([activatePaidAd(paidSession()), activatePaidAd(paidSession())]);
   expect(state.ads[0].status).toBe("active");
   expect(state.refund).not.toHaveBeenCalled();
+});
+
+test("a refund delivered before checkout completion prevents activation", async () => {
+  state.ads[0].stripeSessionId = "paid-session";
+  await pauseReversedAdCharge({ payment_intent: "intent" } as Stripe.Charge);
+  await activatePaidAd(paidSession());
+  expect(state.ads[0].status).toBe("paused");
+});
+
+test("concurrent refund and activation always leave the campaign paused", async () => {
+  state.ads[0].stripeSessionId = "paid-session";
+  await Promise.all([
+    activatePaidAd(paidSession()),
+    pauseReversedAdCharge({ payment_intent: "intent" } as Stripe.Charge),
+  ]);
+  expect(state.ads[0].status).toBe("paused");
+});
+
+test("a reversal for an older checkout never pauses a replacement payment", async () => {
+  state.ads[0].stripeSessionId = "replacement-session";
+  state.ads[0].status = "active";
+  await pauseReversedAdCharge({ payment_intent: "intent" } as Stripe.Charge);
+  expect(state.ads[0].status).toBe("active");
 });

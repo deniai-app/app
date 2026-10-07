@@ -1,8 +1,9 @@
-import { sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type Stripe from "stripe";
-import type { db } from "@/db/drizzle";
+import { db } from "@/db/drizzle";
 import { billing } from "@/db/schema";
 import { findPlanById } from "@/lib/billing";
+import { unchangedBillingSnapshot } from "@/lib/billing-snapshot";
 import { stripe } from "@/lib/stripe";
 
 /** Statuses under which a subscription (still) grants its plan. */
@@ -49,9 +50,15 @@ export type LifetimePurchase = {
   checkoutSessionId: string;
 };
 
-function isUnreversedCharge(intent: Stripe.Checkout.Session["payment_intent"]) {
+export function isUnreversedCharge(intent: Stripe.Checkout.Session["payment_intent"]) {
   const charge = intent && typeof intent !== "string" ? intent.latest_charge : null;
-  return Boolean(charge && typeof charge !== "string" && !charge.refunded && !charge.disputed);
+  return Boolean(
+    charge &&
+    typeof charge !== "string" &&
+    !charge.refunded &&
+    !charge.disputed &&
+    !(charge.amount_refunded > 0),
+  );
 }
 
 /**
@@ -98,35 +105,118 @@ export async function saveLifetimePlan(
     customerId,
     purchase,
     extra,
+    expectedSubscriptionId,
+    expectedBillingRecord,
   }: {
     userId: string;
     customerId: string;
     purchase: LifetimePurchase;
     extra?: Partial<typeof billing.$inferInsert>;
+    expectedSubscriptionId?: string;
+    expectedBillingRecord?: typeof billing.$inferSelect | null;
   },
 ) {
-  const updates = {
-    ...extra,
-    stripeCustomerId: customerId,
-    stripeSubscriptionId: null,
-    planId: purchase.planId,
-    priceId: purchase.priceId,
-    status: "paid",
-    mode: "payment",
-    currentPeriodEnd: null,
-    cancelAt: null,
-    checkoutSessionId: purchase.checkoutSessionId,
-  };
+  return database.transaction(
+    async (tx) => {
+      await tx.execute(sql`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`);
+      // Recheck inside the same lock used by reversal handling: event delivery
+      // order must never resurrect a refunded or disputed one-time purchase.
+      const live = await stripe.checkout.sessions.retrieve(
+        purchase.checkoutSessionId,
+        { expand: ["payment_intent.latest_charge"] },
+        { timeout: 10_000, maxNetworkRetries: 0 },
+      );
+      if (live.payment_status !== "paid" || !isUnreversedCharge(live.payment_intent))
+        return undefined;
+      const updates = {
+        ...extra,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: null,
+        planId: purchase.planId,
+        priceId: purchase.priceId,
+        status: "paid",
+        mode: "payment",
+        currentPeriodEnd: null,
+        cancelAt: null,
+        checkoutSessionId: purchase.checkoutSessionId,
+      };
 
-  const [saved] = await database
-    .insert(billing)
-    .values({ userId, ...updates })
-    .onConflictDoUpdate({
-      target: billing.userId,
-      targetWhere: sql`organization_id IS NULL`,
-      set: { ...updates, updatedAt: new Date() },
-    })
-    .returning();
+      if (expectedSubscriptionId || expectedBillingRecord) {
+        const [saved] = await tx
+          .update(billing)
+          .set({ ...updates, updatedAt: new Date() })
+          .where(
+            and(
+              eq(billing.userId, userId),
+              isNull(billing.organizationId),
+              expectedSubscriptionId
+                ? eq(billing.stripeSubscriptionId, expectedSubscriptionId)
+                : undefined,
+              expectedBillingRecord ? unchangedBillingSnapshot(expectedBillingRecord) : undefined,
+            ),
+          )
+          .returning();
+        return saved;
+      }
 
-  return saved;
+      const [saved] = await tx
+        .insert(billing)
+        .values({ userId, ...updates })
+        .onConflictDoUpdate({
+          target: billing.userId,
+          targetWhere: sql`organization_id IS NULL`,
+          set: { ...updates, updatedAt: new Date() },
+          setWhere: expectedBillingRecord === null ? sql`false` : undefined,
+        })
+        .returning();
+
+      return saved;
+    },
+    { isolationLevel: "read committed" },
+  );
+}
+
+/** Revoke only the reversed one-time checkout, preserving any newer contract. */
+export async function revokeReversedLifetimeCharge(charge: Stripe.Charge) {
+  const paymentIntent =
+    typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+  if (!paymentIntent) return;
+  const sessions = await stripe.checkout.sessions.list({
+    payment_intent: paymentIntent,
+    limit: 100,
+  });
+  for (const session of sessions.data) {
+    const userId = session.metadata?.userId ?? session.client_reference_id;
+    if (
+      !userId ||
+      session.mode !== "payment" ||
+      session.metadata?.organizationId ||
+      !isLifetimePlanId(session.metadata?.planId)
+    )
+      continue;
+    await db.transaction(
+      async (tx) => {
+        await tx.execute(sql`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`);
+        await tx
+          .update(billing)
+          .set({
+            planId: null,
+            priceId: null,
+            mode: "subscription",
+            status: "inactive",
+            currentPeriodEnd: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(billing.userId, userId),
+              isNull(billing.organizationId),
+              eq(billing.mode, "payment"),
+              eq(billing.checkoutSessionId, session.id),
+            ),
+          );
+      },
+      { isolationLevel: "read committed" },
+    );
+  }
 }

@@ -7,6 +7,7 @@ import { env } from "@/env";
 import { isAllowedAdOrigin } from "@/lib/ad-origin";
 import { auth } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
+import { readRequestJson, RequestBodyTooLargeError } from "@/lib/request-body";
 
 export async function POST(request: Request) {
   if (!isAllowedAdOrigin(request)) return new Response(null, { status: 403 });
@@ -14,9 +15,13 @@ export async function POST(request: Request) {
   if (!session?.session || session.user.isAnonymous) return new Response(null, { status: 401 });
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET)
     return new Response(null, { status: 503 });
-  const input = z
-    .object({ id: z.string().uuid() })
-    .safeParse(await request.json().catch(() => null));
+  let body: unknown = null;
+  try {
+    body = await readRequestJson(request, 4096);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) return new Response(null, { status: 413 });
+  }
+  const input = z.object({ id: z.string().uuid() }).safeParse(body);
   if (!input.success) return new Response(null, { status: 400 });
 
   try {

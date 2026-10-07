@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  bigint,
   index,
   integer,
   pgTable,
@@ -37,12 +38,13 @@ export const billing = pgTable(
     cardFunding: text("card_funding"),
     // When the user verified a card via SetupIntent (free-tier boost)
     cardVerifiedAt: timestamp("card_verified_at"),
+    deletionPending: boolean("deletion_pending").notNull().default(false),
     trialPaymentMethodFingerprint: text("trial_payment_method_fingerprint"),
     trialUsedAt: timestamp("trial_used_at"),
     // Max Mode (Usage-based billing for Pro plan)
     maxModeEnabled: boolean("max_mode_enabled").default(false).notNull(),
-    maxModeUsageBasic: integer("max_mode_usage_basic").default(0).notNull(),
-    maxModeUsagePremium: integer("max_mode_usage_premium").default(0).notNull(),
+    maxModeUsageBasic: bigint("max_mode_usage_basic", { mode: "number" }).default(0).notNull(),
+    maxModeUsagePremium: bigint("max_mode_usage_premium", { mode: "number" }).default(0).notNull(),
     maxModePeriodStart: timestamp("max_mode_period_start"),
     stripeMeteredSubscriptionItemId: text("stripe_metered_subscription_item_id"),
     stripeMeteredBasicItemId: text("stripe_metered_basic_item_id"),

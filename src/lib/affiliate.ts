@@ -19,7 +19,6 @@ import {
   type AffiliateResetPlanTier,
   type AffiliateRewardPreference,
 } from "@/lib/affiliate-types";
-import { resetMaxModeUsage } from "@/lib/max-mode";
 
 export { AFFILIATE_REWARD_TYPES };
 
@@ -825,21 +824,27 @@ export async function resetAffiliateCouponSending(rewardId: string) {
 
 export async function consumeAffiliateResetCredit(userId: string) {
   const now = new Date();
-  const [profile] = await db
-    .update(affiliateProfile)
-    .set({ resetCredits: sql`${affiliateProfile.resetCredits} - 1`, updatedAt: now })
-    .where(and(eq(affiliateProfile.userId, userId), sql`${affiliateProfile.resetCredits} > 0`))
-    .returning({ resetCredits: affiliateProfile.resetCredits });
+  return db.transaction(
+    async (tx) => {
+      await tx.execute(sql`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`);
+      const [profile] = await tx
+        .update(affiliateProfile)
+        .set({ resetCredits: sql`${affiliateProfile.resetCredits} - 1`, updatedAt: now })
+        .where(and(eq(affiliateProfile.userId, userId), sql`${affiliateProfile.resetCredits} > 0`))
+        .returning({ resetCredits: affiliateProfile.resetCredits });
 
-  if (!profile) {
-    return null;
-  }
+      if (!profile) {
+        return null;
+      }
 
-  await db
-    .update(usageQuota)
-    .set({ used: 0, periodStart: now, updatedAt: now })
-    .where(eq(usageQuota.userId, userId));
+      await tx
+        .update(usageQuota)
+        .set({ used: 0, periodStart: now, updatedAt: now })
+        .where(eq(usageQuota.userId, userId));
 
-  await resetMaxModeUsage(userId);
-  return profile.resetCredits;
+      // A quota reward does not erase incurred charges or a whole team's ledger.
+      return profile.resetCredits;
+    },
+    { isolationLevel: "read committed" },
+  );
 }

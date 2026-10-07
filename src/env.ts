@@ -16,6 +16,7 @@ export const env = createEnv({
     GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+    CRON_SECRET: z.string().min(32).optional(),
     STRIPE_FLASH_OFFER_COUPON_ID: z.string().min(1).optional(),
     /**
      * Customer Portal configuration (`bpc_...`) used for billing portal sessions.
@@ -102,6 +103,7 @@ export const env = createEnv({
     GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    CRON_SECRET: process.env.CRON_SECRET,
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     DENI_API_KEY: process.env.DENI_API_KEY,
     DENI_API_BASE_URL: process.env.DENI_API_BASE_URL,

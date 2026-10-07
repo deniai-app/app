@@ -58,26 +58,21 @@ vi.mock("@/lib/usage", async () => {
   return {
     UsageLimitError,
     consumeUsage: vi.fn(
-      async ({ amount, allowLimitOverflow }: { amount: number; allowLimitOverflow?: boolean }) => {
-        const settling = state.consumed > 0;
-        if (settling && state.failSettlement) throw new Error("Quota write failed");
-        if (settling && state.limitReached && !allowLimitOverflow) throw new UsageLimitError();
+      async ({ amount, reservationId }: { amount: number; reservationId: string }) => {
         state.consumed += amount;
-        return { maxModeAmount: state.guest ? 0 : amount };
+        return { reservationId, maxModeAmount: 0 };
       },
     ),
-    refundUsage: vi.fn(async ({ amount }: { amount: number }) => {
-      state.refunded += amount;
+    recordObservedUsage: vi.fn(async () => {}),
+    settleUsage: vi.fn(async ({ amount }: { amount: number }) => {
+      if (state.failSettlement) throw new Error("Quota write failed");
+      state.refunded += state.consumed - amount;
       state.settled++;
-      return { maxModeRefunded: state.guest ? 0 : amount };
+      state.reported += state.guest ? 0 : amount;
+      return { amount, maxModeAmount: state.guest ? 0 : amount };
     }),
   };
 });
-vi.mock("@/lib/max-mode", () => ({
-  reportMaxModeUsageToStripe: vi.fn(async (_user, _category, amount) => {
-    state.reported += amount;
-  }),
-}));
 vi.mock("@/app/api/chat/_lib/model", async () => {
   class ChatRouteError extends Error {}
   return {
@@ -113,6 +108,7 @@ vi.mock("ai", async () => {
               await POST(
                 new Request("http://localhost/api/chat/stop", {
                   method: "POST",
+                  headers: { "content-type": "application/json" },
                   body: JSON.stringify({ id: "chat" }),
                 }),
               );
@@ -165,12 +161,37 @@ async function run() {
   const response = await POST(
     new Request("http://localhost/api/chat", {
       method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: "chat", model: "gpt-5.6-luna", messages }),
     }),
   );
   expect(response.status).toBe(200);
   await response.text();
 }
+
+test("cross-site chat requests cannot consume usage", async () => {
+  const response = await POST(
+    new Request("http://localhost/api/chat", {
+      method: "POST",
+      headers: { origin: "https://attacker.example", "content-type": "application/json" },
+      body: "{}",
+    }),
+  );
+  expect(response.status).toBe(403);
+  expect(state.consumed).toBe(0);
+});
+
+test("an oversized chat request cannot consume usage", async () => {
+  const response = await POST(
+    new Request("http://localhost/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json", "content-length": String(17 * 1024 * 1024) },
+      body: "{}",
+    }),
+  );
+  expect(response.status).toBe(413);
+  expect(state.consumed).toBe(0);
+});
 
 test.each(["stopped", "replaced"] as const)(
   "%s generations reconcile usage without writing a stale transcript",

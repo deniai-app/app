@@ -1,7 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { tool } from "ai";
 import { z } from "zod";
 import { env } from "@/env";
-import { consumeUsage, getSearchToolUsageAmount, refundUsage, UsageLimitError } from "@/lib/usage";
+import {
+  consumeUsage,
+  recordObservedUsage,
+  getSearchToolUsageAmount,
+  settleUsage,
+  UsageLimitError,
+} from "@/lib/usage";
 import { fetchPageMarkdown, fetchPageText } from "./fetch-page";
 import { fetchWithAbortHandling, isAbortError, withDeadline } from "./helpers";
 import type { ChatToolUsageContext, SearchResult } from "./types";
@@ -23,34 +30,35 @@ type ExaSearchResponse = {
   }>;
 };
 
-async function chargeSearchUsage(usage: ChatToolUsageContext): Promise<number> {
+type SearchCharge = { amount: number; reservationId: string };
+
+async function chargeSearchUsage(usage: ChatToolUsageContext): Promise<SearchCharge> {
   const amount = getSearchToolUsageAmount(usage.isAnonymous);
-  const consumed = await consumeUsage({
+  const reservationId = `search:${randomUUID()}`;
+  await consumeUsage({
     userId: usage.userId,
     category: "basic",
     isAnonymous: usage.isAnonymous,
     amount,
+    reservationId,
   });
-
-  if (consumed.limit === null) {
-    return 0;
-  }
-
-  usage.onCharged?.({ amount, maxModeAmount: consumed.maxModeAmount });
-  return amount;
+  return { amount, reservationId };
 }
 
-async function refundSearchUsage(usage: ChatToolUsageContext, amount: number): Promise<void> {
+async function settleSearchUsage(
+  usage: ChatToolUsageContext,
+  charge: SearchCharge,
+  amount: number,
+): Promise<void> {
   try {
-    const refunded = await refundUsage({
+    await recordObservedUsage({
       userId: usage.userId,
-      category: "basic",
+      reservationId: charge.reservationId,
       amount,
-      isAnonymous: usage.isAnonymous,
     });
-    usage.onRefunded?.({ amount, maxModeRefunded: refunded.maxModeRefunded });
+    await settleUsage({ userId: usage.userId, reservationId: charge.reservationId, amount });
   } catch (error) {
-    console.error("Failed to refund search tool usage", error);
+    console.error("Search usage reservation retained for settlement", error);
   }
 }
 
@@ -88,13 +96,13 @@ export function createSearchTool(usage?: ChatToolUsageContext) {
     }),
     execute: async ({ query, amount }, { abortSignal }) => {
       const maxResults = Math.min(Math.max(amount ?? 10, 5), 15);
-      let chargedAmount = 0;
+      let charge: SearchCharge | undefined;
       let results: SearchHit[] = [];
 
       try {
-        return await withDeadline(SEARCH_TOTAL_TIMEOUT_MS, abortSignal, async (signal) => {
+        const outcome = await withDeadline(SEARCH_TOTAL_TIMEOUT_MS, abortSignal, async (signal) => {
           if (usage) {
-            chargedAmount = await chargeSearchUsage(usage);
+            charge = await chargeSearchUsage(usage);
           }
 
           const EXA_API_KEY = env.EXA_API_KEY;
@@ -126,9 +134,9 @@ export function createSearchTool(usage?: ChatToolUsageContext) {
           );
 
           if (response.status === 429) {
-            if (chargedAmount > 0 && usage) {
-              await refundSearchUsage(usage, chargedAmount);
-              chargedAmount = 0;
+            if (charge && charge.amount > 0 && usage) {
+              await settleSearchUsage(usage, charge, 0);
+              charge = undefined;
             }
             return [];
           }
@@ -161,12 +169,15 @@ export function createSearchTool(usage?: ChatToolUsageContext) {
               .map((result) => ({ ...result, content: result.description })),
           ];
         });
+        if (charge && usage) await settleSearchUsage(usage, charge, charge.amount);
+        return outcome;
       } catch (error) {
         if (results.length > 0) {
+          if (charge && usage) await settleSearchUsage(usage, charge, charge.amount);
           return results.map((result) => ({ ...result, content: result.description }));
         }
-        if (chargedAmount > 0 && usage) {
-          await refundSearchUsage(usage, chargedAmount);
+        if (charge && charge.amount > 0 && usage) {
+          await settleSearchUsage(usage, charge, 0);
         }
         if (error instanceof UsageLimitError) {
           throw new Error("Web search is unavailable because the usage limit was reached.");

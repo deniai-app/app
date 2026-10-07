@@ -9,7 +9,7 @@ export function getPersonalCustomerOwnership(
 }
 
 export type AccountDeletionStatus = {
-  state: "ready" | "active" | "cancelPending" | "teamOwner";
+  state: "ready" | "active" | "cancelPending" | "billingPending" | "teamOwner";
   periodEnd: string | null;
 };
 

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { db as Db } from "@/db/drizzle";
 import { member, organization, projects } from "@/db/schema";
 
@@ -6,6 +6,24 @@ export type AccessibleProject = typeof projects.$inferSelect & {
   organizationName: string | null;
   canManage: boolean;
 };
+
+/** Evaluate membership against the current project row in the same database statement. */
+export function currentProjectAccessWhere(userId: string) {
+  return or(
+    and(eq(projects.userId, userId), isNull(projects.organizationId)),
+    sql`exists (select 1 from ${member} where ${member.organizationId} = ${projects.organizationId} and ${member.userId} = ${userId})`,
+  );
+}
+
+export function currentProjectManagementWhere(userId: string) {
+  return or(
+    and(eq(projects.userId, userId), isNull(projects.organizationId)),
+    sql`exists (select 1 from ${member}
+      where ${member.organizationId} = ${projects.organizationId}
+        and ${member.userId} = ${userId}
+        and (${projects.userId} = ${userId} or ${member.role} in ('owner', 'admin')))`,
+  );
+}
 
 export async function listUserMemberships(database: typeof Db, userId: string) {
   return database

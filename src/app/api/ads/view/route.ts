@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { recordAdEvent, verifyAdDelivery } from "@/lib/ads";
 import { isFreeAdViewer } from "@/lib/usage";
 import { anonymousAdViewerId } from "@/lib/ad-ip";
+import { readRequestJson, RequestBodyTooLargeError } from "@/lib/request-body";
 
 export async function POST(request: Request) {
   if (!isAllowedAdOrigin(request)) return new Response(null, { status: 403 });
@@ -17,9 +18,13 @@ export async function POST(request: Request) {
     !(await isFreeAdViewer(session.session.userId))
   )
     return new Response(null, { status: 403 });
-  const input = z
-    .object({ id: z.string().uuid(), token: z.string() })
-    .safeParse(await request.json().catch(() => null));
+  let body: unknown;
+  try {
+    body = await readRequestJson(request, 4096);
+  } catch (error) {
+    return new Response(null, { status: error instanceof RequestBodyTooLargeError ? 413 : 400 });
+  }
+  const input = z.object({ id: z.string().uuid(), token: z.string() }).safeParse(body);
   if (!input.success || !verifyAdDelivery(input.data.token, input.data.id, viewerId))
     return new Response(null, { status: 400 });
   await recordAdEvent(

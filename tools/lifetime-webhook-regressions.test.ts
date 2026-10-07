@@ -1,4 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest";
+import { type SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 const state = vi.hoisted(() => ({
   record: {} as Record<string, unknown>,
@@ -6,6 +8,9 @@ const state = vi.hoisted(() => ({
   completedSessions: [] as Record<string, unknown>[],
   /** What Stripe returns when the webhook reads the subscription; defaults to the event's own copy. */
   currentSubscription: null as Record<string, unknown> | null,
+  replacementDuringLookup: false,
+  replacementDuringLineItems: false,
+  reversed: false,
 }));
 vi.mock("@/env", () => ({
   env: { STRIPE_SECRET_KEY: "sk_test", STRIPE_WEBHOOK_SECRET: "whsec_test" },
@@ -22,7 +27,7 @@ vi.mock("@/lib/ad-checkout", () => ({
   pauseReversedAdCharge: vi.fn(),
   releaseExpiredAdCheckout: vi.fn(),
 }));
-vi.mock("@/lib/max-mode", () => ({ resetMaxModeUsage: vi.fn() }));
+vi.mock("@/lib/max-mode", () => ({ syncMaxModeMeterPeriod: vi.fn() }));
 vi.mock("@/lib/stripe-disputes", () => ({
   handleChargeDisputeClosed: vi.fn(),
   handleChargeDisputeCreated: vi.fn(),
@@ -45,24 +50,73 @@ vi.mock("@/lib/stripe", () => ({
     },
     checkout: {
       sessions: {
-        list: async () => ({ data: state.completedSessions }),
-        listLineItems: async () => ({ data: [{ price: { id: "price_pro_lifetime" } }] }),
+        list: async () => {
+          if (state.replacementDuringLookup) state.record.stripeSubscriptionId = "sub_new";
+          return { data: state.completedSessions };
+        },
+        retrieve: async () => ({
+          ...paidLifetimeSession,
+          payment_intent: { latest_charge: { refunded: state.reversed, disputed: false } },
+        }),
+        listLineItems: async () => {
+          if (state.replacementDuringLineItems)
+            Object.assign(state.record, {
+              stripeSubscriptionId: "sub_new",
+              planId: "max_monthly",
+              status: "active",
+            });
+          return { data: [{ price: { id: "price_pro_lifetime" } }] };
+        },
       },
     },
   },
 }));
 vi.mock("@/db/drizzle", () => {
+  const matches = (condition?: SQL) => {
+    if (!condition) return true;
+    const query = new PgDialect().sqlToQuery(condition);
+    for (const match of query.sql.matchAll(/"([a-z_]+)" (?:IS NOT DISTINCT FROM|=) \$(\d+)/g)) {
+      const key = match[1].replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+      const actual = state.record[key] ?? null;
+      const expected = query.params[Number(match[2]) - 1] ?? null;
+      if (actual instanceof Date ? actual.toISOString() !== expected : actual !== expected)
+        return false;
+    }
+    return true;
+  };
   const result = (rows: unknown[]) => {
     const promise = Promise.resolve(rows);
     return Object.assign(promise, { limit: () => promise });
   };
   return {
     db: {
-      select: () => ({ from: () => ({ where: () => result([state.record]) }) }),
+      transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+        run((await import("@/db/drizzle")).db),
+      execute: async () => {},
+      update: () => ({
+        set: (updates: Record<string, unknown>) => ({
+          where: (condition: SQL) => {
+            const applied = Promise.resolve().then(() => {
+              if (!matches(condition)) return [];
+              Object.assign(state.record, updates);
+              return [{ ...state.record }];
+            });
+            return Object.assign(applied, { returning: () => applied });
+          },
+        }),
+      }),
+      select: () => ({ from: () => ({ where: () => result([{ ...state.record }]) }) }),
       insert: () => ({
         values: () => ({
-          onConflictDoUpdate: ({ set }: { set: Record<string, unknown> }) => {
+          onConflictDoUpdate: ({
+            set,
+            setWhere,
+          }: {
+            set: Record<string, unknown>;
+            setWhere?: SQL;
+          }) => {
             const applied = Promise.resolve().then(() => {
+              if (!matches(setWhere)) return [];
               Object.assign(state.record, set);
               return [state.record];
             });
@@ -112,6 +166,64 @@ beforeEach(() => {
   };
   state.completedSessions = [];
   state.currentSubscription = null;
+  state.replacementDuringLookup = false;
+  state.replacementDuringLineItems = false;
+  state.reversed = false;
+});
+
+test.each([false, true])(
+  "an old deletion cannot clear a replacement subscription (lifetime=%s)",
+  async (lifetime) => {
+    Object.assign(state.record, {
+      stripeSubscriptionId: "sub_new",
+      planId: "max_monthly",
+      status: "active",
+      mode: "subscription",
+    });
+    if (lifetime) state.completedSessions = [paidLifetimeSession];
+    state.event = {
+      type: "customer.subscription.deleted",
+      data: {
+        object: {
+          object: "subscription",
+          id: "sub_old",
+          customer: "customer",
+          metadata: { userId: "user" },
+          items: { data: [] },
+        },
+      },
+    };
+    expect((await deliver()).status).toBe(200);
+    expect(state.record).toMatchObject({
+      stripeSubscriptionId: "sub_new",
+      planId: "max_monthly",
+      status: "active",
+    });
+  },
+);
+
+test("a subscription replaced during lifetime lookup is protected by the conditional write", async () => {
+  Object.assign(state.record, {
+    stripeSubscriptionId: "sub_old",
+    planId: "max_monthly",
+    status: "active",
+  });
+  state.replacementDuringLookup = true;
+  state.completedSessions = [paidLifetimeSession];
+  state.event = {
+    type: "customer.subscription.deleted",
+    data: {
+      object: {
+        object: "subscription",
+        id: "sub_old",
+        customer: "customer",
+        metadata: { userId: "user" },
+        items: { data: [] },
+      },
+    },
+  };
+  expect((await deliver()).status).toBe(200);
+  expect(state.record).toMatchObject({ stripeSubscriptionId: "sub_new", status: "active" });
 });
 
 test("a paid lifetime checkout is activated without the buyer returning", async () => {
@@ -220,4 +332,43 @@ test("a stale subscription event cannot undo a newer cancellation", async () => 
 
   expect((await deliver()).status).toBe(200);
   expect(state.record).toMatchObject({ status: "inactive" });
+});
+
+test("a refunded checkout cannot activate a lifetime plan even if its completion event is delayed", async () => {
+  state.reversed = true;
+  state.event = { type: "checkout.session.completed", data: { object: paidLifetimeSession } };
+  expect((await deliver()).status).toBe(200);
+  expect(state.record.status).toBe("inactive");
+});
+test("a lifetime webhook cannot overwrite a contract activated during Stripe lookup", async () => {
+  state.replacementDuringLineItems = true;
+  state.event = { type: "checkout.session.completed", data: { object: paidLifetimeSession } };
+  expect((await deliver()).status).toBe(200);
+  expect(state.record.stripeSubscriptionId).toBe("sub_new");
+});
+test("a lifetime refund revokes only the affected checkout", async () => {
+  Object.assign(state.record, {
+    mode: "payment",
+    status: "paid",
+    planId: "pro_lifetime",
+    checkoutSessionId: "cs_lifetime",
+  });
+  state.completedSessions = [paidLifetimeSession];
+  state.event = { type: "charge.refunded", data: { object: { payment_intent: "intent" } } };
+  expect((await deliver()).status).toBe(200);
+  expect(state.record.status).toBe("inactive");
+});
+test("a refund for an old lifetime checkout preserves a newer subscription", async () => {
+  Object.assign(state.record, {
+    stripeSubscriptionId: "sub_new",
+    mode: "subscription",
+    status: "active",
+    planId: "max_monthly",
+    checkoutSessionId: "cs_new",
+  });
+  state.completedSessions = [paidLifetimeSession];
+  state.event = { type: "charge.refunded", data: { object: { payment_intent: "intent" } } };
+  expect((await deliver()).status).toBe(200);
+  expect(state.record.stripeSubscriptionId).toBe("sub_new");
+  expect(state.record.status).toBe("active");
 });

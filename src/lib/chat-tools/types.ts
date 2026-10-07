@@ -7,8 +7,6 @@ export type SearchResult = {
 export type ChatToolUsageContext = {
   userId: string;
   isAnonymous: boolean;
-  onCharged?: (event: { amount: number; maxModeAmount: number }) => void;
-  onRefunded?: (event: { amount: number; maxModeRefunded: number }) => void;
 };
 
 export type CreateChatToolsOptions = {

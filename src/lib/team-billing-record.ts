@@ -1,6 +1,7 @@
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 import type { db } from "@/db/drizzle";
 import { billing } from "@/db/schema";
+import { unchangedBillingSnapshot } from "@/lib/billing-snapshot";
 
 type Database = typeof db;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -49,18 +50,48 @@ export function saveTeamBillingRecord(
   userId: string,
   organizationId: string,
   updates: TeamBillingUpdates & { stripeCustomerId: string },
+): Promise<typeof billing.$inferSelect>;
+export function saveTeamBillingRecord(
+  database: Database,
+  userId: string,
+  organizationId: string,
+  updates: TeamBillingUpdates & { stripeCustomerId: string },
+  expectedSubscriptionId: string | null | undefined,
+  expectedBillingRecord?: typeof billing.$inferSelect,
+): Promise<typeof billing.$inferSelect | undefined>;
+export function saveTeamBillingRecord(
+  database: Database,
+  userId: string,
+  organizationId: string,
+  updates: TeamBillingUpdates & { stripeCustomerId: string },
+  expectedSubscriptionId?: string | null,
+  expectedBillingRecord?: typeof billing.$inferSelect,
 ) {
   return withTeamBillingLock(database, organizationId, async (transaction) => {
     const existing = await findTeamBillingRecord(transaction, organizationId);
+    if (
+      expectedSubscriptionId !== undefined &&
+      (existing?.stripeSubscriptionId ?? null) !== expectedSubscriptionId
+    ) {
+      return undefined;
+    }
     if (existing) {
       // Preserve old duplicate rows/ledgers, but revoke/update subscription state
       // on ALL of them so no legacy admin copy can retain paid entitlement.
       const [canonical] = await transaction
         .update(billing)
         .set({ ...updates, updatedAt: new Date() })
-        .where(eq(billing.id, existing.id))
+        .where(
+          and(
+            eq(billing.id, existing.id),
+            expectedBillingRecord ? unchangedBillingSnapshot(expectedBillingRecord) : undefined,
+          ),
+        )
         .returning();
-      if (!canonical) throw new Error("Team billing record disappeared.");
+      if (!canonical) {
+        if (expectedBillingRecord) return undefined;
+        throw new Error("Team billing record disappeared.");
+      }
       // Do not copy the payer's card fingerprint/customer IDs to other users,
       // or discard legacy subscription references needed for safe cleanup.
       const { planId, status, mode, currentPeriodEnd, cancelAt } = updates;
@@ -71,6 +102,7 @@ export function saveTeamBillingRecord(
         .returning({ id: billing.id });
       return canonical;
     }
+    if (expectedBillingRecord) return undefined;
     const [created] = await transaction
       .insert(billing)
       .values({ userId, organizationId, ...updates })

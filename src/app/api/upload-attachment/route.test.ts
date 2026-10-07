@@ -106,6 +106,20 @@ test("rate-limits uploads per account", async () => {
   expect(mocks.uploadFile).not.toHaveBeenCalled();
 });
 
+test("cross-site upload forms cannot store files using a victim's session", async () => {
+  const body = new FormData();
+  body.set("file", new File([PNG], "image.png", { type: "image/png" }));
+  const response = await POST(
+    new Request("https://app.example/api/upload-attachment", {
+      method: "POST",
+      headers: { origin: "https://attacker.example" },
+      body,
+    }),
+  );
+  expect(response.status).toBe(403);
+  expect(mocks.uploadFile).not.toHaveBeenCalled();
+});
+
 test("rejects an oversized body that arrives without a Content-Length", async () => {
   const chunk = new Uint8Array(1024 * 1024);
   let sent = 0;

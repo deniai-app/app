@@ -7,6 +7,7 @@ import { ArtifactLivePreview } from "@/components/chat/artifact-live-preview";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useArtifactPreview } from "@/components/chat/artifact-preview-context";
 import { Button } from "@/components/ui/button";
+import { createSandboxedPreviewDocument } from "@/lib/artifact-preview-document";
 
 const HTML_PREVIEWABLE_LANGUAGES = new Set(["html", "htm"]);
 const LIVE_PREVIEWABLE_LANGUAGES = new Set(["html", "htm", "jsx", "tsx", "react"]);
@@ -28,7 +29,9 @@ export function ArtifactPreviewPanel() {
   };
 
   const handleOpenInTab = () => {
-    const blob = new Blob([code], { type: "text/html" });
+    const blob = new Blob([createSandboxedPreviewDocument(code, t("Preview"))], {
+      type: "text/html",
+    });
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank", "noopener,noreferrer");
     // Revoke after a short delay to allow the tab to load

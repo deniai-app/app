@@ -12,6 +12,7 @@ type Record = {
   stripeCustomerId: string;
   status: string;
   maxModeUsageBasic?: number;
+  stripeSubscriptionId?: string | null;
 };
 let records: Record[];
 const dialect = new PgDialect();
@@ -143,4 +144,38 @@ test("entitlement predicate selects the canonical organization row, not an activ
   const query = dialect.sqlToQuery(canonicalTeamBillingRow());
   expect(query.sql).toContain("canonical.organization_id");
   expect(query.sql).toContain("ORDER BY canonical.created_at, canonical.id LIMIT 1");
+});
+
+test("a delayed old deletion cannot clear a team's replacement subscription", async () => {
+  records = [
+    {
+      id: "owner-row",
+      userId: "owner",
+      organizationId: "team",
+      stripeCustomerId: "customer",
+      status: "active",
+      stripeSubscriptionId: "sub_new",
+    },
+  ];
+  const saved = await saveTeamBillingRecord(
+    database(),
+    "owner",
+    "team",
+    { stripeCustomerId: "customer", status: "inactive", stripeSubscriptionId: null },
+    "sub_old",
+  );
+  expect(saved).toBeUndefined();
+  expect(records[0]).toMatchObject({ status: "active", stripeSubscriptionId: "sub_new" });
+});
+
+test("a deletion webhook cannot recreate a deleted team's billing row", async () => {
+  const saved = await saveTeamBillingRecord(
+    database(),
+    "owner",
+    "team",
+    { stripeCustomerId: "customer", status: "inactive", stripeSubscriptionId: null },
+    "sub_old",
+  );
+  expect(saved).toBeUndefined();
+  expect(records).toEqual([]);
 });

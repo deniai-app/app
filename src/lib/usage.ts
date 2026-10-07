@@ -1,12 +1,21 @@
-import { and, eq, isNotNull, isNull, like, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
 
 import { db } from "@/db/drizzle";
-import { billing, member, teamMemberUsagePolicy, teamUsagePolicy, usageQuota } from "@/db/schema";
+import {
+  billing,
+  member,
+  teamMemberUsagePolicy,
+  teamUsagePolicy,
+  usageQuota,
+  usageReservation,
+} from "@/db/schema";
 import { getPlanTier, isMaxTeamPlan } from "@/lib/billing";
 import { isSignupFlagged } from "@/lib/signup-risk";
 import { canonicalTeamBillingRow } from "@/lib/team-billing-record";
 
-import { isMaxModeEligible, recordMaxModeUsage, refundMaxModeUsage } from "./max-mode";
+import { isMaxModeEligible, deliverMaxModeUsageReport } from "./max-mode";
+import { enqueueMaxModeMeterEvent } from "./max-mode-meter-events";
+import { isBillingDisabled } from "./billing-config";
 
 const ACTIVE_BILLING_STATUSES = new Set(["active", "trialing", "past_due", "paid"]);
 
@@ -97,6 +106,9 @@ export class UsageLimitError extends Error {
 }
 
 type TierInfo = {
+  deletionPending: boolean;
+  billingId: string | null;
+  stripeCustomerId: string | null;
   tier: SubscriptionTier;
   planId: string | null;
   status: string | null;
@@ -143,6 +155,9 @@ async function loadTierInfo(userId: string, now: Date, database: UsageDatabase):
   // 1. Check personal billing (where organizationId is NULL)
   const [record] = await database
     .select({
+      id: billing.id,
+      deletionPending: billing.deletionPending,
+      stripeCustomerId: billing.stripeCustomerId,
       organizationId: billing.organizationId,
       planId: billing.planId,
       status: billing.status,
@@ -159,6 +174,9 @@ async function loadTierInfo(userId: string, now: Date, database: UsageDatabase):
   // 2. Check if user belongs to any org with an active team plan
   const teamRecords = await database
     .select({
+      id: billing.id,
+      deletionPending: billing.deletionPending,
+      stripeCustomerId: billing.stripeCustomerId,
       organizationId: billing.organizationId,
       planId: billing.planId,
       status: billing.status,
@@ -227,6 +245,9 @@ async function loadTierInfo(userId: string, now: Date, database: UsageDatabase):
       memberPolicy?.maxModeEnabled ?? defaultPolicy?.defaultMaxModeEnabled ?? true;
 
     return {
+      billingId: teamRecord.id,
+      deletionPending: Boolean(record?.deletionPending || teamRecord.deletionPending),
+      stripeCustomerId: teamRecord.stripeCustomerId,
       tier: isMaxTeamPlan(teamPlanId) ? "max" : "pro",
       planId: teamPlanId,
       status: teamStatus ?? null,
@@ -245,6 +266,9 @@ async function loadTierInfo(userId: string, now: Date, database: UsageDatabase):
   // 4. Fall back to personal billing
   if (!record) {
     return {
+      billingId: null,
+      deletionPending: false,
+      stripeCustomerId: null,
       tier: "free",
       planId: null,
       status: null,
@@ -267,6 +291,9 @@ async function loadTierInfo(userId: string, now: Date, database: UsageDatabase):
 
   if (!hasActiveStatus && !inGracePeriod) {
     return {
+      billingId: record.id,
+      deletionPending: record.deletionPending,
+      stripeCustomerId: record.stripeCustomerId,
       tier: "free",
       planId,
       status,
@@ -284,6 +311,9 @@ async function loadTierInfo(userId: string, now: Date, database: UsageDatabase):
   const maxModeEligible = isMaxModeEligible(planId) && status === "active";
 
   return {
+    billingId: record.id,
+    deletionPending: record.deletionPending,
+    stripeCustomerId: record.stripeCustomerId,
     tier:
       planTier === "max"
         ? "max"
@@ -484,226 +514,311 @@ async function upsertUsageRecord({
   return saved ?? null;
 }
 
-/**
- * `allowLimitOverflow` settles usage that was already incurred (for example when a
- * finished generation is reconciled). It records the full amount even past the
- * plan limit or a Max Mode cap; rejecting it would leave that usage unbilled.
- */
+export type UsagePeriod = { unit: UsageUnit; start: Date; end: Date | null };
+
+async function reservationTotals(
+  database: UsageDatabase,
+  userId: string,
+  category: UsageCategory,
+  period: UsagePeriod,
+) {
+  const [totals] = await database
+    .select({
+      baseUsed: sql<number | null>`max(${usageReservation.baseUsed})`,
+      settledUsed: sql<number>`coalesce(sum(${usageReservation.settledAmount}), 0)`,
+    })
+    .from(usageReservation)
+    .where(
+      and(
+        eq(usageReservation.userId, userId),
+        eq(usageReservation.category, category),
+        eq(usageReservation.unit, period.unit),
+        eq(usageReservation.periodStart, period.start),
+        sql`${usageReservation.periodEnd} IS NOT DISTINCT FROM ${period.end ? asTimestamptz(period.end) : sql`NULL`}`,
+      ),
+    );
+  return {
+    baseUsed: totals?.baseUsed == null ? null : Number(totals.baseUsed),
+    settledUsed: Number(totals?.settledUsed ?? 0),
+  };
+}
+
+/** Reserve quota only. Pending estimates are never written to Stripe's meter. */
 export async function consumeUsage({
   userId,
   category,
+  reservationId,
+  amount = 1,
   now = new Date(),
   isAnonymous = false,
-  amount = 1,
-  allowLimitOverflow = false,
 }: {
   userId: string;
   category: UsageCategory;
+  reservationId: string;
+  amount?: number;
   now?: Date;
   isAnonymous?: boolean;
-  amount?: number;
-  allowLimitOverflow?: boolean;
 }) {
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error("Usage amount must be a positive integer.");
-  }
-
+  if (!Number.isSafeInteger(amount) || amount <= 0)
+    throw new Error("Usage amount must be a positive safe integer.");
   return withUsageLock(userId, async (database) => {
-    const state = await calculateUsageState({
-      userId,
-      category,
-      now,
-      isAnonymous,
-      database,
-    });
-    const { tierInfo, limit, unit } = state;
-
-    if (limit === null) {
+    const [existing] = await database
+      .select()
+      .from(usageReservation)
+      .where(eq(usageReservation.id, reservationId))
+      .limit(1);
+    if (existing) {
+      if (
+        existing.userId !== userId ||
+        existing.category !== category ||
+        existing.reservedAmount !== amount
+      )
+        throw new Error("Usage reservation identity conflict.");
       return {
-        tier: tierInfo.tier,
-        unit,
-        limit: null,
+        reservationId,
+        period: { unit: existing.unit, start: existing.periodStart, end: existing.periodEnd },
+        unit: existing.unit,
+        limit: existing.limitAmount,
         remaining: null,
         usedMaxMode: false,
         maxModeAmount: 0,
       };
     }
-
-    const resetWindowCondition = buildResetWindowCondition({
-      now,
-      targetPeriodEnd: state.targetPeriodEnd,
+    const state = await calculateUsageState({ userId, category, now, isAnonymous, database });
+    const { tierInfo, limit, unit } = state;
+    if (tierInfo.deletionPending) throw new UsageLimitError("Account deletion is in progress.");
+    const maxModeEnabled = !isAnonymous && tierInfo.maxModeEnabled;
+    const period: UsagePeriod = {
       unit,
-    });
-    const isLimitReached = limit <= 0 || state.used + amount > limit;
-
-    if (isLimitReached) {
-      if (tierInfo.maxModeEnabled) {
-        const maxModeLimit =
-          category === "basic" ? tierInfo.maxModeLimitBasic : tierInfo.maxModeLimitPremium;
-        const nextMaxModeUsage = Math.max(state.used + amount - limit, 0);
-
-        // Only the slice above the plan limit is billable overage. Recording the
-        // whole `amount` would overcharge the request that first crosses the limit.
-        let maxModeAmount = Math.min(amount, state.used + amount - limit);
-
-        if (maxModeLimit !== null && nextMaxModeUsage > maxModeLimit) {
-          if (!allowLimitOverflow) {
-            throw new UsageLimitError(
-              "Usage limit reached for your plan.",
-              tierInfo.maxModeEligible,
-            );
-          }
-          // Settling already-incurred usage: keep the quota accurate so later
-          // requests stay blocked, but never bill beyond the configured cap.
-          const alreadyBilled = Math.max(state.used - limit, 0);
-          maxModeAmount = Math.max(0, Math.min(maxModeAmount, maxModeLimit - alreadyBilled));
-        }
-
-        if (maxModeAmount > 0) {
-          const recorded = await recordMaxModeUsage(userId, category, maxModeAmount, database);
-          if (!recorded.success) throw new Error("Unable to record Max Mode usage.");
-        }
-
-        await upsertUsageRecord({
-          userId,
-          category,
-          tier: tierInfo.tier,
-          limit,
-          unit,
-          amount,
-          periodStart: state.periodStart,
-          targetPeriodEnd: state.targetPeriodEnd,
-          resetWindowCondition,
-          allowOverflow: true,
-          database,
-        });
-
-        return {
-          tier: tierInfo.tier,
-          unit,
-          limit,
-          remaining: 0,
-          usedMaxMode: true,
-          maxModeAmount,
-        };
-      }
-
-      if (allowLimitOverflow) {
-        const saved = await upsertUsageRecord({
-          userId,
-          category,
-          tier: tierInfo.tier,
-          limit,
-          unit,
-          amount,
-          periodStart: state.periodStart,
-          targetPeriodEnd: state.targetPeriodEnd,
-          resetWindowCondition,
-          allowOverflow: true,
-          database,
-        });
-
-        if (!saved) {
-          throw new UsageLimitError("Usage limit reached for your plan.", tierInfo.maxModeEligible);
-        }
-
-        return {
-          tier: tierInfo.tier,
-          unit,
-          limit,
-          remaining: Math.max(limit - saved.used, 0),
-          usedMaxMode: false,
-          maxModeAmount: 0,
-        };
-      }
-
-      // If Max Mode is eligible but not enabled, throw error with flag
+      start: state.periodStart,
+      end: state.shouldReset ? state.targetPeriodEnd : (state.current?.periodEnd ?? null),
+    };
+    const maxModeLimit =
+      category === "basic" ? tierInfo.maxModeLimitBasic : tierInfo.maxModeLimitPremium;
+    const overage = limit === null ? 0 : Math.max(state.used + amount - limit, 0);
+    if (overage > 0 && (!maxModeEnabled || (maxModeLimit !== null && overage > maxModeLimit))) {
       throw new UsageLimitError("Usage limit reached for your plan.", tierInfo.maxModeEligible);
     }
-
-    const saved = await upsertUsageRecord({
+    const totals = await reservationTotals(database, userId, category, period);
+    if (limit !== null) {
+      const saved = await upsertUsageRecord({
+        userId,
+        category,
+        tier: tierInfo.tier,
+        limit,
+        unit,
+        amount,
+        periodStart: state.periodStart,
+        targetPeriodEnd: state.targetPeriodEnd,
+        resetWindowCondition: buildResetWindowCondition({
+          now,
+          targetPeriodEnd: state.targetPeriodEnd,
+          unit,
+        }),
+        allowOverflow: maxModeEnabled,
+        database,
+      });
+      if (!saved)
+        throw new UsageLimitError("Usage limit reached for your plan.", tierInfo.maxModeEligible);
+    }
+    await database.insert(usageReservation).values({
+      id: reservationId,
       userId,
       category,
-      tier: tierInfo.tier,
-      limit,
       unit,
-      amount,
-      periodStart: state.periodStart,
-      targetPeriodEnd: state.targetPeriodEnd,
-      resetWindowCondition,
-      allowOverflow: false,
-      database,
+      periodStart: period.start,
+      periodEnd: period.end,
+      reservedAmount: amount,
+      baseUsed: totals.baseUsed ?? state.used,
+      limitAmount: limit,
+      maxModeEnabled,
+      maxModeLimit,
+      billingId: tierInfo.billingId,
+      stripeCustomerId: tierInfo.stripeCustomerId,
+      createdAt: now,
+      updatedAt: now,
     });
-
-    if (!saved) {
-      throw new UsageLimitError("Usage limit reached for your plan.", tierInfo.maxModeEligible);
-    }
-
     return {
+      reservationId,
       tier: tierInfo.tier,
+      period,
       unit,
       limit,
-      remaining: Math.max(limit - saved.used, 0),
-      usedMaxMode: false,
+      remaining: limit === null ? null : Math.max(limit - state.used - amount, 0),
+      usedMaxMode: overage > 0,
       maxModeAmount: 0,
     };
   });
 }
 
-export async function refundUsage({
+/** Atomically settle actual usage, the original payer's ledger, and the durable meter event. */
+export async function settleUsage({
   userId,
-  category,
-  amount = 1,
+  reservationId,
+  amount,
   now = new Date(),
-  isAnonymous = false,
+  staleBefore,
 }: {
   userId: string;
-  category: UsageCategory;
-  amount?: number;
+  reservationId: string;
+  amount: number;
   now?: Date;
-  isAnonymous?: boolean;
+  staleBefore?: Date;
 }) {
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error("Refund amount must be a positive integer.");
+  if (!Number.isSafeInteger(amount) || amount < 0)
+    throw new Error("Settled usage must be a nonnegative safe integer.");
+  const result = await withUsageLock(userId, async (database) => {
+    const [reservation] = await database
+      .select()
+      .from(usageReservation)
+      .where(and(eq(usageReservation.id, reservationId), eq(usageReservation.userId, userId)))
+      .limit(1);
+    if (!reservation) throw new Error("Usage reservation not found.");
+    if (reservation.settledAt)
+      return { maxModeAmount: reservation.maxModeAmount, amount: reservation.settledAmount! };
+    if (staleBefore) {
+      if (reservation.updatedAt > staleBefore) return { maxModeAmount: 0, amount: null };
+      amount = reservation.observedAmount;
+    }
+    const period = {
+      unit: reservation.unit,
+      start: reservation.periodStart,
+      end: reservation.periodEnd,
+    };
+    const totals = await reservationTotals(database, userId, reservation.category, period);
+    const committedUsed = reservation.baseUsed + totals.settledUsed;
+    const limit = reservation.limitAmount;
+    let maxModeAmount =
+      isBillingDisabled || !reservation.maxModeEnabled || limit === null
+        ? 0
+        : Math.min(amount, Math.max(committedUsed + amount - limit, 0));
+    if (reservation.maxModeLimit !== null && limit !== null) {
+      maxModeAmount = Math.max(
+        0,
+        Math.min(maxModeAmount, reservation.maxModeLimit - Math.max(committedUsed - limit, 0)),
+      );
+    }
+    if (limit !== null) {
+      await database
+        .update(usageQuota)
+        .set({
+          used: sql`GREATEST(${usageQuota.used} + ${amount - reservation.reservedAmount}, 0)`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(usageQuota.userId, userId),
+            eq(usageQuota.category, reservation.category),
+            eq(usageQuota.unit, period.unit),
+            eq(usageQuota.periodStart, period.start),
+            sql`${usageQuota.periodEnd} IS NOT DISTINCT FROM ${period.end ? asTimestamptz(period.end) : sql`NULL`}`,
+          ),
+        );
+    }
+    if (maxModeAmount > 0) {
+      if (!reservation.stripeCustomerId || !reservation.billingId)
+        throw new Error("Usage reservation has no billing identity.");
+      const field = reservation.category === "basic" ? "maxModeUsageBasic" : "maxModeUsagePremium";
+      const column =
+        reservation.category === "basic" ? billing.maxModeUsageBasic : billing.maxModeUsagePremium;
+      // Late settlement still bills the old period, without inflating a renewed period's dashboard.
+      await database
+        .update(billing)
+        .set({ [field]: sql`${column} + ${maxModeAmount}` })
+        .where(
+          and(
+            eq(billing.id, reservation.billingId),
+            or(
+              isNull(billing.maxModePeriodStart),
+              sql`${billing.maxModePeriodStart} <= ${reservation.createdAt.toISOString()}::timestamp`,
+            ),
+          ),
+        );
+      await enqueueMaxModeMeterEvent(
+        {
+          id: reservationId,
+          userId,
+          category: reservation.category,
+          amount: maxModeAmount,
+          stripeCustomerId: reservation.stripeCustomerId,
+          occurredAt: reservation.createdAt,
+        },
+        database,
+      );
+    }
+    await database
+      .update(usageReservation)
+      .set({ settledAmount: amount, maxModeAmount, settledAt: now })
+      .where(eq(usageReservation.id, reservationId));
+    return { maxModeAmount, amount };
+  });
+  if (result.maxModeAmount > 0) {
+    try {
+      await deliverMaxModeUsageReport(reservationId);
+    } catch (error) {
+      console.error("Settled usage retained for meter delivery", { reservationId, error });
+    }
   }
+  return result;
+}
 
-  return withUsageLock(userId, async (database) => {
-    const state = await calculateUsageState({ userId, category, now, isAnonymous, database });
-
-    // Anything currently above the plan limit was billed as Max Mode overage, so
-    // the refund has to walk that ledger back too — otherwise an over-reserved
-    // estimate stays charged even though the quota was returned.
-    const maxModeRefund =
-      state.limit === null ? 0 : Math.min(amount, Math.max(state.used - state.limit, 0));
-
-    const [saved] = await database
-      .update(usageQuota)
+/** Persist completed provider usage and refresh a running request's recovery lease. */
+export async function recordObservedUsage({
+  userId,
+  reservationId,
+  amount,
+  now = new Date(),
+}: {
+  userId: string;
+  reservationId: string;
+  amount: number;
+  now?: Date;
+}) {
+  if (!Number.isSafeInteger(amount) || amount < 0)
+    throw new Error("Observed usage must be a nonnegative safe integer.");
+  await withUsageLock(userId, async (database) => {
+    await database
+      .update(usageReservation)
       .set({
-        used: sql`GREATEST(${usageQuota.used} - ${amount}, 0)`,
-        updatedAt: new Date(),
+        observedAmount: sql`GREATEST(${usageReservation.observedAmount}, ${amount})`,
+        updatedAt: now,
       })
       .where(
         and(
-          eq(usageQuota.userId, userId),
-          eq(usageQuota.category, category),
-          // Never refund into a period that already rolled over: the consumption
-          // being reversed belongs to the previous window.
-          sql`(${usageQuota.periodEnd} IS NULL OR ${usageQuota.periodEnd} > ${asTimestamptz(now)})`,
+          eq(usageReservation.id, reservationId),
+          eq(usageReservation.userId, userId),
+          isNull(usageReservation.settledAt),
         ),
-      )
-      .returning({ used: usageQuota.used });
-
-    if (!saved) {
-      return { used: null, maxModeRefunded: 0 };
-    }
-
-    if (maxModeRefund > 0) {
-      const refunded = await refundMaxModeUsage(userId, category, maxModeRefund, database);
-      if (!refunded.success) throw new Error("Unable to refund Max Mode usage.");
-    }
-
-    return { used: saved.used, maxModeRefunded: maxModeRefund };
+      );
   });
+}
+
+/** Recover interrupted requests from durable actual usage; never bill abandoned estimates. */
+export async function recoverUsageReservations(now = new Date()) {
+  const staleBefore = new Date(now.getTime() - 15 * 60_000);
+  const stale = await db
+    .select({ id: usageReservation.id, userId: usageReservation.userId })
+    .from(usageReservation)
+    .where(and(isNull(usageReservation.settledAt), lte(usageReservation.updatedAt, staleBefore)))
+    .orderBy(asc(usageReservation.updatedAt))
+    .limit(5);
+  const result = { recovered: 0, recoveryFailed: 0 };
+  for (const reservation of stale) {
+    try {
+      const settled = await settleUsage({
+        userId: reservation.userId,
+        reservationId: reservation.id,
+        amount: 0,
+        now,
+        staleBefore,
+      });
+      if (settled.amount !== null) result.recovered++;
+    } catch (error) {
+      console.error("Usage reservation recovery failed", { reservationId: reservation.id, error });
+      result.recoveryFailed++;
+    }
+  }
+  return result;
 }
 
 export type UsageSnapshot = {

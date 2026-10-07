@@ -36,6 +36,7 @@ import {
 import { checkoutSessionExpand, summarizeCheckoutSession } from "@/lib/stripe-checkout-receipt";
 import { attachMaxModeMeteredItems } from "@/lib/max-mode-stripe";
 import {
+  listCustomerSubscriptions,
   getLicensedPrice,
   getLicensedSubscriptionItem,
   getSubscriptionPeriodEndDate,
@@ -290,22 +291,35 @@ async function ensureTeamBillingRecord(
   });
 }
 
+async function saveTeamSubscriptionSnapshot(
+  ctx: ProtectedContext,
+  snapshot: BillingRecord,
+  updates: Partial<BillingRecord> & { stripeCustomerId: string },
+) {
+  const saved = await saveTeamBillingRecord(
+    ctx.db,
+    snapshot.userId,
+    snapshot.organizationId!,
+    updates,
+    snapshot.stripeSubscriptionId,
+    snapshot,
+  );
+  return saved ?? (await findTeamBillingRecord(ctx.db, snapshot.organizationId!)) ?? snapshot;
+}
+
 async function syncTeamSubscription(ctx: ProtectedContext, userId: string, organizationId: string) {
   const billingRecord = await ensureTeamBillingRecord(ctx, userId, organizationId);
 
-  const subscriptions = await stripe.subscriptions.list({
-    customer: billingRecord.stripeCustomerId,
-    status: "all",
-    limit: 5,
-    expand: ["data.default_payment_method"],
-  });
+  const subscriptions = await listCustomerSubscriptions(billingRecord.stripeCustomerId, [
+    "data.default_payment_method",
+  ]);
 
-  const bestSub = pickLicensedSubscription(subscriptions.data, (status) =>
+  const bestSub = pickLicensedSubscription(subscriptions, (status) =>
     ACTIVE_SUB_STATUSES.has(status),
   );
   const subscriptionId = bestSub?.id;
   if (!subscriptionId) {
-    return saveTeamBillingRecord(ctx.db, billingRecord.userId, organizationId, {
+    return saveTeamSubscriptionSnapshot(ctx, billingRecord, {
       stripeCustomerId: billingRecord.stripeCustomerId,
       stripeSubscriptionId: null,
       planId: null,
@@ -344,7 +358,7 @@ async function syncTeamSubscription(ctx: ProtectedContext, userId: string, organ
     return billingRecord;
   }
 
-  return saveTeamBillingRecord(ctx.db, billingRecord.userId, organizationId, {
+  return saveTeamSubscriptionSnapshot(ctx, billingRecord, {
     ...updates,
     stripeCustomerId: billingRecord.stripeCustomerId,
   });
@@ -1027,16 +1041,18 @@ export const organizationRouter = router({
         });
       }
 
-      const memberCount = await getOrgMemberCount(input.organizationId);
-      const updated = await stripe.subscriptions.update(subscription.id, {
-        items: [{ id: item.id, price: price.id, quantity: memberCount }],
-        metadata: {
-          userId: ctx.userId,
-          planId: plan.id,
-          organizationId: input.organizationId,
-        },
-        proration_behavior: "always_invoice",
-        payment_behavior: "error_if_incomplete",
+      const updated = await withTeamBillingLock(ctx.db, input.organizationId, async (tx) => {
+        const memberCount = await getOrgMemberCount(input.organizationId, tx);
+        return stripe.subscriptions.update(subscription.id, {
+          items: [{ id: item.id, price: price.id, quantity: memberCount }],
+          metadata: {
+            userId: ctx.userId,
+            planId: plan.id,
+            organizationId: input.organizationId,
+          },
+          proration_behavior: "always_invoice",
+          payment_behavior: "error_if_incomplete",
+        });
       });
 
       const updates: Partial<BillingRecord> = {
@@ -1048,7 +1064,7 @@ export const organizationRouter = router({
         stripeSubscriptionId: updated.id,
       };
 
-      const saved = await saveTeamBillingRecord(ctx.db, ctx.userId, input.organizationId, {
+      const saved = await saveTeamSubscriptionSnapshot(ctx, subscriptionState, {
         ...updates,
         stripeCustomerId: subscriptionState.stripeCustomerId,
       });
@@ -1100,7 +1116,7 @@ export const organizationRouter = router({
           getSubscriptionPeriodEndDate(canceled) ?? subscriptionState.currentPeriodEnd,
       };
 
-      const saved = await saveTeamBillingRecord(ctx.db, ctx.userId, input.organizationId, {
+      const saved = await saveTeamSubscriptionSnapshot(ctx, subscriptionState, {
         stripeSubscriptionId: subscriptionState.stripeSubscriptionId,
         ...updates,
         stripeCustomerId: subscriptionState.stripeCustomerId,
@@ -1153,7 +1169,7 @@ export const organizationRouter = router({
         mode: deriveModeFromPrice(price),
       };
 
-      const saved = await saveTeamBillingRecord(ctx.db, ctx.userId, input.organizationId, {
+      const saved = await saveTeamSubscriptionSnapshot(ctx, subscriptionState, {
         ...updates,
         stripeCustomerId: subscriptionState.stripeCustomerId,
       });

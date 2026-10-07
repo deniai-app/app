@@ -26,6 +26,10 @@ import {
 } from "@/lib/chat";
 import { mergeStoredAndClientMessages } from "@/lib/chat-messages";
 import { inlineTextAttachments } from "@/lib/chat-text-attachments";
+import {
+  prepareBinaryAttachments,
+  createChatAttachmentDownload,
+} from "@/lib/chat-attachment-download";
 import { isComparisonConversation } from "@/lib/comparison-conversation";
 import {
   clearChatGeneration,
@@ -41,10 +45,17 @@ import {
 import { buildMemoryPrompt, getUserMemoryState, maybeAutoSaveMemories } from "@/lib/memory";
 import { platformCapabilities } from "@/lib/platform-capabilities.server";
 import { buildProjectPrompt } from "@/lib/project-context";
-import { reportMaxModeUsageToStripe } from "@/lib/max-mode";
-import { canCompareModels, consumeUsage, refundUsage, UsageLimitError } from "@/lib/usage";
+import {
+  canCompareModels,
+  consumeUsage,
+  recordObservedUsage,
+  settleUsage as settleUsageReservation,
+  UsageLimitError,
+} from "@/lib/usage";
 import { calculateChatUsageAmount, resolveFinalChatUsageAmount } from "@/lib/chat-usage-amount";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { guardMutationRequest } from "@/lib/mutation-request";
+import { readRequestJson, RequestBodyTooLargeError } from "@/lib/request-body";
 import {
   classifyUpstreamError,
   extractChatRequestErrorText,
@@ -131,25 +142,27 @@ function estimateTokenReservation({
 }
 
 export async function POST(req: Request) {
+  const rejected = guardMutationRequest(req, "application/json");
+  if (rejected) return rejected;
   const headersList = await headers();
-  const sessionPromise = auth.api.getSession({ headers: headersList });
+  const session = await auth.api.getSession({ headers: headersList });
+  const userId = session?.session?.userId;
+  const isAnonymous = Boolean(session?.user?.isAnonymous);
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
-    // The auth lookup started in parallel with body parsing. Attach a handler
-    // before returning so a rejected lookup cannot become an unhandled promise.
-    void sessionPromise.catch(() => undefined);
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
-  }
-
-  const session = await sessionPromise;
-  const userId = session?.session?.userId;
-  const isAnonymous = Boolean(session?.user?.isAnonymous);
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    body = await readRequestJson(req, 16 * 1024 * 1024);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof RequestBodyTooLargeError
+            ? "Request body is too large"
+            : "Invalid request body",
+      },
+      { status: error instanceof RequestBodyTooLargeError ? 413 : 400 },
+    );
   }
 
   const rateCheck = await checkRateLimit({
@@ -272,11 +285,6 @@ export async function POST(req: Request) {
   const deepResearchEnabled = searchToolEnabled && deepResearch;
   // Explicit Search (or a retry that requests search) still forces at least one lookup.
   const forceWebSearchEnabled = searchToolEnabled && (forceWebSearch || webSearch);
-  // Net Max Mode overage for this request. Reported to Stripe once after
-  // reconciliation; meter events cannot be reduced. Search-tool charges are
-  // always "basic" usage, whatever the chat model is, so they are kept apart.
-  let pendingMaxModeAmount = 0;
-  let pendingSearchMaxModeAmount = 0;
   const tools = createChatTools({
     // Comparison panes have no interactive questionnaire UI.
     interactive: !parsedBody.data.comparison,
@@ -285,17 +293,18 @@ export async function POST(req: Request) {
     usage: {
       userId,
       isAnonymous,
-      onCharged: ({ maxModeAmount }) => {
-        pendingSearchMaxModeAmount += maxModeAmount;
-      },
-      onRefunded: ({ maxModeRefunded }) => {
-        pendingSearchMaxModeAmount = Math.max(0, pendingSearchMaxModeAmount - maxModeRefunded);
-      },
     },
   });
 
   // Models accept images and PDFs as files, not text files, so inline those.
-  const modelMessages = await convertToModelMessages(await inlineTextAttachments(messages));
+  let modelMessages: ModelMessage[];
+  try {
+    modelMessages = await convertToModelMessages(
+      prepareBinaryAttachments(await inlineTextAttachments(messages)),
+    );
+  } catch {
+    return NextResponse.json({ error: "Invalid or oversized attachment" }, { status: 400 });
+  }
   const currentDate = new Date().toISOString().split("T")[0];
   const persistentMemory = platformCapabilities.features.memory
     ? buildMemoryPrompt(memoryState)
@@ -318,9 +327,30 @@ export async function POST(req: Request) {
   let usageConsumed = false;
   let usageRefunded = false;
   let generationWatch: ReturnType<typeof setInterval> | undefined;
+  let usageWatch: ReturnType<typeof setInterval> | undefined;
   let trailingPersistTimer: ReturnType<typeof setTimeout> | undefined;
   let hasAssistantOutput = false;
   let consumedUsageAmount = 0;
+  const modelReservationId = `${generationId}:model`;
+  const persistObservedUsage = async () => {
+    if (!usageConsumed) return;
+    const amount =
+      usageUnit === "tokens"
+        ? Math.max(finalUsageAmount, hasAssistantOutput ? 1 : 0)
+        : hasAssistantOutput
+          ? 1
+          : 0;
+    try {
+      await recordObservedUsage({ userId, reservationId: modelReservationId, amount });
+    } catch (error) {
+      console.error("Failed to persist observed chat usage", error);
+    }
+  };
+  const watchUsage = () => {
+    usageWatch = setInterval(() => {
+      void persistObservedUsage();
+    }, 30_000);
+  };
   let finalUsageAmount = 0;
 
   const ownsCurrentGeneration = async () => {
@@ -331,119 +361,35 @@ export async function POST(req: Request) {
   };
 
   const refundConsumedUsage = async () => {
-    if (!usageConsumed || usageRefunded || hasAssistantOutput) {
+    if (
+      !usageConsumed ||
+      usageRefunded ||
+      hasAssistantOutput ||
+      (usageUnit === "tokens" && finalUsageAmount > 0)
+    )
       return;
-    }
-
-    usageRefunded = true;
-
     try {
-      const refunded = await refundUsage({
-        userId,
-        category: usageCategory,
-        amount: consumedUsageAmount,
-        isAnonymous,
-      });
+      await settleUsageReservation({ userId, reservationId: modelReservationId, amount: 0 });
+      usageRefunded = true;
       usageConsumed = false;
-      consumedUsageAmount = 0;
-      pendingMaxModeAmount = Math.max(pendingMaxModeAmount - refunded.maxModeRefunded, 0);
     } catch (error) {
       console.error("Failed to refund chat usage", error);
     }
   };
 
-  // Settlement bills tokens that were already generated, so it may exceed the
-  // plan limit. Refusing it would let the request finish at the reservation price.
-  const reconcileConsumedUsage = async (targetAmount: number) => {
-    if (usageUnit !== "tokens") {
-      return;
-    }
-
-    const normalizedTargetAmount = Math.max(targetAmount, hasAssistantOutput ? 1 : 0);
-    if (normalizedTargetAmount === consumedUsageAmount) {
-      return;
-    }
-
-    if (!usageConsumed) {
-      if (normalizedTargetAmount <= 0) {
-        return;
-      }
-
-      const consumed = await consumeUsage({
-        userId,
-        category: usageCategory,
-        isAnonymous,
-        amount: normalizedTargetAmount,
-        allowLimitOverflow: true,
-      });
-      pendingMaxModeAmount += consumed.maxModeAmount;
-      consumedUsageAmount = normalizedTargetAmount;
-      usageConsumed = true;
-      usageRefunded = false;
-      return;
-    }
-
-    const delta = normalizedTargetAmount - consumedUsageAmount;
-    if (delta > 0) {
-      const consumed = await consumeUsage({
-        userId,
-        category: usageCategory,
-        isAnonymous,
-        amount: delta,
-        allowLimitOverflow: true,
-      });
-      pendingMaxModeAmount += consumed.maxModeAmount;
-    } else if (delta < 0) {
-      const refunded = await refundUsage({
-        userId,
-        category: usageCategory,
-        amount: Math.abs(delta),
-        isAnonymous,
-      });
-      pendingMaxModeAmount = Math.max(pendingMaxModeAmount - refunded.maxModeRefunded, 0);
-    }
-
-    consumedUsageAmount = normalizedTargetAmount;
-    usageConsumed = normalizedTargetAmount > 0;
-    usageRefunded = normalizedTargetAmount === 0;
-  };
-
   let usageSettlement: Promise<void> | undefined;
   const settleUsage = () => {
-    usageSettlement ??=
-      usageUnit === "tokens"
-        ? reconcileConsumedUsage(finalUsageAmount)
-        : !hasAssistantOutput
-          ? refundConsumedUsage()
-          : Promise.resolve();
+    usageSettlement ??= (async () => {
+      if (!usageConsumed) return;
+      const amount =
+        usageUnit === "tokens"
+          ? Math.max(finalUsageAmount, hasAssistantOutput ? 1 : 0)
+          : hasAssistantOutput
+            ? 1
+            : 0;
+      await settleUsageReservation({ userId, reservationId: modelReservationId, amount });
+    })();
     return usageSettlement;
-  };
-
-  /**
-   * Sends the reconciled Max Mode overage to Stripe. Runs exactly once at the end
-   * of the request: meter events are append-only, so reporting the up-front
-   * estimate and reconciling down afterwards would leave the customer overbilled.
-   */
-  let maxModeReported = false;
-  const flushMaxModeUsage = async () => {
-    if (maxModeReported) {
-      return;
-    }
-    maxModeReported = true;
-
-    for (const [category, amount] of [
-      [usageCategory, pendingMaxModeAmount],
-      ["basic", pendingSearchMaxModeAmount],
-    ] as const) {
-      if (amount <= 0) {
-        continue;
-      }
-      try {
-        await reportMaxModeUsageToStripe(userId, category, amount);
-      } catch (error) {
-        console.error("Failed to report Max Mode usage", error);
-      }
-    }
   };
 
   const rollbackPendingAssistantState = async () => {
@@ -468,6 +414,10 @@ export async function POST(req: Request) {
   const abortComparison = () => generationAbortController?.abort("stopped");
 
   const clearGenerationLock = () => {
+    if (usageWatch) {
+      clearInterval(usageWatch);
+      usageWatch = undefined;
+    }
     if (isComparison) req.signal.removeEventListener("abort", abortComparison);
     if (generationWatch) {
       clearInterval(generationWatch);
@@ -502,14 +452,15 @@ export async function POST(req: Request) {
     projectPrompt = isComparison ? null : await buildProjectPrompt(chat.projectId, userId);
     if (usageUnit === "requests") {
       consumedUsageAmount = 1;
-      const consumed = await consumeUsage({
+      await consumeUsage({
         userId,
         category: usageCategory,
+        reservationId: modelReservationId,
         isAnonymous,
         amount: consumedUsageAmount,
       });
-      pendingMaxModeAmount += consumed.maxModeAmount;
       usageConsumed = true;
+      watchUsage();
     }
   } catch (error) {
     await rollbackPendingAssistantState();
@@ -572,33 +523,37 @@ export async function POST(req: Request) {
         proMode,
         fastMode,
       });
-      const consumed = await consumeUsage({
+      await consumeUsage({
         userId,
         category: usageCategory,
+        reservationId: modelReservationId,
         isAnonymous,
         amount: consumedUsageAmount,
       });
-      pendingMaxModeAmount += consumed.maxModeAmount;
       usageConsumed = true;
+      watchUsage();
       usageRefunded = false;
     }
 
     result = streamText({
       model: model,
+      experimental_download: createChatAttachmentDownload(generationAbortController.signal),
       messages: requestMessages,
       abortSignal: generationAbortController.signal,
       stopWhen: stepCountIs(isAnonymous ? GUEST_MAX_STEPS : MAX_STEPS),
       tools,
       // onFinish is not called by the SDK after an abort. Keep the usage of
       // completed steps so stopped/replaced generations still get reconciled.
-      onStepFinish: ({ usage }) => {
+      onStepFinish: async ({ usage }) => {
         finalUsageAmount += calculateChatUsageAmount(baseModel, usage, { proMode, fastMode });
+        await persistObservedUsage();
       },
-      onFinish: ({ totalUsage }) => {
+      onFinish: async ({ totalUsage }) => {
         finalUsageAmount = resolveFinalChatUsageAmount(finalUsageAmount, baseModel, totalUsage, {
           proMode,
           fastMode,
         });
+        await persistObservedUsage();
       },
       providerOptions,
       system: requestSystem,
@@ -607,7 +562,6 @@ export async function POST(req: Request) {
     await rollbackPendingAssistantState();
     await refundConsumedUsage();
     // Nothing streamed, so there is no reconciliation left to wait for.
-    await flushMaxModeUsage();
     clearGenerationLock();
     // The token reservation can exceed what is left even when the pre-check passed.
     if (error instanceof UsageLimitError) {
@@ -653,7 +607,10 @@ export async function POST(req: Request) {
   const queuePartialPersist = (message: UIMessage, force: boolean = false) => {
     const pendingMessage = setPendingState(message, true);
     if (pendingMessage.parts.length > 0) {
-      hasAssistantOutput = true;
+      if (!hasAssistantOutput) {
+        hasAssistantOutput = true;
+        void persistObservedUsage();
+      }
     }
     if (isComparison) {
       latestPersistedMessage = pendingMessage;
@@ -803,7 +760,6 @@ export async function POST(req: Request) {
         await refundConsumedUsage();
         throw error;
       } finally {
-        await flushMaxModeUsage();
         clearGenerationLock();
       }
     },

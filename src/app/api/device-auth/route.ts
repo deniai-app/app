@@ -12,6 +12,7 @@ import { decryptFromB64, encryptToB64 } from "@/lib/crypto";
 import { isWithinRedeliveryWindow, keyRedeliveryCutoff } from "@/lib/device-auth-key";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { env } from "@/env";
+import { readRequestJson, RequestBodyTooLargeError } from "@/lib/request-body";
 
 function generateUserCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -55,9 +56,12 @@ async function apiKeyLimitResponse(userId: string, status: 403 | 409, database: 
 export async function POST(req: Request) {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    body = await readRequestJson(req, 4096);
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Invalid request" },
+      { status: error instanceof RequestBodyTooLargeError ? 413 : 400 },
+    );
   }
 
   const action = z.object({ action: z.enum(["initiate", "approve", "poll"]) }).safeParse(body);
@@ -82,7 +86,7 @@ export async function POST(req: Request) {
       return handleApprove(body);
     }
     case "poll":
-      return handlePoll(body);
+      return handlePoll(req, body);
   }
 }
 
@@ -124,7 +128,7 @@ async function handleInitiate(req: Request) {
 async function handleApprove(body: unknown) {
   const parsed = z
     .object({
-      userCode: z.string().min(1),
+      userCode: z.string().regex(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/),
       revokeKeyId: z.string().min(1).optional(),
     })
     .safeParse(body);
@@ -147,6 +151,17 @@ async function handleApprove(body: unknown) {
       { status: 403 },
     );
   }
+
+  const rateCheck = await checkRateLimit({
+    key: `device-approve:${userId}`,
+    windowMs: 60_000,
+    maxRequests: 10,
+  });
+  if (!rateCheck.allowed)
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down." },
+      { status: 429, headers: { "Retry-After": String(rateCheck.retryAfter) } },
+    );
 
   return withApiKeyLock(db, userId, async (transaction) => {
     const [row] = await transaction
@@ -188,11 +203,23 @@ async function handleApprove(body: unknown) {
 }
 
 /** Issue at most one key per device code while sharing the account quota lock. */
-async function handlePoll(body: unknown) {
-  const parsed = z.object({ deviceCode: z.string().min(1) }).safeParse(body);
+async function handlePoll(req: Request, body: unknown) {
+  const parsed = z.object({ deviceCode: z.string().regex(/^[0-9a-f]{64}$/) }).safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
+  // A per-code key alone lets an unauthenticated caller get a fresh budget
+  // (and allocate another in-memory counter) with every random code.
+  const ipRateCheck = await checkRateLimit({
+    key: `device-poll-ip:${resolveClientIp(req.headers) ?? "unknown"}`,
+    windowMs: 60_000,
+    maxRequests: 60,
+  });
+  if (!ipRateCheck.allowed)
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down." },
+      { status: 429, headers: { "Retry-After": String(ipRateCheck.retryAfter) } },
+    );
   const rateCheck = await checkRateLimit({
     key: `device-poll:${parsed.data.deviceCode}`,
     windowMs: 10_000,

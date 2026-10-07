@@ -1,4 +1,4 @@
-import { and, eq, gt, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import { db } from "@/db/drizzle";
 import { adCampaign } from "@/db/schema";
@@ -101,10 +101,27 @@ export async function pauseReversedAdCharge(charge: Stripe.Charge) {
   if (!paymentIntentId) return;
   const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
   if (!intent.metadata.adCampaignId) return;
-  await db
-    .update(adCampaign)
-    .set({ status: "paused", updatedAt: new Date() })
-    .where(and(eq(adCampaign.id, intent.metadata.adCampaignId), eq(adCampaign.status, "active")));
+  const sessions = await stripe.checkout.sessions.list({
+    payment_intent: paymentIntentId,
+    limit: 1,
+  });
+  const checkoutId = sessions.data[0]?.id;
+  if (!checkoutId) return;
+  // Share activation's lock and persist the reversal even before activation.
+  // A delayed paid checkout event must never revive a refunded campaign.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('deni-fixed-ads'))`);
+    await tx
+      .update(adCampaign)
+      .set({ status: "paused", updatedAt: new Date() })
+      .where(
+        and(
+          eq(adCampaign.id, intent.metadata.adCampaignId),
+          eq(adCampaign.stripeSessionId, checkoutId),
+          inArray(adCampaign.status, ["approved", "active"]),
+        ),
+      );
+  });
 }
 
 export async function releaseExpiredAdCheckout(session: Stripe.Checkout.Session) {

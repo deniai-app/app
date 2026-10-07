@@ -8,6 +8,7 @@ import {
 import { auth } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { uploadFile } from "@/lib/upload";
+import { guardMutationRequest } from "@/lib/mutation-request";
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 // Multipart boundaries and headers add a little on top of the file itself.
@@ -58,6 +59,8 @@ async function readBodyWithinLimit(request: Request): Promise<Uint8Array<ArrayBu
 }
 
 export async function POST(request: Request) {
+  const rejected = guardMutationRequest(request, "multipart/form-data");
+  if (rejected) return rejected;
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

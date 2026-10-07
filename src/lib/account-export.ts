@@ -16,6 +16,7 @@ import {
   userMemory,
 } from "@/db/schema";
 import { appVersion } from "@/lib/version";
+import { currentProjectAccessWhere } from "@/lib/project-access";
 
 function textFromMessage(message: UIMessage): string {
   const texts: string[] = [];
@@ -80,7 +81,10 @@ export async function buildAccountExport(userId: string) {
       .limit(1)
       .then((rows) => rows[0] ?? null),
     db.select().from(memoryItem).where(eq(memoryItem.userId, userId)),
-    db.select().from(projects).where(eq(projects.userId, userId)),
+    db
+      .select()
+      .from(projects)
+      .where(and(eq(projects.userId, userId), currentProjectAccessWhere(userId))),
     db.select().from(projectFiles).where(eq(projectFiles.userId, userId)),
     db
       .select({

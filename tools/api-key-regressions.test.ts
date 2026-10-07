@@ -150,8 +150,8 @@ beforeEach(() => {
   }));
   devices = ["first", "second"].map((id) => ({
     id,
-    deviceCode: id,
-    userCode: id,
+    deviceCode: (id === "first" ? "a" : "b").repeat(64),
+    userCode: id === "first" ? "ABCD-EFGH" : "JKLM-NPQR",
     userId: "current-user",
     approved: true,
     expiresAt: new Date(Date.now() + 60_000),
@@ -170,6 +170,10 @@ function caller() {
   } as unknown as Parameters<typeof apiKeysRouter.createCaller>[0]);
 }
 function deviceRequest(action: string, fields: Record<string, string>) {
+  if (fields.deviceCode)
+    fields = { ...fields, deviceCode: (fields.deviceCode === "first" ? "a" : "b").repeat(64) };
+  if (fields.userCode)
+    fields = { ...fields, userCode: fields.userCode === "first" ? "ABCD-EFGH" : "JKLM-NPQR" };
   return POST(
     new Request("http://localhost/api/device-auth", {
       method: "POST",

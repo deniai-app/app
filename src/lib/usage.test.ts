@@ -1,60 +1,102 @@
-import { getTableName, type SQL } from "drizzle-orm";
+import { getTableName, SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, expect, test, vi } from "vitest";
-import { consumeUsage, refundUsage } from "./usage";
+import { consumeUsage, settleUsage, recordObservedUsage, recoverUsageReservations } from "./usage";
+import type { usageReservation, usageQuota, billing, maxModeMeterEvent } from "@/db/schema";
 
+type Reservation = typeof usageReservation.$inferSelect;
+type Quota = typeof usageQuota.$inferSelect;
+type Billing = typeof billing.$inferSelect;
+type Event = typeof maxModeMeterEvent.$inferSelect;
 const state = vi.hoisted(() => ({
   database: {} as Record<string, unknown>,
-  used: 300_000_000 - 10,
-  exists: true,
-  maxModeEnabled: true,
-  unit: "tokens",
-  ledger: 0,
-  team: false,
-  cap: 20,
+  quota: null as Quota | null,
+  reservations: [] as Reservation[],
+  events: [] as Event[],
+  billings: [] as Billing[],
+  team: null as string | null,
+  cap: null as number | null,
   failQuota: false,
-  failLedger: false,
+  failMeter: false,
   locks: 0,
-  writes: [] as string[],
 }));
 vi.mock("@/db/drizzle", () => ({
   db: new Proxy({}, { get: (_target, key) => state.database[key as string] }),
 }));
-vi.mock("./stripe", () => ({ stripe: {} }));
+vi.mock("./max-mode", () => ({
+  isMaxModeEligible: () => true,
+  deliverMaxModeUsageReport: vi.fn(async () => {}),
+}));
 vi.mock("./billing-config", () => ({ isBillingDisabled: false }));
-
+vi.mock("./stripe", () => ({ stripe: {} }));
 const dialect = new PgDialect();
 const now = new Date("2026-06-01T00:00:00Z");
 const limit = 300_000_000;
-
+const field = (name: string) => name.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+function matches(row: object, condition: SQL): boolean {
+  const values = row as Record<string, unknown>;
+  const query = dialect.sqlToQuery(condition);
+  for (const match of query.sql.matchAll(/"([a-z_]+)" (?:=|IS NOT DISTINCT FROM) \$(\d+)/g)) {
+    const actual = values[field(match[1])] ?? null;
+    const expected = query.params[Number(match[2]) - 1] ?? null;
+    const same =
+      actual instanceof Date
+        ? actual.getTime() === new Date(expected as string).getTime()
+        : actual === expected;
+    if (!same) return false;
+  }
+  if (query.sql.includes('"settled_at" is null') && values.settledAt != null) return false;
+  if (query.sql.includes('"period_end" IS NOT DISTINCT FROM NULL') && values.periodEnd != null)
+    return false;
+  if (
+    query.sql.includes('"max_mode_period_start" <=') &&
+    values.maxModePeriodStart instanceof Date &&
+    values.maxModePeriodStart > now
+  )
+    return false;
+  return true;
+}
 function database() {
   let tail = Promise.resolve();
   return {
-    transaction: async (run: (transaction: unknown) => Promise<unknown>, options: unknown) => {
+    select: () => ({
+      from: () => ({
+        where: (condition: SQL) => ({
+          orderBy: () => ({
+            limit: async () => {
+              const threshold = dialect.sqlToQuery(condition).params[0] as string;
+              return state.reservations
+                .filter((r) => !r.settledAt && r.updatedAt <= new Date(threshold))
+                .slice(0, 5)
+                .map((r) => ({ id: r.id, userId: r.userId }));
+            },
+          }),
+        }),
+      }),
+    }),
+    transaction: async (run: (tx: unknown) => Promise<unknown>, options: unknown) => {
       expect(options).toEqual({ isolationLevel: "read committed" });
-      let release: (() => void) | undefined;
-      let snapshot: { used: number; ledger: number; exists: boolean; unit: string } | undefined;
-      const checkLock = () =>
-        expect(snapshot, "all usage reads and writes must follow the account lock").toBeDefined();
-      const transaction = {
+      let release!: () => void;
+      let snapshot: ReturnType<typeof structuredClone> | undefined;
+      const assertLocked = () => expect(snapshot).toBeDefined();
+      const tx = {
         execute: async (statement: SQL) => {
           expect(dialect.sqlToQuery(statement).sql).toContain('FROM "user"');
-          expect(dialect.sqlToQuery(statement).sql).toContain("FOR UPDATE");
           const previous = tail;
           tail = new Promise<void>((resolve) => {
             release = resolve;
           });
           await previous;
-          snapshot = {
-            used: state.used,
-            ledger: state.ledger,
-            exists: state.exists,
-            unit: state.unit,
-          };
+          snapshot = structuredClone({
+            quota: state.quota,
+            reservations: state.reservations,
+            events: state.events,
+            billings: state.billings,
+          });
           state.locks++;
           return [{ id: "user" }];
         },
-        select: () => ({
+        select: (fields?: { baseUsed?: unknown }) => ({
           from: (table: Parameters<typeof getTableName>[0]) => {
             let joined = false;
             const query = {
@@ -62,42 +104,17 @@ function database() {
                 joined = true;
                 return query;
               },
-              where: () => {
-                checkLock();
+              where: (condition: SQL) => {
+                assertLocked();
                 const name = getTableName(table);
-                let rows: Record<string, unknown>[] = [];
-                const personal = {
-                  id: "personal",
-                  organizationId: null,
-                  planId: "pro_monthly",
-                  status: "active",
-                  maxModeEnabled: state.maxModeEnabled,
-                  maxModeUsageBasic: state.ledger,
-                  maxModeUsagePremium: 0,
-                };
-                if (name === "billing") {
-                  rows = joined
-                    ? state.team
-                      ? [
-                          {
-                            ...personal,
-                            id: "team-billing",
-                            organizationId: "team",
-                            planId: "pro_team_monthly",
-                          },
-                        ]
-                      : []
-                    : [personal];
-                }
-                if (name === "usage_quota" && state.exists)
-                  rows = [
-                    {
-                      used: state.used,
-                      unit: state.unit,
-                      periodStart: now,
-                      periodEnd: state.unit === "requests" ? null : new Date("2026-07-01"),
-                    },
-                  ];
+                let rows: object[] = [];
+                if (name === "billing")
+                  rows = state.billings.filter((b) =>
+                    joined ? b.organizationId === state.team && !!state.team : !b.organizationId,
+                  );
+                if (name === "usage_quota") rows = state.quota ? [state.quota] : [];
+                if (name === "usage_reservation")
+                  rows = state.reservations.filter((r) => matches(r, condition));
                 if (name === "team_member_usage_policy")
                   rows = [
                     {
@@ -106,59 +123,101 @@ function database() {
                       maxModeLimitPremium: state.cap,
                     },
                   ];
-                const result = Promise.resolve(rows);
+                if (fields?.baseUsed)
+                  rows = [
+                    {
+                      baseUsed: rows.length ? (rows[0] as Reservation).baseUsed : null,
+                      settledUsed: rows.reduce(
+                        (sum, row) => sum + ((row as Reservation).settledAmount ?? 0),
+                        0,
+                      ),
+                    },
+                  ];
+                const result = Promise.resolve(structuredClone(rows));
                 return Object.assign(result, { limit: () => result });
               },
             };
             return query;
           },
         }),
-        insert: () => ({
-          values: (values: { used: number; unit: string }) => ({
-            onConflictDoUpdate: () => ({
-              returning: async () => {
-                checkLock();
-                if (state.failQuota) throw new Error("Quota write failed");
-                state.used =
-                  state.exists && state.unit === values.unit
-                    ? state.used + values.used
-                    : values.used;
-                state.exists = true;
-                state.unit = values.unit;
-                state.writes.push("quota");
-                return [{ used: state.used }];
-              },
-            }),
-          }),
+        insert: (table: Parameters<typeof getTableName>[0]) => ({
+          values: (input: Record<string, unknown>) => {
+            assertLocked();
+            const name = getTableName(table);
+            if (name === "usage_reservation") {
+              state.reservations.push({
+                observedAmount: 0,
+                settledAt: null,
+                settledAmount: null,
+                maxModeAmount: 0,
+                ...input,
+              } as Reservation);
+              return Promise.resolve();
+            }
+            if (name === "max_mode_meter_event")
+              return {
+                onConflictDoNothing: async () => {
+                  if (state.failMeter) throw new Error("Meter persistence failed");
+                  if (!state.events.some((e) => e.id === input.id))
+                    state.events.push(input as Event);
+                },
+              };
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => {
+                  if (state.failQuota) throw new Error("Quota write failed");
+                  const reset =
+                    !state.quota ||
+                    state.quota.unit !== input.unit ||
+                    (state.quota.periodEnd && state.quota.periodEnd <= (input.periodStart as Date));
+                  state.quota = {
+                    ...state.quota,
+                    ...input,
+                    used: (reset ? 0 : state.quota!.used) + Number(input.used),
+                  } as Quota;
+                  return [{ used: state.quota.used }];
+                },
+              }),
+            };
+          },
         }),
         update: (table: Parameters<typeof getTableName>[0]) => ({
-          set: (fields: Record<string, SQL>) => ({
-            where: () => ({
-              returning: async () => {
-                checkLock();
-                const quota = getTableName(table) === "usage_quota";
-                const expression = quota ? fields.used : fields.maxModeUsageBasic;
-                const { sql, params } = dialect.sqlToQuery(expression);
-                const amount = Number(params[0]);
-                if (quota) {
-                  if (state.failQuota) throw new Error("Quota write failed");
-                  state.used = Math.max(state.used - amount, 0);
-                  state.writes.push("quota");
-                  return [{ used: state.used }];
-                }
-                if (state.failLedger) return [];
-                state.ledger = sql.includes("GREATEST")
-                  ? Math.max(state.ledger - amount, 0)
-                  : state.ledger + amount;
-                state.writes.push("ledger");
-                return [{ maxModeUsageBasic: state.ledger, maxModeUsagePremium: 0 }];
-              },
-            }),
+          set: (updates: Record<string, unknown>) => ({
+            where: (condition: SQL) => {
+              const result = Promise.resolve().then(() => {
+                assertLocked();
+                const name = getTableName(table);
+                if (name === "usage_quota" && state.failQuota)
+                  throw new Error("Quota write failed");
+                const rows =
+                  name === "usage_quota"
+                    ? state.quota
+                      ? [state.quota]
+                      : []
+                    : name === "billing"
+                      ? state.billings
+                      : state.reservations;
+                const matched = rows.filter((row) => matches(row, condition));
+                for (const row of matched)
+                  for (const [key, value] of Object.entries(updates)) {
+                    const target = row as unknown as Record<string, unknown>;
+                    if (value instanceof SQL) {
+                      const expression = dialect.sqlToQuery(value);
+                      target[key] =
+                        key === "observedAmount"
+                          ? Math.max(Number(target[key]), Number(expression.params[0]))
+                          : Math.max(0, Number(target[key]) + Number(expression.params[0]));
+                    } else target[key] = value;
+                  }
+                return matched;
+              });
+              return Object.assign(result, { returning: () => result });
+            },
           }),
         }),
       };
       try {
-        return await run(transaction);
+        return await run(tx);
       } catch (error) {
         if (snapshot) Object.assign(state, snapshot);
         throw error;
@@ -168,127 +227,247 @@ function database() {
     },
   };
 }
-
 beforeEach(() => {
-  state.used = limit - 10;
-  state.exists = true;
-  state.maxModeEnabled = true;
-  state.unit = "tokens";
-  state.ledger = 0;
-  state.team = false;
-  state.cap = 20;
+  state.quota = {
+    userId: "user",
+    category: "basic",
+    used: limit - 10,
+    unit: "tokens",
+    periodStart: now,
+    periodEnd: new Date("2026-07-01"),
+  } as Quota;
+  state.reservations = [];
+  state.events = [];
+  state.team = null;
+  state.cap = null;
   state.failQuota = false;
-  state.failLedger = false;
+  state.failMeter = false;
   state.locks = 0;
-  state.writes = [];
+  state.billings = [
+    {
+      id: "personal",
+      userId: "user",
+      organizationId: null,
+      stripeCustomerId: "personal-customer",
+      planId: "pro_monthly",
+      status: "active",
+      maxModeEnabled: true,
+      maxModeUsageBasic: 0,
+      maxModeUsagePremium: 0,
+      maxModePeriodStart: now,
+      deletionPending: false,
+    } as Billing,
+  ];
   state.database = database();
 });
+const reserve = (reservationId: string, amount = 20) =>
+  consumeUsage({ userId: "user", category: "basic", reservationId, amount, now });
+const settle = (reservationId: string, amount: number, at = now) =>
+  settleUsage({ userId: "user", reservationId, amount, now: at });
 
-const consume = (amount: number) =>
-  consumeUsage({ userId: "user", category: "basic", amount, now });
-const refund = (amount: number) => refundUsage({ userId: "user", category: "basic", amount, now });
-
-test("parallel consumes accurately bill the free/Max Mode boundary", async () => {
-  const results = await Promise.all([consume(20), consume(20)]);
-  expect(state.used - limit).toBe(30);
-  expect(state.ledger).toBe(30);
-  expect(results.reduce((sum, result) => sum + result.maxModeAmount, 0)).toBe(30);
-  expect(state.locks).toBe(2);
+test("parallel reservations never permanently bill estimates", async () => {
+  await Promise.all([reserve("a"), reserve("b")]);
+  expect(state.quota!.used).toBe(limit + 30);
+  expect(state.billings[0].maxModeUsageBasic).toBe(0);
+  expect(state.events).toHaveLength(0);
 });
-
-test("parallel team consumes cannot exceed a member's Max Mode cap", async () => {
-  state.team = true;
-  state.used = limit;
-  const results = await Promise.allSettled([consume(20), consume(20)]);
-  expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-  expect(state.used - limit).toBe(20);
-  expect(state.ledger).toBe(20);
+test.each([true, false])(
+  "an aborted reservation cannot overbill another generation (first abort: %s)",
+  async (firstAbort) => {
+    await Promise.all([reserve("a"), reserve("b")]);
+    if (firstAbort) {
+      await settle("a", 0);
+      await settle("b", 20);
+    } else {
+      await settle("b", 20);
+      await settle("a", 0);
+    }
+    expect(state.quota!.used).toBe(limit + 10);
+    expect(state.events.map((e) => e.amount)).toEqual([10]);
+    expect(state.billings[0].maxModeUsageBasic).toBe(10);
+  },
+);
+test("concurrent finalization bills each actual token once", async () => {
+  await Promise.all([reserve("a"), reserve("b")]);
+  await Promise.all([settle("a", 20), settle("b", 20)]);
+  expect(state.events.reduce((sum, e) => sum + e.amount, 0)).toBe(30);
 });
-
-test("only the above-limit slice counts toward a member cap", async () => {
-  state.team = true;
+test("old-period settlement neither refunds the new quota nor bills a returned estimate", async () => {
+  await reserve("a");
+  state.quota!.periodStart = new Date("2026-07-01");
+  state.quota!.periodEnd = new Date("2026-08-01");
+  state.quota!.used = 100;
+  await settle("a", 10, new Date("2026-07-01"));
+  expect(state.quota!.used).toBe(100);
+  expect(state.events).toHaveLength(0);
+});
+test("late old-period overage retains its payer and timestamp, without inflating the new ledger", async () => {
+  await reserve("a");
+  state.quota!.periodStart = new Date("2026-07-01");
+  state.quota!.used = 100;
+  state.billings[0].maxModePeriodStart = new Date("2026-07-01");
+  await settle("a", 20, new Date("2026-07-01"));
+  expect(state.events[0]).toMatchObject({
+    amount: 10,
+    stripeCustomerId: "personal-customer",
+    occurredAt: now,
+  });
+  expect(state.billings[0].maxModeUsageBasic).toBe(0);
+  expect(state.quota!.used).toBe(100);
+});
+test("membership changes never move a generation's charge to a different payer", async () => {
+  const team = {
+    ...state.billings[0],
+    id: "team-a",
+    organizationId: "team-a",
+    planId: "pro_team_monthly",
+    stripeCustomerId: "customer-a",
+  };
+  state.billings.push(team, {
+    ...team,
+    id: "team-b",
+    organizationId: "team-b",
+    stripeCustomerId: "customer-b",
+  });
+  state.team = "team-a";
+  await reserve("a");
+  state.team = "team-b";
+  await settle("a", 20);
+  expect(state.events[0].stripeCustomerId).toBe("customer-a");
+  expect(state.billings[1].maxModeUsageBasic).toBe(10);
+  expect(state.billings[2].maxModeUsageBasic).toBe(0);
+});
+test("parallel reservations respect a member's Max Mode cap", async () => {
+  state.billings[0].organizationId = "team";
+  state.billings[0].planId = "pro_team_monthly";
+  state.team = "team";
+  state.cap = 20;
+  state.quota!.used = limit;
+  const results = await Promise.allSettled([reserve("a"), reserve("b")]);
+  expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+});
+test("actual usage beyond the estimate records all usage but honors the captured member cap", async () => {
+  state.billings[0].organizationId = "team";
+  state.billings[0].planId = "pro_team_monthly";
+  state.team = "team";
   state.cap = 15;
-  expect((await consume(20)).maxModeAmount).toBe(10);
-  expect(state.ledger).toBe(10);
+  await reserve("a");
+  await settle("a", 40);
+  expect(state.quota!.used).toBe(limit + 30);
+  expect(state.events[0].amount).toBe(15);
 });
-
-test("parallel refunds do not refund the same overage twice", async () => {
-  state.used = limit + 10;
-  state.ledger = 10;
-  const results = await Promise.all([refund(10), refund(10)]);
-  expect(state.used).toBe(limit - 10);
-  expect(state.ledger).toBe(0);
-  expect(results.reduce((sum, result) => sum + result.maxModeRefunded, 0)).toBe(10);
-});
-
-test("consume and refund share one serialization boundary", async () => {
-  state.used = limit + 10;
-  state.ledger = 10;
-  await Promise.all([consume(10), refund(10)]);
-  expect(state.used).toBe(limit + 10);
-  expect(state.ledger).toBe(10);
-  expect(state.locks).toBe(2);
-});
-
-test("a failed quota write rolls back the Max Mode ledger", async () => {
+test("quota-write failure rolls back the reservation", async () => {
   state.failQuota = true;
-  await expect(consume(20)).rejects.toThrow("Quota write failed");
-  expect(state.used).toBe(limit - 10);
-  expect(state.ledger).toBe(0);
+  await expect(reserve("a")).rejects.toThrow("Quota write failed");
+  expect(state.reservations).toHaveLength(0);
+  expect(state.quota!.used).toBe(limit - 10);
 });
-
-test("a failed ledger refund rolls back the quota refund", async () => {
-  state.used = limit + 10;
-  state.ledger = 10;
-  state.failLedger = true;
-  await expect(refund(10)).rejects.toThrow("Unable to refund");
-  expect(state.used).toBe(limit + 10);
-  expect(state.ledger).toBe(10);
+test("meter persistence failure rolls back quota, ledger, and settlement together", async () => {
+  await reserve("a");
+  state.failMeter = true;
+  await expect(settle("a", 15)).rejects.toThrow("Meter persistence failed");
+  expect(state.quota!.used).toBe(limit + 10);
+  expect(state.billings[0].maxModeUsageBasic).toBe(0);
+  expect(state.reservations[0].settledAt).toBeNull();
 });
-
-test("empty guest quotas are protected by the account lock", async () => {
-  state.exists = false;
-  state.maxModeEnabled = false;
-  state.used = 0;
+test("replayed reserve and settlement calls are idempotent", async () => {
+  await reserve("a");
+  await reserve("a");
+  await settle("a", 20);
+  await settle("a", 999);
+  expect(state.reservations).toHaveLength(1);
+  expect(state.events).toHaveLength(1);
+  expect(state.events[0].amount).toBe(10);
+  expect(state.quota!.used).toBe(limit + 10);
+});
+test("a guest reservation cannot refund a converted token quota", async () => {
+  state.quota = null;
+  await consumeUsage({
+    userId: "user",
+    category: "basic",
+    reservationId: "a",
+    amount: 1,
+    isAnonymous: true,
+    now,
+  });
+  state.quota!.unit = "tokens";
+  state.quota!.used = 100;
+  await settle("a", 0);
+  expect(state.quota!.used).toBe(100);
+});
+test("empty guest quotas are protected against parallel creation", async () => {
+  state.quota = null;
   const results = await Promise.allSettled(
-    [1, 2].map(() =>
-      consumeUsage({ userId: "user", category: "basic", amount: 30, isAnonymous: true, now }),
+    ["a", "b"].map((reservationId) =>
+      consumeUsage({
+        userId: "user",
+        category: "basic",
+        reservationId,
+        amount: 30,
+        isAnonymous: true,
+        now,
+      }),
     ),
   );
-  expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-  expect(state.used).toBe(30);
-  expect(state.unit).toBe("requests");
-  expect(state.locks).toBe(2);
+  expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+});
+test("frozen accounts cannot start a new paid generation", async () => {
+  state.billings[0].deletionPending = true;
+  await expect(reserve("a")).rejects.toThrow("Account deletion");
+  expect(state.reservations).toHaveLength(0);
+});
+test("usage exceeding the signed 32-bit range can be settled", async () => {
+  state.quota!.used = 2_147_483_640;
+  await reserve("a", 20);
+  await settle("a", 20);
+  expect(state.quota!.used).toBe(2_147_483_660);
+  expect(state.events[0].amount).toBe(20);
 });
 
-test("settling past a member cap records the quota but bills only up to the cap", async () => {
-  state.team = true;
-  state.used = limit + 15;
-  state.ledger = 15;
-  const result = await consumeUsage({
-    userId: "user",
-    category: "basic",
-    amount: 20,
-    allowLimitOverflow: true,
-    now,
+test("interrupted generations recover actual provider usage without retaining the estimate", async () => {
+  await reserve("a", 20);
+  await recordObservedUsage({ userId: "user", reservationId: "a", amount: 15, now });
+  expect(await recoverUsageReservations(new Date(now.getTime() + 16 * 60_000))).toEqual({
+    recovered: 1,
+    recoveryFailed: 0,
   });
-  expect(result.maxModeAmount).toBe(5);
-  expect(state.used - limit).toBe(35);
-  expect(state.ledger).toBe(20);
+  expect(state.quota!.used).toBe(limit + 5);
+  expect(state.events[0].amount).toBe(5);
 });
-
-test("settling once the member cap is exhausted bills nothing more", async () => {
-  state.team = true;
-  state.used = limit + 20;
-  state.ledger = 20;
-  const result = await consumeUsage({
+test("an abandoned generation with no output releases its entire reservation", async () => {
+  await reserve("a", 20);
+  await recoverUsageReservations(new Date(now.getTime() + 16 * 60_000));
+  expect(state.quota!.used).toBe(limit - 10);
+  expect(state.events).toHaveLength(0);
+});
+test("a heartbeat that wins the account lock prevents stale recovery", async () => {
+  await reserve("a");
+  await recordObservedUsage({
     userId: "user",
-    category: "basic",
-    amount: 20,
-    allowLimitOverflow: true,
-    now,
+    reservationId: "a",
+    amount: 15,
+    now: new Date(now.getTime() + 16 * 60_000),
   });
-  expect(result.maxModeAmount).toBe(0);
-  expect(state.used - limit).toBe(40);
-  expect(state.ledger).toBe(20);
+  const result = await settleUsage({
+    userId: "user",
+    reservationId: "a",
+    amount: 0,
+    staleBefore: new Date(now.getTime() + 60_000),
+  });
+  expect(result.amount).toBeNull();
+  expect(state.reservations[0].settledAt).toBeNull();
+  expect(state.events).toHaveLength(0);
+});
+test("late observations cannot reopen an already settled receipt", async () => {
+  await reserve("a");
+  await settle("a", 20);
+  const updatedAt = state.reservations[0].updatedAt;
+  await recordObservedUsage({
+    userId: "user",
+    reservationId: "a",
+    amount: 99,
+    now: new Date(now.getTime() + 60_000),
+  });
+  expect(state.reservations[0].updatedAt).toEqual(updatedAt);
+  expect(state.events).toHaveLength(1);
 });

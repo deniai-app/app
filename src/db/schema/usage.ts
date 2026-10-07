@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { user } from "./auth-schema";
 
@@ -16,7 +16,7 @@ export const usageQuota = pgTable(
     planTier: text("plan_tier").notNull(), // "free" | "pro" | "max"
     limitAmount: integer("limit_amount"),
     unit: text("unit"),
-    used: integer("used").notNull().default(0),
+    used: bigint("used", { mode: "number" }).notNull().default(0),
     periodStart: timestamp("period_start").defaultNow().notNull(),
     periodEnd: timestamp("period_end"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

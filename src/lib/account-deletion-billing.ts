@@ -1,8 +1,8 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import { APIError } from "better-auth/api";
 import { db } from "@/db/drizzle";
-import { billing, member } from "@/db/schema";
+import { billing, member, maxModeMeterEvent, usageReservation } from "@/db/schema";
 import { env } from "@/env";
 import { stripe } from "@/lib/stripe";
 import { escapeStripeSearchValue } from "@/lib/stripe-search";
@@ -11,6 +11,74 @@ import {
   getPersonalCustomerOwnership,
   type AccountDeletionStatus,
 } from "@/lib/account-deletion-policy";
+import { isMeteredMaxModePrice } from "@/lib/stripe-subscriptions";
+
+async function hasPendingUsage(
+  userId: string,
+  customerIds: Set<string>,
+  database: Pick<typeof db, "select"> = db,
+) {
+  const [reservation] = await database
+    .select({ id: usageReservation.id })
+    .from(usageReservation)
+    .where(and(eq(usageReservation.userId, userId), isNull(usageReservation.settledAt)))
+    .limit(1);
+  if (reservation) return true;
+  if (!customerIds.size) return false;
+  const [event] = await database
+    .select({ id: maxModeMeterEvent.id })
+    .from(maxModeMeterEvent)
+    .where(
+      and(
+        inArray(maxModeMeterEvent.stripeCustomerId, [...customerIds]),
+        isNull(maxModeMeterEvent.deliveredAt),
+      ),
+    )
+    .limit(1);
+  return Boolean(event);
+}
+
+async function hasUnpaidInvoices(customerIds: Set<string>) {
+  for (const customer of customerIds) {
+    for await (const invoice of stripe.invoices.list({ customer, limit: 100 })) {
+      if (
+        invoice.status === "draft" ||
+        ((invoice.status === "open" || invoice.status === "uncollectible") &&
+          invoice.amount_remaining > 0)
+      )
+        return true;
+    }
+  }
+  return false;
+}
+
+async function personalDeletionStatus(
+  userId: string,
+  customerIds: Set<string>,
+  subscriptions: Stripe.Subscription[],
+): Promise<AccountDeletionStatus> {
+  const status = classifyDeletionSubscriptions(subscriptions);
+  if (status.state === "active") return status;
+  const meteredCancellation =
+    status.state === "cancelPending" &&
+    subscriptions.some(
+      (sub) =>
+        sub.status !== "canceled" &&
+        sub.status !== "incomplete_expired" &&
+        sub.items.data.some(
+          (item) =>
+            isMeteredMaxModePrice(item.price) || item.price.recurring?.usage_type === "metered",
+        ),
+    );
+  if (
+    meteredCancellation ||
+    (await hasPendingUsage(userId, customerIds)) ||
+    (await hasUnpaidInvoices(customerIds))
+  ) {
+    return { state: "billingPending", periodEnd: status.periodEnd };
+  }
+  return status;
+}
 
 async function getPersonalCustomerIds(userId: string) {
   const [record] = await db
@@ -101,7 +169,7 @@ export async function getAccountDeletionStatus(userId: string): Promise<AccountD
   const customerIds = await getPersonalCustomerIds(userId);
   const all = (await Promise.all([...customerIds].map(getSubscriptions))).flat();
   if (await hasRunningTeamSubscription(userId)) return { state: "active", periodEnd: null };
-  return classifyDeletionSubscriptions(all);
+  return personalDeletionStatus(userId, customerIds, all);
 }
 
 /** Run in better-auth's beforeDelete hook, before the billing row is cascaded away. */
@@ -115,12 +183,31 @@ export async function deletePersonalStripeCustomers(userId: string) {
   }
   const customerIds = await getPersonalCustomerIds(userId);
   const subscriptions = (await Promise.all([...customerIds].map(getSubscriptions))).flat();
-  const status = classifyDeletionSubscriptions(subscriptions);
+  const status = await personalDeletionStatus(userId, customerIds, subscriptions);
+  if (status.state === "billingPending")
+    throw new APIError("BAD_REQUEST", {
+      message:
+        "Wait for usage billing to finish and pay outstanding invoices before deleting your account.",
+    });
   if (status.state === "active" || (await hasRunningTeamSubscription(userId))) {
     throw new APIError("BAD_REQUEST", {
       message: "Cancel your active subscription before deleting your account.",
     });
   }
+  // Freeze new reservations under the same account lock before Stripe I/O.
+  // Retry remains possible if Stripe or the later account deletion fails.
+  await db.transaction(
+    async (tx) => {
+      await tx.execute(sql`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`);
+      if (await hasPendingUsage(userId, customerIds, tx))
+        throw new APIError("BAD_REQUEST", { message: "Usage settlement is still in progress." });
+      await tx
+        .update(billing)
+        .set({ deletionPending: true })
+        .where(and(eq(billing.userId, userId), isNull(billing.organizationId)));
+    },
+    { isolationLevel: "read committed" },
+  );
   if (status.state === "cancelPending") {
     // Immediate deletion forfeits remaining access, with no proration or refund.
     for (const sub of subscriptions) {

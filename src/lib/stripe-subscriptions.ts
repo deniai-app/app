@@ -1,4 +1,26 @@
 import type Stripe from "stripe";
+import { stripe } from "@/lib/stripe";
+
+/** Read every page: recently canceled subscriptions must not hide an older active plan. */
+export async function listCustomerSubscriptions(customer: string, expand: string[] = []) {
+  const subscriptions: Stripe.Subscription[] = [];
+  let startingAfter: string | undefined;
+  while (true) {
+    const page = await stripe.subscriptions.list({
+      customer,
+      status: "all",
+      limit: 100,
+      expand,
+      starting_after: startingAfter,
+    });
+    subscriptions.push(...page.data);
+    if (!page.has_more) return subscriptions;
+    const lastId = page.data.at(-1)?.id;
+    if (!lastId || lastId === startingAfter)
+      throw new Error("Subscription pagination made no progress.");
+    startingAfter = lastId;
+  }
+}
 
 type SubscriptionLike =
   | Stripe.Subscription

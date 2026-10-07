@@ -1,4 +1,4 @@
-import { render } from "@react-email/render";
+import { render } from "react-email";
 import { createElement } from "react";
 import { expect, test } from "vitest";
 import {

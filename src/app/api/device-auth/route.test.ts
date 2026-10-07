@@ -86,7 +86,7 @@ function poll() {
   return POST(
     new Request("http://localhost/api/device-auth", {
       method: "POST",
-      body: JSON.stringify({ action: "poll", deviceCode: "device" }),
+      body: JSON.stringify({ action: "poll", deviceCode: "a".repeat(64) }),
     }),
   );
 }
@@ -95,7 +95,7 @@ beforeEach(() => {
   state.keys = [];
   state.code = {
     id: "code-1",
-    deviceCode: "device",
+    deviceCode: "a".repeat(64),
     userId: "user",
     approved: true,
     issuedApiKeyEnc: null,

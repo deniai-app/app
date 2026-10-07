@@ -75,7 +75,12 @@ export function DeleteAccount({ className }: DeleteAccountProps) {
         toast.error(t("Unable to check your subscription. Please try again."));
         return;
       }
-      if (latest.data.state === "active" || latest.data.state === "teamOwner") return;
+      if (
+        latest.data.state === "active" ||
+        latest.data.state === "teamOwner" ||
+        latest.data.state === "billingPending"
+      )
+        return;
     } catch {
       toast.error(t("Unable to check your subscription. Please try again."));
       return;
@@ -151,11 +156,15 @@ export function DeleteAccount({ className }: DeleteAccountProps) {
                           ? t(
                               "You have an active subscription. Cancel it before deleting your account.",
                             )
-                          : deletionStatus.data?.state === "cancelPending"
+                          : deletionStatus.data?.state === "billingPending"
                             ? t(
-                                "Your subscription is ending. Wait until it ends, or delete now without a refund (immediate loss of access). Your account will not be deleted automatically.",
+                                "Your account has pending usage or unpaid invoices. Wait for billing to finish and settle any balance before deleting your account.",
                               )
-                            : deleteUserLocalization.deleteAccountDescription}
+                            : deletionStatus.data?.state === "cancelPending"
+                              ? t(
+                                  "Your subscription is ending. Wait until it ends, or delete now without a refund (immediate loss of access). Your account will not be deleted automatically.",
+                                )
+                              : deleteUserLocalization.deleteAccountDescription}
                 </AlertDialogDescription>
                 {deletionStatus.data?.state === "teamOwner" && (
                   <Link
@@ -165,7 +174,8 @@ export function DeleteAccount({ className }: DeleteAccountProps) {
                     {t("Manage team")}
                   </Link>
                 )}
-                {deletionStatus.data?.state === "active" && (
+                {(deletionStatus.data?.state === "active" ||
+                  deletionStatus.data?.state === "billingPending") && (
                   <Link
                     href="/settings/billing"
                     className="text-sm underline underline-offset-4 sm:col-start-2"
@@ -214,6 +224,7 @@ export function DeleteAccount({ className }: DeleteAccountProps) {
                     deletionStatus.isFetching ||
                     !deletionStatus.data ||
                     deletionStatus.data.state === "active" ||
+                    deletionStatus.data.state === "billingPending" ||
                     deletionStatus.data.state === "teamOwner"
                   }
                 >

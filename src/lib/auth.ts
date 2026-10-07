@@ -2,7 +2,7 @@ import { passkey } from "@better-auth/passkey";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import { drizzleAdapter } from "@better-auth/drizzle-adapter";
+import { limitedAuthAdapter } from "@/lib/auth-adapter";
 import {
   anonymous,
   captcha,
@@ -134,10 +134,7 @@ export const auth = betterAuth({
   // Keep the legacy `/token` endpoint unavailable while OAuth 2.1 uses the
   // explicit `/oauth2/token` endpoint below.
   disabledPaths: ["/token"],
-  database: drizzleAdapter(db, {
-    provider: "pg",
-    schema,
-  }),
+  database: limitedAuthAdapter(),
   // Reject disallowed domains before verification / magic-link emails are sent.
   hooks: {
     before: createAuthMiddleware(async (ctx) => {

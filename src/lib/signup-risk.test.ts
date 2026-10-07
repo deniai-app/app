@@ -98,7 +98,19 @@ test("IPv6 addresses are grouped by their /64", () => {
   expect(networkKey("203.0.113.9")).toBe("203.0.113.9");
   expect(networkKey("2001:db8:1:2:aaaa:bbbb:cccc:dddd")).toBe("2001:db8:1:2");
   expect(networkKey("2001:db8:1:2:1111:2222:3333:4444")).toBe("2001:db8:1:2");
-  expect(networkKey("2001:db8:1::5")).toBe("2001:db8:1");
+  expect(networkKey("2001:db8:1::5")).toBe("2001:db8:1:0");
+  expect(networkKey("2001:0DB8:0001:0000:0000:0000:0000:0005")).toBe("2001:db8:1:0");
+  expect(networkKey("2001:db8:1:0:abcd::5")).toBe("2001:db8:1:0");
+  expect(networkKey("2001::1:2:3:4:5")).toBe("2001:0:0:1");
+  expect(networkKey("2001::2:2:3:4:5")).toBe("2001:0:0:2");
+  expect(networkKey("::1")).toBe("0:0:0:0");
+  expect(networkKey("fe80::1%eth0")).toBe("fe80:0:0:0");
+});
+
+test("IPv4-mapped addresses use the same limit as native IPv4", () => {
+  expect(networkKey("::ffff:203.0.113.9")).toBe("203.0.113.9");
+  expect(networkKey("0:0:0:0:0:ffff:cb00:7109")).toBe("203.0.113.9");
+  expect(networkKey("::ffff:203.0.113.10")).toBe("203.0.113.10");
 });
 
 test("sign-ups are refused once a network passes its daily cap", async () => {

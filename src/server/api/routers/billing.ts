@@ -19,6 +19,7 @@ import {
   isTrialFingerprintEligible,
 } from "@/lib/billing-card-usage";
 import { isBillingDisabled } from "@/lib/billing-config";
+import { unchangedBillingSnapshot } from "@/lib/billing-snapshot";
 import { getAccountDeletionStatus } from "@/lib/account-deletion-billing";
 import { isAffiliatePaidStatus, processAffiliatePurchase } from "@/lib/affiliate";
 import {
@@ -48,6 +49,7 @@ import {
 } from "@/lib/stripe-checkout";
 import { checkoutSessionExpand, summarizeCheckoutSession } from "@/lib/stripe-checkout-receipt";
 import {
+  listCustomerSubscriptions,
   getLicensedPrice,
   getLicensedSubscriptionItem,
   getSubscriptionPeriodEndDate,
@@ -244,6 +246,11 @@ async function ensureBillingRecord(ctx: ProtectedContext, userId: string) {
     .from(billing)
     .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
     .limit(1);
+  if (initial?.deletionPending)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Account deletion is in progress.",
+    });
   if (initial && (initial.firstPaidAt || initial.flashOfferEndsAt)) return initial;
 
   // Release pooled reads before Stripe I/O. The account idempotency key keeps
@@ -308,14 +315,11 @@ async function ensureBillingRecord(ctx: ProtectedContext, userId: string) {
 async function syncSubscription(ctx: ProtectedContext, userId: string) {
   const billingRecord = await ensureBillingRecord(ctx, userId);
 
-  const subscriptions = await stripe.subscriptions.list({
-    customer: billingRecord.stripeCustomerId,
-    status: "all",
-    limit: 5,
-    expand: ["data.default_payment_method"],
-  });
+  const subscriptions = await listCustomerSubscriptions(billingRecord.stripeCustomerId, [
+    "data.default_payment_method",
+  ]);
 
-  const bestSub = pickLicensedSubscription(subscriptions.data, (status) =>
+  const bestSub = pickLicensedSubscription(subscriptions, (status) =>
     ACTIVE_SUB_STATUSES.has(status),
   );
 
@@ -328,11 +332,13 @@ async function syncSubscription(ctx: ProtectedContext, userId: string) {
     if (billingRecord.firstPaidAt) {
       const lifetime = await findPaidLifetimePurchase(billingRecord.stripeCustomerId);
       if (lifetime) {
-        return saveLifetimePlan(ctx.db, {
+        const restored = await saveLifetimePlan(ctx.db, {
           userId,
           customerId: billingRecord.stripeCustomerId,
           purchase: lifetime,
+          expectedBillingRecord: billingRecord,
         });
+        return restored ?? (await ensureBillingRecord(ctx, userId));
       }
     }
   }
@@ -349,9 +355,15 @@ async function syncSubscription(ctx: ProtectedContext, userId: string) {
           currentPeriodEnd: null,
           updatedAt: new Date(),
         })
-        .where(and(eq(billing.userId, userId), isNull(billing.organizationId)))
+        .where(
+          and(
+            eq(billing.userId, userId),
+            isNull(billing.organizationId),
+            unchangedBillingSnapshot(billingRecord),
+          ),
+        )
         .returning();
-      return cleared ?? billingRecord;
+      return cleared ?? (await ensureBillingRecord(ctx, userId));
     }
     return billingRecord;
   }
@@ -392,10 +404,11 @@ async function syncSubscription(ctx: ProtectedContext, userId: string) {
         ...updates,
         updatedAt: new Date(),
       },
+      setWhere: unchangedBillingSnapshot(billingRecord),
     })
     .returning();
 
-  return updated;
+  return updated ?? (await ensureBillingRecord(ctx, userId));
 }
 
 async function reuseOpenCheckoutSession({
@@ -961,7 +974,7 @@ export const billingRouter = router({
         stripeSubscriptionId: updated.id,
       };
 
-      const [saved] = await ctx.db
+      const [savedSnapshot] = await ctx.db
         .insert(billing)
         .values({
           userId: ctx.userId,
@@ -975,8 +988,10 @@ export const billingRouter = router({
             ...updates,
             updatedAt: new Date(),
           },
+          setWhere: unchangedBillingSnapshot(subscriptionState),
         })
         .returning();
+      const saved = savedSnapshot ?? (await ensureBillingRecord(ctx, ctx.userId));
 
       if (saved?.maxModeEnabled) {
         await attachMaxModeMeteredItems(saved, ctx.userId);
@@ -1008,7 +1023,7 @@ export const billingRouter = router({
         getSubscriptionPeriodEndDate(canceled) ?? subscriptionState.currentPeriodEnd,
     };
 
-    const [saved] = await ctx.db
+    const [savedSnapshot] = await ctx.db
       .insert(billing)
       .values({
         userId: ctx.userId,
@@ -1023,8 +1038,10 @@ export const billingRouter = router({
           ...updates,
           updatedAt: new Date(),
         },
+        setWhere: unchangedBillingSnapshot(subscriptionState),
       })
       .returning();
+    const saved = savedSnapshot ?? (await ensureBillingRecord(ctx, ctx.userId));
 
     return {
       planId: saved.planId ?? null,
@@ -1061,7 +1078,7 @@ export const billingRouter = router({
       mode: deriveModeFromPrice(price),
     };
 
-    const [saved] = await ctx.db
+    const [savedSnapshot] = await ctx.db
       .insert(billing)
       .values({
         userId: ctx.userId,
@@ -1075,8 +1092,10 @@ export const billingRouter = router({
           ...updates,
           updatedAt: new Date(),
         },
+        setWhere: unchangedBillingSnapshot(subscriptionState),
       })
       .returning();
+    const saved = savedSnapshot ?? (await ensureBillingRecord(ctx, ctx.userId));
 
     return {
       planId: saved.planId ?? null,

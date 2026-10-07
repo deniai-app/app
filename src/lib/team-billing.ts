@@ -6,7 +6,7 @@ import { isBillingDisabled } from "@/lib/billing-config";
 import { isTeamPlan } from "@/lib/billing";
 import { stripe } from "@/lib/stripe";
 import { getLicensedSubscriptionItem } from "@/lib/stripe-subscriptions";
-import { findTeamBillingRecord } from "@/lib/team-billing-record";
+import { findTeamBillingRecord, withTeamBillingLock } from "@/lib/team-billing-record";
 
 const ACTIVE_SUB_STATUSES = new Set(["trialing", "active", "past_due"]);
 
@@ -14,8 +14,11 @@ export async function getTeamBilling(organizationId: string) {
   return (await findTeamBillingRecord(db, organizationId)) ?? null;
 }
 
-export async function getOrgMemberCount(organizationId: string): Promise<number> {
-  const [result] = await db
+export async function getOrgMemberCount(
+  organizationId: string,
+  database: Pick<typeof db, "select"> = db,
+): Promise<number> {
+  const [result] = await database
     .select({ count: sql<number>`count(*)::int` })
     .from(member)
     .where(eq(member.organizationId, organizationId));
@@ -25,23 +28,23 @@ export async function getOrgMemberCount(organizationId: string): Promise<number>
 export async function updateTeamSeatCount(organizationId: string) {
   if (isBillingDisabled) return;
 
-  const teamBilling = await getTeamBilling(organizationId);
-  if (!teamBilling?.stripeSubscriptionId) return;
-
-  const memberCount = await getOrgMemberCount(organizationId);
-
   try {
-    const subscription = await stripe.subscriptions.retrieve(teamBilling.stripeSubscriptionId, {
-      expand: ["items"],
-    });
-    const item = getLicensedSubscriptionItem(subscription) ?? subscription.items.data[0];
-    if (!item) return;
+    await withTeamBillingLock(db, organizationId, async (transaction) => {
+      const teamBilling = await findTeamBillingRecord(transaction, organizationId);
+      if (!teamBilling?.stripeSubscriptionId) return;
+      // Keep the lock through Stripe's write: otherwise a delayed older count
+      // can overwrite the quantity sent by a newer membership change.
+      const memberCount = await getOrgMemberCount(organizationId, transaction);
+      const subscription = await stripe.subscriptions.retrieve(teamBilling.stripeSubscriptionId, {
+        expand: ["items"],
+      });
+      const item = getLicensedSubscriptionItem(subscription) ?? subscription.items.data[0];
+      if (!item || item.quantity === memberCount) return;
 
-    if (item.quantity === memberCount) return;
-
-    await stripe.subscriptions.update(subscription.id, {
-      items: [{ id: item.id, quantity: memberCount }],
-      proration_behavior: "always_invoice",
+      await stripe.subscriptions.update(subscription.id, {
+        items: [{ id: item.id, quantity: memberCount }],
+        proration_behavior: "always_invoice",
+      });
     });
   } catch (error) {
     console.error("[team-billing] Failed to update seat count:", error);
@@ -96,7 +99,13 @@ export async function cancelPersonalSubscription(userId: string, organizationId:
         currentPeriodEnd: new Date(),
         updatedAt: new Date(),
       })
-      .where(and(eq(billing.userId, userId), isNull(billing.organizationId)));
+      .where(
+        and(
+          eq(billing.userId, userId),
+          isNull(billing.organizationId),
+          eq(billing.stripeSubscriptionId, record.stripeSubscriptionId),
+        ),
+      );
 
     console.log("[team-billing] Canceled personal subscription for user joining team", { userId });
   } catch (error) {

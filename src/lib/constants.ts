@@ -524,6 +524,17 @@ export const models: readonly ModelDefinition[] = [
     contextWindow: 1_000_000,
   },
   {
+    name: "Claude Haiku 5.5",
+    value: "claude-haiku-5.5",
+    tokenMultiplier: 1,
+    author: "anthropic",
+    description: "Fast, lightweight Claude 5 model for everyday chat and quick reasoning.",
+    featured: true,
+    features: ["reasoning", "smart", "fast"],
+    efforts: ["low", "medium", "high", "xhigh", "max"],
+    contextWindow: 1_000_000,
+  },
+  {
     name: "Claude Opus 4.7",
     value: "claude-opus-4.7",
     tokenMultiplier: 2,

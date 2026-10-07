@@ -531,7 +531,7 @@ export const models: readonly ModelDefinition[] = [
     description: "Fast, lightweight Claude 5 model for everyday chat and quick reasoning.",
     featured: true,
     features: ["reasoning", "smart", "fast"],
-    efforts: ["low", "medium", "high"],
+    efforts: ["low", "medium", "high", "xhigh", "max"],
     contextWindow: 1_000_000,
   },
   {

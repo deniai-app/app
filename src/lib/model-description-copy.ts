@@ -90,6 +90,9 @@ export function useModelDescriptionCopy() {
     "Fast, lightweight Claude model for everyday chat and quick reasoning.": t(
       "Fast, lightweight Claude model for everyday chat and quick reasoning.",
     ),
+    "Fast, lightweight Claude 5 model for everyday chat and quick reasoning.": t(
+      "Fast, lightweight Claude 5 model for everyday chat and quick reasoning.",
+    ),
     "Legacy professional model": t("Legacy professional model"),
     "Beta Grok model for deep research with coordinated multi-agent tool use.": t(
       "Beta Grok model for deep research with coordinated multi-agent tool use.",

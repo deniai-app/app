@@ -2,11 +2,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import {
-  getChatGenerationContextById,
-  removePendingAssistantMessage,
-  stopChatGenerationState,
-} from "@/lib/chat";
+import { getChatGenerationContextById, stopActiveChatGeneration } from "@/lib/chat";
 import { stopChatGeneration } from "@/lib/chat-generation";
 import { guardMutationRequest } from "@/lib/mutation-request";
 import { readRequestJson, RequestBodyTooLargeError } from "@/lib/request-body";
@@ -47,9 +43,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Chat not found" }, { status: 404 });
   }
 
-  await stopChatGenerationState(chat.id, userId);
-  stopChatGeneration(chat.id);
-  await removePendingAssistantMessage(chat.id, userId);
+  // Clearing the active generation and its pending flag is one guarded write,
+  // so a generation started meanwhile is neither stopped nor overwritten.
+  const stoppedGenerationId = await stopActiveChatGeneration(chat.id, userId);
+  if (stoppedGenerationId) stopChatGeneration(chat.id, stoppedGenerationId);
 
   return NextResponse.json({ ok: true });
 }

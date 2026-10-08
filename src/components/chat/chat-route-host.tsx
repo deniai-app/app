@@ -1,11 +1,13 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
 import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChatInterfaceSkeleton } from "@/components/chat/chat-interface-skeleton";
 import { DocumentTitle } from "@/components/document-title";
+import { captureAccountEpoch } from "@/lib/account-query-boundary";
 import { trpc } from "@/lib/trpc/react";
 
 /**
@@ -73,6 +75,7 @@ function nextMountedIds(prev: string[], activeId: string): string[] {
 
 function useChatPanePage(id: string, isActive: boolean, projectIdFromQuery: string | null) {
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
 
   const pageQuery = trpc.chat.getChatPage.useQuery(
     { id },
@@ -94,10 +97,13 @@ function useChatPanePage(id: string, isActive: boolean, projectIdFromQuery: stri
 
   // `mutate` is stable; the full mutation result changes identity on every
   // status update, which re-ran the effect below and flooded ensureChat.
+  // Results started for a previous account must not reach the next one's cache.
   const { mutate: ensureChat } = trpc.chat.ensureChat.useMutation({
     retry: false,
-    onSuccess: (row, variables) => {
+    onMutate: () => captureAccountEpoch(queryClient),
+    onSuccess: (row, variables, isSameAccount) => {
       if (
+        !isSameAccount() ||
         variables.id !== paneIdRef.current ||
         (variables.projectId ?? null) !== projectIdRef.current
       ) {
@@ -109,8 +115,9 @@ function useChatPanePage(id: string, isActive: boolean, projectIdFromQuery: stri
         window.history.replaceState({}, "", `/chat/${variables.id}`);
       }
     },
-    onError: (_error, variables) => {
+    onError: (_error, variables, isSameAccount) => {
       if (
+        !isSameAccount?.() ||
         variables.id !== paneIdRef.current ||
         (variables.projectId ?? null) !== projectIdRef.current
       ) {

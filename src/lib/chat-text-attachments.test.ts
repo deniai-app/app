@@ -178,3 +178,32 @@ test("truncates very long files with a notice and leaves assistant messages alon
   expect(textAt(message, 0)).toContain("[Truncated: only the first 400,000");
   expect(untouched).toBe(assistant);
 });
+
+test("bounds the cache even when stored files are empty", async () => {
+  const fetchMock = vi.fn(async () => new Response(""));
+  vi.stubGlobal("fetch", fetchMock);
+  const emptyFile = (index: number) =>
+    ({
+      type: "file",
+      mediaType: "text/plain",
+      filename: "empty.txt",
+      url: `https://app.ufs.sh/f/empty?copy=${index}`,
+    }) as const;
+  const request = (indexes: number[]) =>
+    inlineTextAttachments([userMessage(indexes.map((index) => emptyFile(index)))]);
+
+  await request([0]);
+  await request([0]);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+
+  // Each request reads at most 20 files; send many distinct empty ones.
+  for (let start = 1; start <= 2000; start += 20) {
+    await request(Array.from({ length: 20 }, (_, offset) => start + offset));
+  }
+  fetchMock.mockClear();
+
+  await request([2000]);
+  expect(fetchMock).not.toHaveBeenCalled();
+  await request([0]);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});

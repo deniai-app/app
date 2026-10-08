@@ -119,6 +119,44 @@ test("pins socket DNS to validated addresses while preserving the HTTP hostname"
   expect(await response.text()).toContain("Readable public page");
 });
 
+/** Like a real socket, deliver the response on a later tick, outside the Promise executor. */
+function respondLater(status: number, headers: Record<string, string>) {
+  const incoming = Object.assign(Readable.from([Buffer.from("body")]), {
+    statusCode: status,
+    headers,
+  });
+  const destroyIncoming = vi.spyOn(incoming, "destroy");
+  const outgoing = Object.assign(new EventEmitter(), { end: vi.fn(), destroy: vi.fn() });
+  outgoing.end.mockImplementation(() => {
+    const [, , onResponse] = vi.mocked(httpRequest).mock.calls.at(-1)!;
+    setImmediate(() => {
+      if (typeof onResponse === "function") onResponse(incoming as never);
+    });
+  });
+  vi.mocked(httpRequest).mockReturnValueOnce(outgoing as never);
+  return { destroyIncoming, outgoing };
+}
+
+// Before the fix these errors escaped the Promise from the socket callback: the
+// request never settled (test timeout) and the runner reported an uncaught error.
+test.each([600, 199])(
+  "rejects an asynchronous upstream status %i instead of crashing the process",
+  async (status) => {
+    const { destroyIncoming, outgoing } = respondLater(status, {});
+    await expect(fetchSafePublicHttpUrl("http://probe.example/")).rejects.toThrow(
+      "Invalid upstream response status",
+    );
+    expect(destroyIncoming).toHaveBeenCalled();
+    expect(outgoing.destroy).toHaveBeenCalled();
+  },
+);
+
+test("rejects asynchronous upstream headers that a Response cannot carry", async () => {
+  const { destroyIncoming } = respondLater(200, { "x-bad": "line\nbreak" });
+  await expect(fetchSafePublicHttpUrl("http://probe.example/")).rejects.toThrow();
+  expect(destroyIncoming).toHaveBeenCalled();
+});
+
 test("rejects DNS rebinding between validation and connection setup", async () => {
   vi.mocked(lookup)
     .mockResolvedValueOnce(publicAnswer)

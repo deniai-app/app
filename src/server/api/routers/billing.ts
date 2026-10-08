@@ -33,6 +33,8 @@ import {
   findPaidLifetimePurchase,
   grantsSubscriptionAccess,
   resolveSubscriptionStatus,
+  isPaidCheckoutPaymentCurrent,
+  isLifetimePlanId,
   isPaidLifetimeRecord,
   saveLifetimePlan,
 } from "@/lib/lifetime-plan";
@@ -756,7 +758,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const session = await stripe.checkout.sessions.retrieve(input.sessionId, {
-        expand: ["subscription", "payment_intent", "line_items"],
+        expand: ["subscription", "payment_intent.latest_charge", "line_items"],
       });
 
       if (!session.client_reference_id || session.client_reference_id !== ctx.userId) {
@@ -823,6 +825,9 @@ export const billingRouter = router({
           updates.trialPaymentMethodFingerprint = fingerprintUpdates.trialPaymentMethodFingerprint;
           updates.trialUsedAt = fingerprintUpdates.trialUsedAt;
         }
+      } else if (!isPaidCheckoutPaymentCurrent(session)) {
+        // A refunded or disputed one-time payment keeps its "succeeded"/"paid"
+        // status, so replaying the session must not restore the revoked plan.
       } else if (
         paymentIntent &&
         typeof paymentIntent !== "string" &&
@@ -866,6 +871,40 @@ export const billingRouter = router({
           status: billingRecord.status ?? null,
           mode: billingRecord.mode ?? null,
           currentPeriodEnd: billingRecord.currentPeriodEnd ?? null,
+        };
+      }
+
+      // A refund can land between the session fetch above and the write; recheck
+      // the live charge under the same user lock that reversal handling takes.
+      if (!subscription && updates.status === "paid" && isLifetimePlanId(plan?.id)) {
+        const saved = await saveLifetimePlan(ctx.db, {
+          userId: ctx.userId,
+          customerId: updates.stripeCustomerId ?? "",
+          purchase: {
+            planId: plan.id,
+            priceId: updates.priceId ?? null,
+            checkoutSessionId: session.id,
+          },
+          extra: updates,
+        });
+        if (!saved) {
+          return {
+            planId: billingRecord.planId ?? null,
+            status: billingRecord.status ?? null,
+            mode: billingRecord.mode ?? null,
+            currentPeriodEnd: billingRecord.currentPeriodEnd ?? null,
+          };
+        }
+        await processAffiliatePurchase({
+          referredUserId: ctx.userId,
+          planId: plan.id,
+          purchasedAt: updates.firstPaidAt ?? new Date(),
+        });
+        return {
+          planId: saved.planId ?? null,
+          status: saved.status ?? null,
+          mode: saved.mode ?? null,
+          currentPeriodEnd: saved.currentPeriodEnd ?? null,
         };
       }
 

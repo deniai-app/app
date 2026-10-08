@@ -3,6 +3,9 @@ import { chats } from "@/db/schema";
 import { normalizeMigrationPayload } from "@/lib/migration";
 import { protectedProcedure, router } from "../trpc";
 
+/** Five bound parameters per chat row. */
+export const IMPORT_BATCH_SIZE = 1000;
+
 export const migrationRouter = router({
   import: protectedProcedure
     .input(
@@ -34,13 +37,23 @@ export const migrationRouter = router({
         updated_at: conversation.updatedAt ?? now,
       }));
 
-      const inserted = await ctx.db.insert(chats).values(values).returning({
-        id: chats.id,
+      // One INSERT per batch keeps each statement below Postgres' 65,534 bind
+      // parameter limit; the transaction keeps the import all-or-nothing.
+      const importedChats = await ctx.db.transaction(async (tx) => {
+        let count = 0;
+        for (let index = 0; index < values.length; index += IMPORT_BATCH_SIZE) {
+          const inserted = await tx
+            .insert(chats)
+            .values(values.slice(index, index + IMPORT_BATCH_SIZE))
+            .returning({ id: chats.id });
+          count += inserted.length;
+        }
+        return count;
       });
 
       return {
         success: true,
-        importedChats: inserted.length,
+        importedChats,
         importedMessages: conversations.reduce(
           (count, conversation) => count + conversation.messages.length,
           0,

@@ -1,5 +1,6 @@
 import type { ReasoningUIPart, TextUIPart, UIMessage } from "ai";
 import { nanoid } from "nanoid";
+import { toJsonbSafe } from "@/lib/jsonb";
 
 export type MigrationExport = {
   format: "deni-ai-message-export";
@@ -246,6 +247,19 @@ function parseUnixSeconds(value: unknown): Date | undefined {
 }
 
 export function normalizeMigrationPayload(payload: unknown): MigrationImportResult {
+  const result = normalizeParsedPayload(payload);
+  // Exports can carry U+0000, which Postgres jsonb/text columns reject (22P05).
+  return {
+    ...result,
+    conversations: result.conversations.map((conversation) => ({
+      ...conversation,
+      title: conversation.title.replaceAll("\u0000", ""),
+      messages: toJsonbSafe(conversation.messages),
+    })),
+  };
+}
+
+function normalizeParsedPayload(payload: unknown): MigrationImportResult {
   if (isChatGptExport(payload)) {
     return normalizeChatGptExport(payload);
   }

@@ -1,10 +1,10 @@
 import { generateText, type UIMessage } from "ai";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/drizzle";
 import { chats } from "@/db/schema";
 import { env } from "@/env";
+import { stringifyForJsonb } from "@/lib/jsonb";
 import { createDeniOpenRouter } from "@/lib/openrouter-provider";
-import { setPendingState } from "@/app/api/chat/_lib/schema";
 
 type ChatUpdateFields = Partial<typeof chats.$inferInsert>;
 
@@ -77,13 +77,6 @@ function chatRowWhere(id: string, userId: string, expectedGenerationId?: string 
     : and(eq(chats.id, id), eq(chats.uid, userId));
 }
 
-/** Postgres jsonb rejects U+0000 (22P05); web search results can contain it. */
-function stringifyForJsonb(value: unknown) {
-  return JSON.stringify(value, (_key, v) =>
-    typeof v === "string" ? v.replaceAll("\u0000", "") : v,
-  );
-}
-
 function jsonbSetLastMessage(message: UIMessage) {
   const payload = stringifyForJsonb(message);
   return sql`jsonb_set(
@@ -150,27 +143,54 @@ export async function replaceLastChatMessage(
   return updatedChat.id;
 }
 
-export async function removePendingAssistantMessage(id: string, userId: string) {
-  const chat = await getChatById(id, userId);
-  const messages = Array.isArray(chat?.messages) ? (chat.messages as UIMessage[]) : null;
+/**
+ * Stop the generation that is active right now, in one guarded statement.
+ *
+ * A new generation may start between the read and the write, so the update only
+ * applies while the captured generation is still the active one. The pending flag
+ * is removed from the stored last message in SQL instead of writing back a
+ * snapshot, which would replace a newer transcript tail or a newer partial answer.
+ *
+ * Returns the stopped generation id (`null` when none was active), or `undefined`
+ * when the chat does not exist or a newer generation took over.
+ */
+export async function stopActiveChatGeneration(id: string, userId: string) {
+  const [chat] = await db
+    .select({ activeGenerationId: chats.activeGenerationId })
+    .from(chats)
+    .where(and(eq(chats.id, id), eq(chats.uid, userId)))
+    .limit(1);
+  if (!chat) return undefined;
 
-  if (!messages || messages.length === 0) {
-    return false;
-  }
+  const generationId = chat.activeGenerationId;
+  const lastIndex = sql`(jsonb_array_length(${chats.messages}) - 1)::text`;
+  const lastIsPendingAssistant = sql`(
+    jsonb_typeof(${chats.messages}) = 'array'
+    AND ${chats.messages}->-1->>'role' = 'assistant'
+    AND ${chats.messages}->-1->'metadata'->'pending' = 'true'::jsonb
+  )`;
+  const [stopped] = await db
+    .update(chats)
+    .set({
+      activeGenerationId: null,
+      updated_at: new Date(),
+      messages: sql`CASE WHEN ${lastIsPendingAssistant}
+        THEN ${chats.messages} #- ARRAY[${lastIndex}, 'metadata', 'pending']
+        ELSE ${chats.messages}
+      END`,
+    })
+    .where(
+      and(
+        eq(chats.id, id),
+        eq(chats.uid, userId),
+        generationId === null
+          ? isNull(chats.activeGenerationId)
+          : eq(chats.activeGenerationId, generationId),
+      ),
+    )
+    .returning({ id: chats.id });
 
-  const lastMessage = messages[messages.length - 1];
-  const isPendingAssistant =
-    lastMessage?.role === "assistant" &&
-    typeof lastMessage.metadata === "object" &&
-    lastMessage.metadata !== null &&
-    Boolean((lastMessage.metadata as { pending?: boolean }).pending);
-
-  if (!isPendingAssistant) {
-    return false;
-  }
-
-  await replaceLastChatMessage(id, userId, setPendingState(lastMessage, false));
-  return true;
+  return stopped ? generationId : undefined;
 }
 
 export async function clearChatGenerationState(
@@ -202,19 +222,6 @@ export async function clearChatGenerationState(
     .update(chats)
     .set(updates)
     .where(and(eq(chats.id, id), eq(chats.uid, userId), eq(chats.activeGenerationId, generationId)))
-    .returning({ id: chats.id });
-
-  return updatedChat?.id ?? null;
-}
-
-export async function stopChatGenerationState(id: string, userId: string) {
-  const [updatedChat] = await db
-    .update(chats)
-    .set({
-      activeGenerationId: null,
-      updated_at: new Date(),
-    })
-    .where(and(eq(chats.id, id), eq(chats.uid, userId)))
     .returning({ id: chats.id });
 
   return updatedChat?.id ?? null;

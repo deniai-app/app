@@ -214,29 +214,43 @@ export async function fetchSafePublicHttpUrl(
           callback(null, lookupOptions.all ? addresses : address.address, address.family),
       },
       (incoming) => {
-        const responseHeaders = new Headers();
-        for (const [name, value] of Object.entries(incoming.headers)) {
-          if (value !== undefined) {
-            responseHeaders.set(name, Array.isArray(value) ? value.join(", ") : value);
+        // This callback runs outside the Promise executor: a malformed remote
+        // status or header must reject here, not escape as an uncaught error.
+        try {
+          const status = incoming.statusCode ?? 502;
+          if (!Number.isInteger(status) || status < 200 || status > 599) {
+            throw new Error(`Invalid upstream response status (${status}).`);
           }
+          const responseHeaders = new Headers();
+          for (const [name, value] of Object.entries(incoming.headers)) {
+            if (value !== undefined) {
+              responseHeaders.set(name, Array.isArray(value) ? value.join(", ") : value);
+            }
+          }
+          if (status === 204 || status === 205 || status === 304) {
+            incoming.resume();
+            resolve(new Response(null, { status, headers: responseHeaders }));
+            return;
+          }
+          resolve(
+            new Response(
+              Readable.toWeb(incoming, {
+                strategy: {
+                  highWaterMark: 64 * 1024,
+                  size: (chunk: Uint8Array) => chunk.byteLength,
+                },
+              }) as ReadableStream<Uint8Array>,
+              {
+                status,
+                headers: responseHeaders,
+              },
+            ),
+          );
+        } catch (error) {
+          incoming.destroy();
+          outgoing.destroy();
+          reject(error);
         }
-        const status = incoming.statusCode ?? 502;
-        if (status === 204 || status === 205 || status === 304) {
-          incoming.resume();
-          resolve(new Response(null, { status, headers: responseHeaders }));
-          return;
-        }
-        resolve(
-          new Response(
-            Readable.toWeb(incoming, {
-              strategy: { highWaterMark: 64 * 1024, size: (chunk: Uint8Array) => chunk.byteLength },
-            }) as ReadableStream<Uint8Array>,
-            {
-              status,
-              headers: responseHeaders,
-            },
-          ),
-        );
       },
     );
     outgoing.on("error", reject);

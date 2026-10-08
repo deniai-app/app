@@ -6,6 +6,9 @@ import { affiliateReferral, affiliateReward } from "@/db/schema";
 import { env } from "@/env";
 import { AFFILIATE_REWARD_TYPES } from "@/lib/affiliate-types";
 
+/** The global pool or a transaction, so callers holding a lock never need a second connection. */
+type RiskDatabase = Pick<typeof db, "select">;
+
 const VELOCITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const VELOCITY_THRESHOLD = 5;
 const FAST_CLAIM_MS = 10 * 60 * 1000;
@@ -28,23 +31,26 @@ export type RegistrationRewardRisk = {
   hardBlock: boolean;
 };
 
-export async function computeRegistrationRewardRisk({
-  referrerId,
-  referredUserId,
-  referredEmail,
-  referredEmailVerified,
-  referredCreatedAt,
-  claimedAt,
-  claimIpHash,
-}: {
-  referrerId: string;
-  referredUserId: string;
-  referredEmail: string;
-  referredEmailVerified: boolean;
-  referredCreatedAt: Date;
-  claimedAt: Date;
-  claimIpHash: string | null;
-}): Promise<RegistrationRewardRisk> {
+export async function computeRegistrationRewardRisk(
+  {
+    referrerId,
+    referredUserId,
+    referredEmail,
+    referredEmailVerified,
+    referredCreatedAt,
+    claimedAt,
+    claimIpHash,
+  }: {
+    referrerId: string;
+    referredUserId: string;
+    referredEmail: string;
+    referredEmailVerified: boolean;
+    referredCreatedAt: Date;
+    claimedAt: Date;
+    claimIpHash: string | null;
+  },
+  database: RiskDatabase = db,
+): Promise<RegistrationRewardRisk> {
   const flags: string[] = [];
   let score = 0;
   let hardBlock = false;
@@ -65,7 +71,7 @@ export async function computeRegistrationRewardRisk({
   }
 
   if (claimIpHash) {
-    const [ipCollision] = await db
+    const [ipCollision] = await database
       .select({ id: affiliateReferral.id })
       .from(affiliateReferral)
       .where(
@@ -85,7 +91,7 @@ export async function computeRegistrationRewardRisk({
   }
 
   const since = new Date(claimedAt.getTime() - VELOCITY_WINDOW_MS);
-  const [velocity] = await db
+  const [velocity] = await database
     .select({ count: sql<number>`count(*)::int` })
     .from(affiliateReferral)
     .where(
@@ -108,8 +114,11 @@ export type ReferrerTrustTier = "new" | "medium" | "high";
  * one-time check, per the anti-spam requirement that invite rewards must
  * never be blanket-auto-approved.
  */
-export async function getReferrerTrustTier(referrerId: string): Promise<ReferrerTrustTier> {
-  const rows = await db
+export async function getReferrerTrustTier(
+  referrerId: string,
+  database: RiskDatabase = db,
+): Promise<ReferrerTrustTier> {
+  const rows = await database
     .select({ status: affiliateReward.status })
     .from(affiliateReward)
     .where(
@@ -141,18 +150,21 @@ const AUTO_APPROVE_THRESHOLDS: Record<ReferrerTrustTier, number | null> = {
   high: 30,
 };
 
-export async function evaluateRegistrationReward(params: {
-  referrerId: string;
-  referredUserId: string;
-  referredEmail: string;
-  referredEmailVerified: boolean;
-  referredCreatedAt: Date;
-  claimedAt: Date;
-  claimIpHash: string | null;
-}): Promise<{ autoApprove: boolean; risk: RegistrationRewardRisk; tier: ReferrerTrustTier }> {
+export async function evaluateRegistrationReward(
+  params: {
+    referrerId: string;
+    referredUserId: string;
+    referredEmail: string;
+    referredEmailVerified: boolean;
+    referredCreatedAt: Date;
+    claimedAt: Date;
+    claimIpHash: string | null;
+  },
+  database: RiskDatabase = db,
+): Promise<{ autoApprove: boolean; risk: RegistrationRewardRisk; tier: ReferrerTrustTier }> {
   const [risk, tier] = await Promise.all([
-    computeRegistrationRewardRisk(params),
-    getReferrerTrustTier(params.referrerId),
+    computeRegistrationRewardRisk(params, database),
+    getReferrerTrustTier(params.referrerId, database),
   ]);
 
   const threshold = AUTO_APPROVE_THRESHOLDS[tier];

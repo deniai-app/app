@@ -62,6 +62,16 @@ export function isUnreversedCharge(intent: Stripe.Checkout.Session["payment_inte
 }
 
 /**
+ * True when a one-time checkout's payment still stands. A session without a
+ * payment intent was fully discounted, so there is no charge to reverse.
+ */
+export function isPaidCheckoutPaymentCurrent(
+  session: Pick<Stripe.Checkout.Session, "payment_intent">,
+) {
+  return session.payment_intent === null || isUnreversedCharge(session.payment_intent);
+}
+
+/**
  * The billing row holds a single plan, so a subscription bought on top of a
  * lifetime plan replaces it. Recover the paid, unreversed one-time purchase from
  * Stripe once that subscription no longer grants access.
@@ -82,7 +92,7 @@ export async function findPaidLifetimePurchase(
       session.mode !== "payment" ||
       session.payment_status !== "paid" ||
       !isLifetimePlanId(planId) ||
-      !isUnreversedCharge(session.payment_intent)
+      !isPaidCheckoutPaymentCurrent(session)
     ) {
       continue;
     }
@@ -126,8 +136,7 @@ export async function saveLifetimePlan(
         { expand: ["payment_intent.latest_charge"] },
         { timeout: 10_000, maxNetworkRetries: 0 },
       );
-      if (live.payment_status !== "paid" || !isUnreversedCharge(live.payment_intent))
-        return undefined;
+      if (live.payment_status !== "paid" || !isPaidCheckoutPaymentCurrent(live)) return undefined;
       const updates = {
         ...extra,
         stripeCustomerId: customerId,

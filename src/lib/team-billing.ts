@@ -9,6 +9,7 @@ import { getLicensedSubscriptionItem } from "@/lib/stripe-subscriptions";
 import { findTeamBillingRecord, withTeamBillingLock } from "@/lib/team-billing-record";
 
 const ACTIVE_SUB_STATUSES = new Set(["trialing", "active", "past_due"]);
+const TERMINAL_SUB_STATUSES = new Set(["canceled", "incomplete_expired"]);
 
 export async function getTeamBilling(organizationId: string) {
   return (await findTeamBillingRecord(db, organizationId)) ?? null;
@@ -145,7 +146,9 @@ export async function cancelTeamSubscriptionForDeletion(organizationId: string) 
   );
   for (const subscriptionId of subscriptionIds) {
     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-    if (ACTIVE_SUB_STATUSES.has(subscription.status)) {
+    // unpaid, paused and incomplete subscriptions can still resume or complete
+    // and charge a team that no longer exists; only ended ones are safe to drop.
+    if (!TERMINAL_SUB_STATUSES.has(subscription.status)) {
       await stripe.subscriptions.cancel(subscriptionId, { prorate: true });
     }
   }

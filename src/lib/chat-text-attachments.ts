@@ -24,20 +24,29 @@ const MAX_CACHED_FILE_CHARS = 200_000;
 type MessagePart = UIMessage["parts"][number];
 type FilePart = Extract<MessagePart, { type: "file" }>;
 
+/** Entries kept regardless of size: empty files would otherwise cost nothing. */
+const MAX_CACHED_ENTRIES = 500;
+/** Rough per-entry Map overhead, so tiny files with long URLs still count. */
+const CACHE_ENTRY_OVERHEAD_CHARS = 64;
+
 const textCache = new Map<string, string>();
 let cachedChars = 0;
+
+function cacheCost(url: string, text: string) {
+  return url.length + text.length + CACHE_ENTRY_OVERHEAD_CHARS;
+}
 
 function cacheText(url: string, text: string) {
   if (text.length > MAX_CACHED_FILE_CHARS) return;
   const previous = textCache.get(url);
-  if (previous !== undefined) cachedChars -= previous.length;
+  if (previous !== undefined) cachedChars -= cacheCost(url, previous);
   textCache.delete(url);
   textCache.set(url, text);
-  cachedChars += text.length;
+  cachedChars += cacheCost(url, text);
   for (const [oldestUrl, oldest] of textCache) {
-    if (cachedChars <= MAX_CACHED_CHARS) break;
+    if (cachedChars <= MAX_CACHED_CHARS && textCache.size <= MAX_CACHED_ENTRIES) break;
     textCache.delete(oldestUrl);
-    cachedChars -= oldest.length;
+    cachedChars -= cacheCost(oldestUrl, oldest);
   }
 }
 

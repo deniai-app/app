@@ -14,9 +14,10 @@ export function startChatGeneration(chatId: string, generationId: string) {
   return { abortController };
 }
 
-export function stopChatGeneration(chatId: string) {
+/** Abort only the given generation, never one that replaced it on this instance. */
+export function stopChatGeneration(chatId: string, generationId: string) {
   const activeGeneration = activeGenerations.get(chatId);
-  if (!activeGeneration) {
+  if (activeGeneration?.generationId !== generationId) {
     return false;
   }
 

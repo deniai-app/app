@@ -526,7 +526,6 @@ export function CheckoutReceiptForm({
                   address: "never",
                   email: "never",
                   name: "never",
-                  phone: "never",
                 },
               },
               layout: {

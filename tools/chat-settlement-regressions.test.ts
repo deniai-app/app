@@ -31,10 +31,12 @@ vi.mock("@/lib/chat", () => ({
   }),
   isChatGenerationActive: async (_id: string, _user: string, generation: string) =>
     state.activeGenerationId === generation,
-  stopChatGenerationState: async () => {
+  // Mirrors the guarded stop: clears and returns the generation that was active.
+  stopActiveChatGeneration: async () => {
+    const stopped = state.activeGenerationId;
     state.activeGenerationId = null;
+    return stopped;
   },
-  removePendingAssistantMessage: async () => false,
   replaceLastChatMessage: vi.fn(),
   clearChatGenerationState: vi.fn(async () => {
     state.activeGenerationId = null;

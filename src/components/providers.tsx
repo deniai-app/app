@@ -14,6 +14,7 @@ import { authClient } from "@/lib/auth-client";
 import { toSafeRedirectPath } from "@/lib/auth-redirect";
 import type { PlatformCapabilities } from "@/lib/platform-capabilities";
 import { getQueryClient } from "@/lib/query-client";
+import { AccountBoundary } from "./account-boundary";
 import { CommonProviders } from "./common-providers";
 
 // Stable captcha plugin instance (no localization) — avoids recreating on every locale pass
@@ -98,7 +99,7 @@ export function AppProviders({
         plugins={plugins}
         Link={Link}
       >
-        {children}
+        <AccountBoundary>{children}</AccountBoundary>
       </AuthProvider>
     </CommonProviders>
   );

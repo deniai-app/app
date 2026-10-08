@@ -460,36 +460,66 @@ export async function claimAffiliateReferral({
     return { created: false, alreadyClaimed: true, referrerId: referrerProfile.userId };
   }
 
-  const referralCountResult = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(affiliateReferral)
-    .where(eq(affiliateReferral.referrerId, referrerProfile.userId));
-  const referralCount = referralCountResult[0]?.count ?? 0;
-  const milestone = Math.floor(referralCount / AFFILIATE_REFERRAL_MILESTONE);
+  const countReferrals = async (database: Pick<typeof db, "select">) => {
+    const [result] = await database
+      .select({ count: sql<number>`count(*)::int` })
+      .from(affiliateReferral)
+      .where(eq(affiliateReferral.referrerId, referrerProfile.userId));
+    return result?.count ?? 0;
+  };
 
-  // Use the current milestone rather than relying on an exact count modulo.
-  // This also recovers if concurrent registrations make the count jump from
-  // 2 to 4 before the third registration finishes its reward insert.
-  if (milestone > 0) {
-    // Trust-tiered staged approval: a referrer only starts earning
-    // auto-approved rewards after a clean track record, and even then only
-    // when this specific referral's fraud signals are clean. New referrers,
-    // any referrer with a past rejection, or a referral with a hard-block
-    // signal (e.g. same IP already used for this referrer) always land in
-    // the manual review queue — see src/lib/affiliate-risk.ts.
-    const { autoApprove, risk } = await evaluateRegistrationReward({
-      referrerId: referrerProfile.userId,
-      referredUserId: userId,
-      referredEmail: referredUser.email,
-      referredEmailVerified: referredUser.emailVerified,
-      referredCreatedAt: referredUser.createdAt,
-      claimedAt,
-      claimIpHash,
-    });
+  // Trust-tiered staged approval: a referrer only starts earning
+  // auto-approved rewards after a clean track record, and even then only
+  // when this specific referral's fraud signals are clean. New referrers,
+  // any referrer with a past rejection, or a referral with a hard-block
+  // signal (e.g. same IP already used for this referrer) always land in
+  // the manual review queue — see src/lib/affiliate-risk.ts.
+  // Risk reads go through the transaction: a global-pool query made while the
+  // referrer lock is held could wait for a connection that queued claims hold.
+  const evaluateReward = (database: Pick<typeof db, "select">) =>
+    evaluateRegistrationReward(
+      {
+        referrerId: referrerProfile.userId,
+        referredUserId: userId,
+        referredEmail: referredUser.email,
+        referredEmailVerified: referredUser.emailVerified,
+        referredCreatedAt: referredUser.createdAt,
+        claimedAt,
+        claimIpHash,
+      },
+      database,
+    );
 
-    // One transaction: if the credit update failed after the reward row was
-    // inserted, a retry would see the existing row and never grant the credit.
-    await db.transaction(async (tx) => {
+  // Serialize milestone accounting per referrer. Concurrent claims can all see
+  // a count that crosses several milestones at once, so each claim awards the
+  // lowest milestone still missing (one reward per referral) instead of the
+  // current one, which would let the unique index swallow the skipped milestone.
+  // One transaction also keeps the reward row and its credit together.
+  const awardMilestone = () =>
+    db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`affiliate-milestone:${referrerProfile.userId}`}, 0))`,
+      );
+      const owed = Math.floor((await countReferrals(tx)) / AFFILIATE_REFERRAL_MILESTONE);
+      if (owed === 0) return;
+      const awarded = new Set(
+        (
+          await tx
+            .select({ milestone: affiliateReward.milestone })
+            .from(affiliateReward)
+            .where(
+              and(
+                eq(affiliateReward.referrerId, referrerProfile.userId),
+                eq(affiliateReward.type, AFFILIATE_REWARD_TYPES.registrationReset),
+              ),
+            )
+        ).map((row) => row.milestone),
+      );
+      let milestone = 1;
+      while (milestone <= owed && awarded.has(milestone)) milestone += 1;
+      if (milestone > owed) return;
+
+      const { autoApprove, risk } = await evaluateReward(tx);
       const [insertedReward] = await tx
         .insert(affiliateReward)
         .values({
@@ -516,6 +546,10 @@ export async function claimAffiliateReferral({
           .where(eq(affiliateProfile.userId, referrerProfile.userId));
       }
     });
+  // Our referral is already committed, so the claim that brings the count to a
+  // milestone always sees it here; below the first milestone none can be owed.
+  if ((await countReferrals(db)) >= AFFILIATE_REFERRAL_MILESTONE) {
+    await awardMilestone();
   }
 
   // A user can apply a code after paying, as long as both windows still allow it.
@@ -668,31 +702,35 @@ export async function approveAffiliateResetReward({
   adminEmail: string;
 }) {
   const now = new Date();
-  const [approved] = await db
-    .update(affiliateReward)
-    .set({ status: "approved", approvedBy: adminEmail, approvedAt: now, updatedAt: now })
-    .where(
-      and(
-        eq(affiliateReward.id, rewardId),
-        eq(affiliateReward.type, AFFILIATE_REWARD_TYPES.registrationReset),
-        eq(affiliateReward.status, "pending"),
-      ),
-    )
-    .returning();
+  // The status change and the credit grant commit together: otherwise a failed
+  // credit write leaves an approved reward that a retry can no longer approve.
+  return db.transaction(async (tx) => {
+    const [approved] = await tx
+      .update(affiliateReward)
+      .set({ status: "approved", approvedBy: adminEmail, approvedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(affiliateReward.id, rewardId),
+          eq(affiliateReward.type, AFFILIATE_REWARD_TYPES.registrationReset),
+          eq(affiliateReward.status, "pending"),
+        ),
+      )
+      .returning();
 
-  if (!approved) {
-    return null;
-  }
+    if (!approved) {
+      return null;
+    }
 
-  await db
-    .update(affiliateProfile)
-    .set({
-      resetCredits: sql`${affiliateProfile.resetCredits} + ${approved.quantity}`,
-      updatedAt: now,
-    })
-    .where(eq(affiliateProfile.userId, approved.referrerId));
+    await tx
+      .update(affiliateProfile)
+      .set({
+        resetCredits: sql`${affiliateProfile.resetCredits} + ${approved.quantity}`,
+        updatedAt: now,
+      })
+      .where(eq(affiliateProfile.userId, approved.referrerId));
 
-  return approved;
+    return approved;
+  });
 }
 
 export async function rejectAffiliateResetReward({

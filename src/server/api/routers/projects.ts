@@ -86,27 +86,39 @@ export const projectsRouter = router({
     .input(projectInputSchema.extend({ organizationId: z.string().min(1).nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const organizationId = input.organizationId ?? null;
-      if (organizationId && !(await userIsOrgMember(ctx.db, ctx.userId, organizationId))) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You are not a member of that team.",
-        });
+      const values = {
+        userId: ctx.userId,
+        organizationId,
+        name: input.name,
+        description: input.description ?? null,
+        instructions: input.instructions,
+        color: input.color,
+        defaultModel: input.defaultModel ?? null,
+      };
+
+      if (!organizationId) {
+        const [project] = await ctx.db.insert(projects).values(values).returning();
+        return project;
       }
 
-      const [project] = await ctx.db
-        .insert(projects)
-        .values({
-          userId: ctx.userId,
-          organizationId,
-          name: input.name,
-          description: input.description ?? null,
-          instructions: input.instructions,
-          color: input.color,
-          defaultModel: input.defaultModel ?? null,
-        })
-        .returning();
-
-      return project;
+      // Lock the membership row for the insert: a removal committed earlier is
+      // seen here, and one that starts later waits until the project exists.
+      return ctx.db.transaction(async (tx) => {
+        const [membership] = await tx
+          .select({ id: member.id })
+          .from(member)
+          .where(and(eq(member.organizationId, organizationId), eq(member.userId, ctx.userId)))
+          .limit(1)
+          .for("share");
+        if (!membership) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You are not a member of that team.",
+          });
+        }
+        const [project] = await tx.insert(projects).values(values).returning();
+        return project;
+      });
     }),
 
   update: protectedProcedure

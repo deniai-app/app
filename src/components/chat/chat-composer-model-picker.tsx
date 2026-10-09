@@ -25,6 +25,7 @@ import { useExtracted, useLocale } from "next-intl";
 import { useState } from "react";
 import Openai from "@/components/openai";
 import { useAvailableModels } from "@/hooks/use-available-models";
+import { type ModelHealthStatus, useModelHealth } from "@/hooks/use-model-health";
 import { formatModelDeprecationDate } from "@/lib/constants";
 import { translateModelDescription, useModelDescriptionCopy } from "@/lib/model-description-copy";
 import { cn } from "@/lib/utils";
@@ -171,6 +172,31 @@ function useModelDeprecationCopy(deprecation: ModelOption["deprecation"]) {
   };
 }
 
+function ModelStatusBadge({ status }: { status: ModelHealthStatus | undefined }) {
+  const t = useExtracted();
+  if (!status) return null;
+  if (status === "available") {
+    return (
+      <span
+        className="size-1.5 shrink-0 rounded-full bg-emerald-500"
+        title={t("Operational")}
+        role="img"
+        aria-label={t("Operational")}
+      />
+    );
+  }
+  return (
+    <Badge
+      variant="secondary"
+      className="bg-red-500/15 text-red-700 dark:text-red-400 text-[10px] leading-none py-0.5 h-auto"
+      title={t("This model is currently unavailable.")}
+    >
+      <TriangleAlert className="size-3" aria-hidden="true" />
+      {t("Unavailable")}
+    </Badge>
+  );
+}
+
 function ProviderSidebar({
   providers,
   counts,
@@ -283,6 +309,7 @@ function ModelPickerFooter({
 function ModelPickerItem({
   model,
   isSelected,
+  status,
   onSelect,
   featureLabels,
   modelDescriptionLabels,
@@ -290,6 +317,7 @@ function ModelPickerItem({
 }: {
   model: ModelOption;
   isSelected: boolean;
+  status: ModelHealthStatus | undefined;
   onSelect: () => void;
   featureLabels: FeatureLabels;
   modelDescriptionLabels: ModelDescriptionLabels;
@@ -320,6 +348,7 @@ function ModelPickerItem({
           <ModelIcon model={model} />
         </span>
         <span>{model.name}</span>
+        <ModelStatusBadge status={status} />
         {deprecationWarning && deprecationLabel && (
           <Badge
             variant="secondary"
@@ -434,7 +463,13 @@ function filterProviderGroups(
   return filtered;
 }
 
-function ModelPickerTriggerLabel({ selectedModel }: { selectedModel: ModelOption | undefined }) {
+function ModelPickerTriggerLabel({
+  selectedModel,
+  status,
+}: {
+  selectedModel: ModelOption | undefined;
+  status: ModelHealthStatus | undefined;
+}) {
   const t = useExtracted();
   const { warning } = useModelDeprecationCopy(selectedModel?.deprecation);
   const multiplier =
@@ -446,6 +481,7 @@ function ModelPickerTriggerLabel({ selectedModel }: { selectedModel: ModelOption
         <ModelIcon model={selectedModel ?? { author: "openai", premium: false }} />
       </span>
       <span className="max-w-30 truncate text-sm">{selectedModel?.name ?? t("Select model")}</span>
+      {status === "unavailable" && <ModelStatusBadge status={status} />}
       {warning && (
         <Badge
           variant="secondary"
@@ -477,6 +513,7 @@ function ModelPickerList({
   activeModels,
   legacyModels,
   selectedValue,
+  healthStatuses,
   legacyOpen,
   onLegacyOpenChange,
   featureLabels,
@@ -487,6 +524,7 @@ function ModelPickerList({
   activeModels: ModelOption[];
   legacyModels: ModelOption[];
   selectedValue: string;
+  healthStatuses: Record<string, ModelHealthStatus>;
   legacyOpen: boolean;
   onLegacyOpenChange: (open: boolean) => void;
   featureLabels: FeatureLabels;
@@ -507,6 +545,7 @@ function ModelPickerList({
       key={m.value}
       model={m}
       isSelected={m.value === selectedValue}
+      status={healthStatuses[m.value]}
       featureLabels={featureLabels}
       modelDescriptionLabels={modelDescriptionLabels}
       modelDescriptionCopy={modelDescriptionCopy}
@@ -568,6 +607,7 @@ export function ChatComposerModelPicker({
   className,
 }: ChatComposerModelPickerProps) {
   const { shouldVerifyCard, isAnonymous } = useAvailableModels();
+  const healthStatuses = useModelHealth();
   const t = useExtracted();
   const modelDescriptionLabels: ModelDescriptionLabels = {
     xaiMostIntelligentModel: t("xAI's most intelligent model"),
@@ -637,7 +677,10 @@ export function ChatComposerModelPicker({
           />
         }
       >
-        <ModelPickerTriggerLabel selectedModel={selectedModel} />
+        <ModelPickerTriggerLabel
+          selectedModel={selectedModel}
+          status={selectedModel ? healthStatuses[selectedModel.value] : undefined}
+        />
       </PopoverTrigger>
       <PopoverContent
         className="flex w-[calc(100vw-1rem)] max-w-125 max-h-[min(31rem,var(--available-height))] flex-col overflow-hidden p-0 shadow-lg sm:w-125"
@@ -676,6 +719,7 @@ export function ChatComposerModelPicker({
                   activeModels={activeModels}
                   legacyModels={legacyModels}
                   selectedValue={model}
+                  healthStatuses={healthStatuses}
                   legacyOpen={legacyModelsOpen}
                   onLegacyOpenChange={setLegacyModelsOpen}
                   featureLabels={featureLabels}

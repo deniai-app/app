@@ -26,32 +26,30 @@ export type ModelHealthResult = {
   error: string | null;
 };
 
-function resolveProbeModel(value: string): { provider: string; model: LanguageModel } {
+function getProbeProvider(value: string) {
   const definition = models.find((candidate) => candidate.value === value);
   if (!definition) throw new Error(`Unknown model: ${value}`);
-  const provider = definition.provider ?? definition.author;
-  const modelId = `${definition.author}/${definition.value}`;
+  return {
+    provider: definition.provider ?? definition.author,
+    modelId: `${definition.author}/${definition.value}`,
+  };
+}
 
+function createProbeModel(provider: string, modelId: string): LanguageModel {
   if (provider === "deni") {
     const apiKey = env.DENI_API_KEY?.trim();
     if (!apiKey) throw new Error("Deni AI API is not configured");
-    return {
-      provider,
-      model: createOpenAI({ apiKey, baseURL: env.DENI_API_BASE_URL }).chat(modelId),
-    };
+    return createOpenAI({ apiKey, baseURL: env.DENI_API_BASE_URL }).chat(modelId);
   }
 
   const apiKey = env.OPENROUTER_API_KEY?.trim();
   if (!apiKey) throw new Error("OpenRouter is not configured");
-  return {
-    provider,
-    model: createDeniOpenRouter({ apiKey }).chat(modelId, {
-      provider: {
-        allow_fallbacks: false,
-        only: ["openai", "anthropic", "google-ai-studio"],
-      },
-    }),
-  };
+  return createDeniOpenRouter({ apiKey }).chat(modelId, {
+    provider: {
+      allow_fallbacks: false,
+      only: ["openai", "anthropic", "google-ai-studio"],
+    },
+  });
 }
 
 function describeError(error: unknown): string {
@@ -63,10 +61,10 @@ export async function probeModel(value: string): Promise<ModelHealthResult> {
   const startedAt = Date.now();
   let provider = "unknown";
   try {
-    const resolved = resolveProbeModel(value);
-    provider = resolved.provider;
+    const probe = getProbeProvider(value);
+    provider = probe.provider;
     await generateText({
-      model: resolved.model,
+      model: createProbeModel(probe.provider, probe.modelId),
       prompt: "ping",
       maxOutputTokens: 1,
       maxRetries: 0,

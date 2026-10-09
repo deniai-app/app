@@ -111,14 +111,6 @@ function seedFromStored(
   };
 }
 
-function decodeQueryMessage(value: string) {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
 export function useInitialMessage(params: {
   id: string;
   initialMessagesLength: number;
@@ -252,7 +244,6 @@ export function useInitialMessage(params: {
     // prompt on the user's behalf: it could spend their quota or plant memories and
     // tool calls. Prefill it so the user reviews and sends it themselves.
     initialMessageSentRef.current = true;
-    const decodedMessage = decodeQueryMessage(initialMessage);
     const initialWebSearch = searchParams.get("webSearch") === "true";
     setConsumedSeed({
       id,
@@ -267,7 +258,8 @@ export function useInitialMessage(params: {
 
     window.history.replaceState({}, "", `/chat/${id}`);
     emitInitialMessageStore();
-    onDraftRef.current(decodedMessage);
+    // Search params are already decoded; literal percent escapes belong to the prompt.
+    onDraftRef.current(initialMessage);
   }, [searchParams, initialMessagesLength, id]);
 
   return liveSeed;

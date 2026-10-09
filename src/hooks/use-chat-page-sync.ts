@@ -55,11 +55,17 @@ export function useChatPageSync(params: {
             return current;
           }
 
-          const localUserCount = current.filter((message) => message.role === "user").length;
-          const serverUserCount = serverMessages.filter(
-            (message) => message.role === "user",
-          ).length;
-          if (localUserCount > serverUserCount) {
+          // Loaded history can be longer than the server's latest-message window.
+          // Match the current turn, including windows containing only assistant
+          // continuations, without replacing a newer local question with old data.
+          const lastLocalMessage = current.at(-1);
+          const lastLocalUser = current.findLast((message) => message.role === "user");
+          if (
+            lastLocalUser &&
+            !serverMessages.some(
+              (message) => message.id === lastLocalUser.id || message.id === lastLocalMessage?.id,
+            )
+          ) {
             return current;
           }
 

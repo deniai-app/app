@@ -100,11 +100,21 @@ export function getSentryOptions(): SentryOptions {
       // Service worker fetch failures (offline, deploy in progress, bots).
       /Failed to update a ServiceWorker/,
       /Script https?:\/\/\S+\/sw\.js load failed/,
+      // Scanner bots POSTing to unknown paths (e.g. /index.php) or replaying stale Server Actions.
+      /Failed to find Server Action/,
+      /Body exceeded 1 MB limit/,
+      /Failed to parse body as FormData/,
+      // Desktop shell denies its opener plugin for external links; not raised by app code.
+      /not allowed by ACL/,
+      // Expected tool failure that is already reported back to the model and the user.
+      /^Error: Web search timed out/,
     ],
     // Extension and in-app browser scripts that are not part of the app bundle.
     denyUrls: [
       /^app:\/\/\/executors\//,
       /\/executors\/\d+\.js/,
+      // Injected scripts reported under a bare name or the page path instead of a bundle chunk.
+      /^app:\/\/\/(compare|chat\/[0-9a-f-]{36})$/,
       /^(chrome|moz|safari(-web)?)-extension:\/\//,
     ],
     beforeSend: scrubEvent,

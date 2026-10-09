@@ -592,11 +592,15 @@ export async function POST(req: Request) {
       .catch(() => undefined)
       .then(async () => {
         try {
-          if (!(await ownsCurrentGeneration())) {
-            return;
-          }
-          await replaceLastChatMessage(id, userId, latestPersistedMessage, {
-            expectedGenerationId: generationId,
+          // Untraced like the generation poll: one identical select+update span pair
+          // per interval would otherwise trip Sentry's N+1 query detector.
+          await suppressTracing(async () => {
+            if (!(await ownsCurrentGeneration())) {
+              return;
+            }
+            await replaceLastChatMessage(id, userId, latestPersistedMessage, {
+              expectedGenerationId: generationId,
+            });
           });
         } catch (error) {
           console.error("Failed to persist partial chat response", error);

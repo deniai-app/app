@@ -102,19 +102,33 @@ export function useChatBranches({ messages, setMessages, regenerate }: UseChatBr
 
   const handleRegenerate = useCallback(
     (options?: RegenOptions) => {
-      const lastAssistantIdx = [...messages].map((m) => m.role).lastIndexOf("assistant");
-      if (lastAssistantIdx === -1) {
+      const assistantIndex =
+        options?.messageId === undefined
+          ? messages.findLastIndex((message) => message.role === "assistant")
+          : messages.findIndex(
+              (message) => message.id === options.messageId && message.role === "assistant",
+            );
+      if (assistantIndex === -1) {
         void regenerate(options);
         return;
       }
 
-      const lastAssistant = messages[lastAssistantIdx];
-      const existingGroupId = getBranchGroupId(lastAssistant);
+      const existingGroupId = getBranchGroupId(messages[assistantIndex]);
       const groupId = existingGroupId ?? nanoid(8);
+      // Keep sibling alternatives when an earlier answer in a branch is retried.
+      // Later questions are truncated by the SDK and must not be reinserted here.
+      let branchEndIndex = assistantIndex;
+      while (
+        existingGroupId &&
+        messages[branchEndIndex + 1]?.role === "assistant" &&
+        getBranchGroupId(messages[branchEndIndex + 1]) === existingGroupId
+      ) {
+        branchEndIndex++;
+      }
       const pending: PendingBranch = {
         groupId,
-        originalMessage: lastAssistant,
-        messagesBeforeRegen: messages.slice(0, lastAssistantIdx),
+        originalMessage: messages[branchEndIndex],
+        messagesBeforeRegen: messages.slice(0, branchEndIndex),
       };
 
       setPendingBranch(pending);

@@ -32,6 +32,14 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
+          # NEXT_PUBLIC_* are inlined at build time. They are public values, so they come
+          # from repository variables. Server secrets stay out of the image (runtime env).
+          build-args: |
+            NEXT_PUBLIC_BETTER_AUTH_URL=${{ vars.NEXT_PUBLIC_BETTER_AUTH_URL }}
+            NEXT_PUBLIC_TURNSTILE_SITE_KEY=${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+            NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+            NEXT_PUBLIC_BILLING_DISABLED=${{ vars.NEXT_PUBLIC_BILLING_DISABLED }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Trigger Dokploy deploy

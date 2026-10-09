@@ -1,10 +1,9 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { AppProviders } from "@/components/providers";
+import { RuntimeAppProviders } from "@/components/runtime-app-providers";
 import { Spinner } from "@/components/ui/spinner";
 import { getSession } from "@/lib/get-session";
-import { platformCapabilities } from "@/lib/platform-capabilities.server";
 
 /** Content-area only — AppShell (sidebar) stays visible while auth resolves. */
 function AppContentFallback() {
@@ -31,12 +30,14 @@ async function RequireAuth({ children }: { children: React.ReactNode }) {
  */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AppProviders platformCapabilities={platformCapabilities}>
-      <AppShell>
-        <Suspense fallback={<AppContentFallback />}>
-          <RequireAuth>{children}</RequireAuth>
-        </Suspense>
-      </AppShell>
-    </AppProviders>
+    <Suspense fallback={<AppContentFallback />}>
+      <RuntimeAppProviders>
+        <AppShell>
+          <Suspense fallback={<AppContentFallback />}>
+            <RequireAuth>{children}</RequireAuth>
+          </Suspense>
+        </AppShell>
+      </RuntimeAppProviders>
+    </Suspense>
   );
 }

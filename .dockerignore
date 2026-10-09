@@ -27,6 +27,8 @@ dist
 .env
 .env.*
 !.env.example
+# Committed public NEXT_PUBLIC_* values; Next.js reads it during `next build`.
+!.env.production
 
 # Docs & non-runtime paths
 *.md

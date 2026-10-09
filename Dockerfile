@@ -71,7 +71,7 @@ ARG RESEND_API_KEY
 ARG UPSTASH_REDIS_REST_URL
 ARG UPSTASH_REDIS_REST_TOKEN
 ARG UPLOADTHING_TOKEN
-ARG NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000
+ARG NEXT_PUBLIC_BETTER_AUTH_URL
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_BILLING_DISABLED
@@ -110,12 +110,21 @@ ENV DATABASE_URL=$DATABASE_URL \
   SENTRY_ORG=$SENTRY_ORG \
   SENTRY_PROJECT=$SENTRY_PROJECT
 
+# Empty NEXT_PUBLIC_* vars are unset right before `next build` (see the RUN below) so
+# the committed .env.production supplies them: Next.js never overrides a variable that
+# already exists in the environment, even as an empty string (which an unset ARG becomes).
+# Non-empty build args (Dokploy / --build-arg) still take precedence.
+
 # Mount dependencies from the install stage instead of copying thousands of
 # files into the Node builder. This avoids a slow 40+ second node_modules COPY;
 # the mount is available for the build and is not copied into the runtime image.
 # Persist Turbopack's filesystem cache across Dokploy deploys on this host.
 RUN --mount=type=bind,from=deps,source=/app/node_modules,target=/app/node_modules \
   --mount=type=cache,id=deni-ai-next,target=/app/.next/cache \
+  for v in NEXT_PUBLIC_BETTER_AUTH_URL NEXT_PUBLIC_TURNSTILE_SITE_KEY \
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY NEXT_PUBLIC_BILLING_DISABLED NEXT_PUBLIC_SENTRY_DSN; do \
+    [ -n "$(printenv "$v")" ] || unset "$v"; \
+  done; \
   NEXT_DEPLOYMENT_ID="${NEXT_DEPLOYMENT_ID:-$(date +%s)}" node ./node_modules/next/dist/bin/next build
 
 # Turbopack emits aliases for external packages under `.next/node_modules`.

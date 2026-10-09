@@ -196,7 +196,7 @@ async function BlogIndexList({
     featured?: boolean;
   }>;
 }) {
-  const managed = await listPublishedManagedPosts();
+  const managed = await listPublishedManagedPosts().catch(() => []);
   const managedPosts = managed.map((post) => {
     const copy = pickManagedPostCopy(post, locale);
     return {

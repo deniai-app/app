@@ -21,7 +21,7 @@ jobs:
         id: next-cache
         with:
           path: next-cache
-          key: next-cache-${{ hashFiles('package-lock.json') }}
+          key: next-cache-${{ hashFiles('pnpm-lock.yaml') }}
       - uses: reproducible-containers/buildkit-cache-dance@v3
         with:
           cache-map: |

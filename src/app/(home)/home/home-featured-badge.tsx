@@ -4,7 +4,8 @@ import { getFeaturedPublishedPost, pickManagedPostCopy } from "@/lib/blog/querie
 import { HomeFeaturedBadgeLink } from "./home-featured-badge-link";
 
 export async function HomeFeaturedBadge() {
-  const post = await getFeaturedPublishedPost();
+  // The badge is optional; an unreachable DB (e.g. the CI image build) must not fail prerender.
+  const post = await getFeaturedPublishedPost().catch(() => null);
   if (!post) {
     return null;
   }

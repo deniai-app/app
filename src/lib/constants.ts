@@ -138,7 +138,7 @@ export function formatModelDeprecationDate(date: string, locale: string): string
 // https://console.groq.com/docs/models
 // https://openrouter.ai/api/v1/models (routed model variants)
 // Pro/Fast mode and long-context multipliers are applied separately.
-export const models: readonly ModelDefinition[] = [
+const catalogModels: readonly ModelDefinition[] = [
   {
     name: "GPT-6 Astra",
     value: "gpt-6-astra",
@@ -680,6 +680,24 @@ export const models: readonly ModelDefinition[] = [
     efforts: ["low", "medium", "high"],
   },
 ];
+
+/** OpenAI model served through OpenRouter; every other OpenAI model goes through the Deni AI API. */
+const OPENROUTER_OPENAI_MODEL_VALUE = "gpt-6-luna";
+
+/**
+ * Routes OpenAI models other than GPT-6 Luna through the Deni AI API. Pro and
+ * Fast modes depend on OpenRouter (`*-pro` slugs, `service_tier`), so they are
+ * not offered on the Deni route.
+ */
+function withDeniRouting(model: ModelDefinition): ModelDefinition {
+  if (model.author !== "openai" || model.value === OPENROUTER_OPENAI_MODEL_VALUE) {
+    return model;
+  }
+  const { supportsProMode: _pro, supportsFastMode: _fast, ...rest } = model;
+  return { ...rest, provider: "deni" };
+}
+
+export const models: readonly ModelDefinition[] = catalogModels.map(withDeniRouting);
 
 export const defaultModel = models.find((model) => model.value === "gpt-6-luna") ?? models[0];
 

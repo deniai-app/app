@@ -5,7 +5,7 @@ function hasValue(value: string | undefined): boolean {
   return Boolean(value?.trim());
 }
 
-const hasDeniApi = hasValue(env.DENI_API_KEY) && hasValue(env.DENI_API_BASE_URL);
+const hasDeniApi = hasValue(env.DENI_API_KEY);
 const hasOpenRouter = hasValue(env.OPENROUTER_API_KEY);
 const hasStripeSecret = hasValue(env.STRIPE_SECRET_KEY);
 const hasStripePublishableKey = hasValue(env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);

@@ -283,7 +283,7 @@ export async function resolveChatModelContext({
     });
   };
   const getDeniModel = () => {
-    if (!deniApiKey || !deniApiBaseUrl) {
+    if (!deniApiKey) {
       throw new ChatRouteError(503, {
         error: "Deni AI API is not configured in the current environment.",
       });
@@ -293,7 +293,12 @@ export async function resolveChatModelContext({
       apiKey: deniApiKey,
       baseURL: deniApiBaseUrl,
     });
-    return provider.chat(resolvedModelId);
+    // Deni AI API ids are author-prefixed (e.g. `openai/gpt-6-sol`).
+    return provider.chat(
+      resolvedModelId.includes("/")
+        ? resolvedModelId
+        : `${selectedModel.author}/${resolvedModelId}`,
+    );
   };
 
   let model: LanguageModel;

@@ -28,11 +28,11 @@ export const env = createEnv({
     BLOG_ADMIN_EMAILS: z.string().min(1).optional(),
     OPENROUTER_API_KEY: z.string().min(1).optional(),
     /**
-     * OpenAI-compatible Deni AI API. Both key and base URL are required to
-     * expose DeepSeek / MiniMax models routed through this provider.
+     * OpenAI-compatible Deni AI API. The key is required to expose DeepSeek /
+     * MiniMax and non-Luna OpenAI models; the base URL has a default.
      */
     DENI_API_KEY: z.string().min(1).optional(),
-    DENI_API_BASE_URL: z.url().optional(),
+    DENI_API_BASE_URL: z.url().default("https://api.deniai.app/v1"),
     // Optional strings preserve parseFloat prefix parsing and fallback defaults
     // in token-weighting.ts; invalid/negative/non-finite values use defaults.
     FLIXA_USAGE_WEIGHT_INPUT: z.string().optional(),

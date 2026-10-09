@@ -79,12 +79,6 @@ export default function ModelsPage() {
     xai: t(
       "Helpful to compare against other providers when you want a different response style or model behavior for the same prompt.",
     ),
-    deepseek: t(
-      "Strong open-weight reasoning and coding models, useful when you want a capable alternative to GPT and Claude for technical work.",
-    ),
-    minimax: t(
-      "A fast reasoning option for everyday agentic tasks when you want another style alongside the larger flagship families.",
-    ),
   };
 
   const providerGuides = Object.keys(grouped).flatMap((providerKey) => {

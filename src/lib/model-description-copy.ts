@@ -112,15 +112,6 @@ export function useModelDescriptionCopy() {
     "Flagship Grok reasoning model with native tool use and real-time search.": t(
       "Flagship Grok reasoning model with native tool use and real-time search.",
     ),
-    "DeepSeek V4 for reasoning, coding, and general agentic work.": t(
-      "DeepSeek V4 for reasoning, coding, and general agentic work.",
-    ),
-    "Higher-capacity DeepSeek V4 for harder reasoning and coding tasks.": t(
-      "Higher-capacity DeepSeek V4 for harder reasoning and coding tasks.",
-    ),
-    "MiniMax M3 for fast reasoning and everyday agentic tasks.": t(
-      "MiniMax M3 for fast reasoning and everyday agentic tasks.",
-    ),
   } as Record<string, string>;
 }
 

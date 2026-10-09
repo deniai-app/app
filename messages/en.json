@@ -1019,8 +1019,6 @@
   "w8ddr1": "Often a strong choice for structured writing, analysis, and long-form reasoning where tone and coherence matter.",
   "UDR7Yf": "Useful when you want another high-capability option for multimodal and general productivity workflows inside the same workspace.",
   "4KrfUh": "Helpful to compare against other providers when you want a different response style or model behavior for the same prompt.",
-  "QJOWXM": "Strong open-weight reasoning and coding models, useful when you want a capable alternative to GPT and Claude for technical work.",
-  "oT2Cfz": "A fast reasoning option for everyday agentic tasks when you want another style alongside the larger flagship families.",
   "RJuGPw": "Start with the task, not the brand",
   "ftC-5J": "Choose based on the job you need done: quick drafting, careful reasoning, coding, or side-by-side comparison.",
   "8ftWlQ": "Use faster models for iteration",
@@ -2606,8 +2604,5 @@
   "AGmER5": "Non-reasoning Grok 4.20 variant tuned for fast responses and tool use.",
   "5Q9dIr": "Fast Grok model optimized for accurate tool calling, deep research, and low hallucination.",
   "pgECOQ": "Cost-efficient Grok model with strong reasoning, native tool use, and real-time search.",
-  "JmAR6C": "Flagship Grok reasoning model with native tool use and real-time search.",
-  "8YbYsK": "DeepSeek V4 for reasoning, coding, and general agentic work.",
-  "-Bhjii": "Higher-capacity DeepSeek V4 for harder reasoning and coding tasks.",
-  "64F0dr": "MiniMax M3 for fast reasoning and everyday agentic tasks."
+  "JmAR6C": "Flagship Grok reasoning model with native tool use and real-time search."
 }

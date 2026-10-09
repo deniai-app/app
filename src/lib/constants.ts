@@ -1,4 +1,4 @@
-export type Author = "openai" | "anthropic" | "google" | "xai" | "deepseek" | "minimax";
+export type Author = "openai" | "anthropic" | "google" | "xai";
 
 export const reasoningEffortValues = [
   "none",
@@ -648,37 +648,6 @@ const catalogModels: readonly ModelDefinition[] = [
   //   efforts: false,
   //   contextWindow: 256_000,
   // },
-  {
-    name: "DeepSeek V4",
-    value: "deepseek/deepseek-v4",
-    tokenMultiplier: 1,
-    author: "deepseek",
-    provider: "deni",
-    description: "DeepSeek V4 for reasoning, coding, and general agentic work.",
-    features: ["reasoning", "coding", "smart"],
-    efforts: ["low", "medium", "high"],
-  },
-  {
-    name: "DeepSeek V4 Pro",
-    value: "deepseek/deepseek-v4-pro",
-    tokenMultiplier: 1,
-    author: "deepseek",
-    provider: "deni",
-    description: "Higher-capacity DeepSeek V4 for harder reasoning and coding tasks.",
-    featured: true,
-    features: ["reasoning", "coding", "smart", "smartest"],
-    efforts: ["low", "medium", "high"],
-  },
-  {
-    name: "MiniMax M3",
-    value: "minimax/minimax-m3",
-    tokenMultiplier: 1,
-    author: "minimax",
-    provider: "deni",
-    description: "MiniMax M3 for fast reasoning and everyday agentic tasks.",
-    features: ["reasoning", "fast"],
-    efforts: ["low", "medium", "high"],
-  },
 ];
 
 /** OpenAI model served through OpenRouter; every other OpenAI model goes through the Deni AI API. */

@@ -7,16 +7,34 @@ export const BLOG_CACHE_TAG = "blog";
 
 export type ManagedBlogPost = typeof blogPost.$inferSelect;
 
+// `next build` may run without a reachable database (e.g. the CI image build).
+// Fall back there so prerender succeeds; at runtime errors still propagate, so a
+// transient DB failure is not cached as an empty result.
+async function withBuildFallback<T>(query: () => Promise<T>, fallback: T) {
+  try {
+    return await query();
+  } catch (error) {
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      return fallback;
+    }
+    throw error;
+  }
+}
+
 export async function listPublishedManagedPosts() {
   "use cache";
   cacheTag(BLOG_CACHE_TAG);
   cacheLife("hours");
 
-  return db
-    .select()
-    .from(blogPost)
-    .where(eq(blogPost.status, "published"))
-    .orderBy(desc(blogPost.publishedAt), desc(blogPost.updatedAt));
+  return withBuildFallback(
+    () =>
+      db
+        .select()
+        .from(blogPost)
+        .where(eq(blogPost.status, "published"))
+        .orderBy(desc(blogPost.publishedAt), desc(blogPost.updatedAt)),
+    [],
+  );
 }
 
 export async function getFeaturedPublishedPost() {
@@ -24,12 +42,16 @@ export async function getFeaturedPublishedPost() {
   cacheTag(BLOG_CACHE_TAG);
   cacheLife("hours");
 
-  const [post] = await db
-    .select()
-    .from(blogPost)
-    .where(and(eq(blogPost.status, "published"), eq(blogPost.featured, true)))
-    .orderBy(desc(blogPost.publishedAt), desc(blogPost.updatedAt))
-    .limit(1);
+  const [post] = await withBuildFallback(
+    () =>
+      db
+        .select()
+        .from(blogPost)
+        .where(and(eq(blogPost.status, "published"), eq(blogPost.featured, true)))
+        .orderBy(desc(blogPost.publishedAt), desc(blogPost.updatedAt))
+        .limit(1),
+    [],
+  );
 
   return post ?? null;
 }
@@ -39,11 +61,15 @@ export async function getPublishedManagedPost(slug: string) {
   cacheTag(BLOG_CACHE_TAG, `${BLOG_CACHE_TAG}:${slug}`);
   cacheLife("hours");
 
-  const [post] = await db
-    .select()
-    .from(blogPost)
-    .where(and(eq(blogPost.slug, slug), eq(blogPost.status, "published")))
-    .limit(1);
+  const [post] = await withBuildFallback(
+    () =>
+      db
+        .select()
+        .from(blogPost)
+        .where(and(eq(blogPost.slug, slug), eq(blogPost.status, "published")))
+        .limit(1),
+    [],
+  );
 
   return post ?? null;
 }

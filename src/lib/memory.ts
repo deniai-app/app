@@ -38,7 +38,7 @@ const defaultProfile: PersonalizationProfile = {
 
 const openrouterApiKey = env.OPENROUTER_API_KEY?.trim();
 const memoryModel = openrouterApiKey
-  ? createOpenRouter({ apiKey: openrouterApiKey })("openai/gpt-5.6-luna")
+  ? createOpenRouter({ apiKey: openrouterApiKey })("openai/gpt-6-luna")
   : null;
 
 export async function getUserMemoryState(userId: string) {

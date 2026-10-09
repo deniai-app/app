@@ -17,6 +17,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/cache@v4
+        id: next-cache
+        with:
+          path: next-cache
+          key: next-cache-${{ hashFiles('package-lock.json') }}
+      - uses: reproducible-containers/buildkit-cache-dance@v3
+        with:
+          cache-map: |
+            {"next-cache": "/app/.next/cache"}
+          skip-extraction: ${{ steps.next-cache.outputs.cache-hit }}
       - uses: docker/build-push-action@v6
         with:
           context: .

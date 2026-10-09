@@ -34,8 +34,41 @@ const SENSITIVE_ATTRIBUTE_PREFIXES = [
   "http.url",
 ];
 
+/** Bare `app:///<page path>` frames mean the script is inline or injected, not an app chunk. */
+const INJECTED_FRAME_FILENAME = /^app:\/\/\/(?!_next\/)/;
+
+function hasInjectedFrame(event: ErrorEvent): boolean {
+  return Boolean(
+    event.exception?.values?.some((value) =>
+      value.stacktrace?.frames?.some((frame) => INJECTED_FRAME_FILENAME.test(frame.filename ?? "")),
+    ),
+  );
+}
+
+/**
+ * Scrubbing request headers also drops the User-Agent, so errors from injected scripts
+ * (extensions, page translators, bots) become impossible to attribute. Tag them and keep
+ * only the non-sensitive client hints needed to tell those sources apart.
+ */
+function tagInjectedScriptEvent(event: ErrorEvent): void {
+  if (typeof navigator === "undefined" || !hasInjectedFrame(event)) {
+    return;
+  }
+  event.tags = { ...event.tags, injected_script: "true" };
+  event.contexts = {
+    ...event.contexts,
+    client_hints: {
+      userAgent: navigator.userAgent,
+      webdriver: navigator.webdriver,
+      language: navigator.language,
+      htmlClass: document.documentElement.className.slice(0, 200),
+    },
+  };
+}
+
 /** Drops request payloads so prompts, attachments, and form data never leave the app. */
 function scrubEvent(event: ErrorEvent): ErrorEvent {
+  tagInjectedScriptEvent(event);
   if (event.request) {
     delete event.request.data;
     delete event.request.cookies;

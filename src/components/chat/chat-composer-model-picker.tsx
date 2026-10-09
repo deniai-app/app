@@ -172,6 +172,11 @@ function useModelDeprecationCopy(deprecation: ModelOption["deprecation"]) {
   };
 }
 
+/** Models share the availability of the route (OpenRouter provider or Deni AI API) they run on. */
+function getModelProvider(model: ModelOption): string {
+  return model.provider ?? model.author;
+}
+
 function ModelStatusBadge({ status }: { status: ModelHealthStatus | undefined }) {
   const t = useExtracted();
   if (!status) return null;
@@ -513,7 +518,7 @@ function ModelPickerList({
   activeModels,
   legacyModels,
   selectedValue,
-  healthStatuses,
+  providerHealth,
   legacyOpen,
   onLegacyOpenChange,
   featureLabels,
@@ -524,7 +529,7 @@ function ModelPickerList({
   activeModels: ModelOption[];
   legacyModels: ModelOption[];
   selectedValue: string;
-  healthStatuses: Record<string, ModelHealthStatus>;
+  providerHealth: Record<string, ModelHealthStatus>;
   legacyOpen: boolean;
   onLegacyOpenChange: (open: boolean) => void;
   featureLabels: FeatureLabels;
@@ -545,7 +550,7 @@ function ModelPickerList({
       key={m.value}
       model={m}
       isSelected={m.value === selectedValue}
-      status={healthStatuses[m.value]}
+      status={providerHealth[getModelProvider(m)]}
       featureLabels={featureLabels}
       modelDescriptionLabels={modelDescriptionLabels}
       modelDescriptionCopy={modelDescriptionCopy}
@@ -607,7 +612,7 @@ export function ChatComposerModelPicker({
   className,
 }: ChatComposerModelPickerProps) {
   const { shouldVerifyCard, isAnonymous } = useAvailableModels();
-  const healthStatuses = useModelHealth();
+  const providerHealth = useModelHealth();
   const t = useExtracted();
   const modelDescriptionLabels: ModelDescriptionLabels = {
     xaiMostIntelligentModel: t("xAI's most intelligent model"),
@@ -679,7 +684,7 @@ export function ChatComposerModelPicker({
       >
         <ModelPickerTriggerLabel
           selectedModel={selectedModel}
-          status={selectedModel ? healthStatuses[selectedModel.value] : undefined}
+          status={selectedModel ? providerHealth[getModelProvider(selectedModel)] : undefined}
         />
       </PopoverTrigger>
       <PopoverContent
@@ -719,7 +724,7 @@ export function ChatComposerModelPicker({
                   activeModels={activeModels}
                   legacyModels={legacyModels}
                   selectedValue={model}
-                  healthStatuses={healthStatuses}
+                  providerHealth={providerHealth}
                   legacyOpen={legacyModelsOpen}
                   onLegacyOpenChange={setLegacyModelsOpen}
                   featureLabels={featureLabels}

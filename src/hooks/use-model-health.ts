@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 export type ModelHealthStatus = "available" | "unavailable";
 
 type ModelHealthResponse = {
-  models: { model: string; available: boolean; checkedAt: string }[];
+  models: { provider: string; available: boolean; checkedAt: string }[];
 };
 
 /** Probes run every 5 minutes; older results mean the scheduler stopped, so show nothing. */
@@ -17,7 +17,7 @@ async function fetchModelHealth(): Promise<Record<string, ModelHealthStatus>> {
   const statuses: Record<string, ModelHealthStatus> = {};
   for (const entry of models) {
     if (now - new Date(entry.checkedAt).getTime() > STALE_AFTER_MS) continue;
-    statuses[entry.model] = entry.available ? "available" : "unavailable";
+    statuses[entry.provider] = entry.available ? "available" : "unavailable";
   }
   return statuses;
 }

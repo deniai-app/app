@@ -118,14 +118,18 @@ ENV DATABASE_URL=$DATABASE_URL \
 # Mount dependencies from the install stage instead of copying thousands of
 # files into the Node builder. This avoids a slow 40+ second node_modules COPY;
 # the mount is available for the build and is not copied into the runtime image.
-# Persist Turbopack's filesystem cache across Dokploy deploys on this host.
+# Persist Turbopack's filesystem cache across Dokploy deploys on this host
+# (and across GitHub Actions runs via buildkit-cache-dance, which maps this id).
+# After a successful build, keep only the cache directory it just wrote: each
+# Next.js version/config gets its own directory, and stale ones only add size.
 RUN --mount=type=bind,from=deps,source=/app/node_modules,target=/app/node_modules \
   --mount=type=cache,id=deni-ai-next,target=/app/.next/cache \
   for v in NEXT_PUBLIC_BETTER_AUTH_URL NEXT_PUBLIC_TURNSTILE_SITE_KEY \
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY NEXT_PUBLIC_BILLING_DISABLED NEXT_PUBLIC_SENTRY_DSN; do \
     [ -n "$(printenv "$v")" ] || unset "$v"; \
   done; \
-  NEXT_DEPLOYMENT_ID="${NEXT_DEPLOYMENT_ID:-$(date +%s)}" node ./node_modules/next/dist/bin/next build
+  NEXT_DEPLOYMENT_ID="${NEXT_DEPLOYMENT_ID:-$(date +%s)}" node ./node_modules/next/dist/bin/next build && \
+  { [ ! -d .next/cache/turbopack ] || ls -1dt .next/cache/turbopack/*/ | tail -n +2 | xargs -r rm -rf; }
 
 # Turbopack emits aliases for external packages under `.next/node_modules`.
 # External aliases can point to absolute paths in the builder's virtual

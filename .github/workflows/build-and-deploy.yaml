@@ -12,20 +12,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+        with:
+          # Hosted runners are discarded after the job; skip the builder teardown.
+          cleanup: false
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Turbopack's build cache makes `next build` incremental. A per-commit key
+      # saves the updated cache after every build; restore-keys picks the newest.
       - uses: actions/cache@v4
         id: next-cache
         with:
           path: next-cache
-          key: next-cache-${{ hashFiles('pnpm-lock.yaml') }}
+          key: next-cache-${{ github.sha }}
+          restore-keys: next-cache-
       - uses: reproducible-containers/buildkit-cache-dance@v3
         with:
+          # `id` must match the Dockerfile cache mount, or BuildKit uses an empty cache.
           cache-map: |
-            {"next-cache": "/app/.next/cache"}
+            {"next-cache": {"target": "/app/.next/cache", "id": "deni-ai-next"}}
           skip-extraction: ${{ steps.next-cache.outputs.cache-hit }}
       - uses: docker/build-push-action@v6
         with:
@@ -34,8 +41,17 @@ jobs:
           tags: ghcr.io/${{ github.repository }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # A separate job so a failed webhook cannot skip the build job's cache save.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
       - name: Trigger Dokploy deploy
         run: |
-          curl -fsS -X POST "${{ secrets.DOKPLOY_WEBHOOK_URL }}" \
+          status=$(curl -sS -o response.txt -w '%{http_code}' -X POST "${{ secrets.DOKPLOY_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
-            -d '{"push_data":{"tag":"latest"}}'
+            -d '{"push_data":{"tag":"latest"}}')
+          echo "Dokploy webhook responded with HTTP $status"
+          cat response.txt
+          [ "$status" -lt 300 ]

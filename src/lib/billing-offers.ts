@@ -1,6 +1,8 @@
 import { env } from "@/env";
 
 export const FLASH_OFFER_DURATION_HOURS = 24;
+/** Flash offer length granted once for verifying a card. */
+export const CARD_FLASH_OFFER_DURATION_HOURS = 48;
 
 export function createFlashOfferEndAt(now = new Date()) {
   return new Date(now.getTime() + FLASH_OFFER_DURATION_HOURS * 60 * 60 * 1000);

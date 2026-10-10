@@ -14,6 +14,7 @@ import {
 import {
   type CardFunding,
   claimCardVerification,
+  grantCardVerificationFlashOffer,
   getBillingFingerprintUpdates,
 } from "@/lib/billing-card-usage";
 import { isBillingDisabled } from "@/lib/billing-config";
@@ -1364,6 +1365,11 @@ export const billingRouter = router({
       } catch (err) {
         console.warn("[billing] Failed to set default payment method", err);
       }
+
+      // Card holders can pay right away: give them a one-time flash offer.
+      await grantCardVerificationFlashOffer(ctx.db, ctx.userId).catch((err) => {
+        console.warn("[billing] Failed to grant card verification flash offer", err);
+      });
 
       const saved = eligibility.record;
 

@@ -38,6 +38,8 @@ export const billing = pgTable(
     cardFunding: text("card_funding"),
     // When the user verified a card via SetupIntent (free-tier boost)
     cardVerifiedAt: timestamp("card_verified_at"),
+    // One-time 48h flash offer granted for verifying a card; survives card removal.
+    cardOfferGrantedAt: timestamp("card_offer_granted_at"),
     deletionPending: boolean("deletion_pending").notNull().default(false),
     trialPaymentMethodFingerprint: text("trial_payment_method_fingerprint"),
     trialUsedAt: timestamp("trial_used_at"),

@@ -21,6 +21,7 @@ vi.mock("@/lib/billing-card-usage", () => ({
   claimCardVerification: vi.fn(),
   getBillingFingerprintUpdates: vi.fn(),
   getCustomerPrimaryCardInfo: vi.fn(),
+  grantCardVerificationFlashOffer: vi.fn(async () => true),
 }));
 vi.mock("@/lib/stripe", () => ({
   stripe: {

@@ -2,7 +2,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { beforeEach, expect, test, vi } from "vitest";
 import type { db } from "@/db/drizzle";
-import { claimCardVerification } from "./billing-card-usage";
+import { claimCardVerification, grantCardVerificationFlashOffer } from "./billing-card-usage";
 vi.mock("@/db/drizzle", () => ({ db: {} }));
 vi.mock("./stripe", () => ({ stripe: {} }));
 
@@ -120,4 +120,32 @@ test("reverification of the same account does not occupy another slot", async ()
   expect((await claimCardVerification(mocked, claim)).eligible).toBe(true);
   expect((await claimCardVerification(mocked, claim)).eligible).toBe(true);
   expect(rows).toHaveLength(1);
+});
+test("card verification flash offer is granted once per never-paid account", async () => {
+  const calls: { set: Record<string, unknown>; where: SQL }[] = [];
+  const mocked = {
+    update: () => ({
+      set: (set: Record<string, unknown>) => ({
+        where: (where: SQL) => ({
+          returning: async () => {
+            calls.push({ set, where });
+            return [{ userId: "a" }];
+          },
+        }),
+      }),
+    }),
+  } as unknown as typeof db;
+  const now = new Date("2026-10-11T00:00:00.000Z");
+
+  expect(await grantCardVerificationFlashOffer(mocked, "a", now)).toBe(true);
+
+  const [call] = calls;
+  const where = dialect.sqlToQuery(call.where);
+  expect(where.sql).toContain('"card_offer_granted_at" is null');
+  expect(where.sql).toContain('"first_paid_at" is null');
+  expect(where.sql).toContain('"organization_id" is null');
+  expect(call.set.cardOfferGrantedAt).toEqual(now);
+  const endsAt = dialect.sqlToQuery(call.set.flashOfferEndsAt as SQL);
+  expect(endsAt.sql).toContain("GREATEST");
+  expect(endsAt.params).toContain("2026-10-13T00:00:00.000Z");
 });

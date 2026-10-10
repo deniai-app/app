@@ -21,6 +21,7 @@ import { useExtracted, useLocale } from "next-intl";
 import { useState } from "react";
 import Openai from "@/components/openai";
 import { useAvailableModels } from "@/hooks/use-available-models";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { type ModelHealthStatus, useModelHealth } from "@/hooks/use-model-health";
 import { formatModelDeprecationDate } from "@/lib/constants";
 import { translateModelDescription, useModelDescriptionCopy } from "@/lib/model-description-copy";
@@ -30,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import type { ModelOption } from "./chat-composer";
 
 type ModelDescriptionLabels = {
@@ -174,16 +176,26 @@ function ProviderSidebar({
   counts,
   selectedProvider,
   labels,
+  orientation,
   onSelect,
 }: {
   providers: string[];
   counts: Record<string, ModelOption[]>;
   selectedProvider: string;
   labels: ProviderLabels;
+  orientation: "horizontal" | "vertical";
   onSelect: (provider: string) => void;
 }) {
+  const horizontal = orientation === "horizontal";
   return (
-    <div className="w-32 shrink-0 border-r flex flex-col gap-0.5 overflow-y-auto overscroll-contain bg-muted/30 p-1.5 [-webkit-overflow-scrolling:touch] sm:w-40">
+    <div
+      className={cn(
+        "flex shrink-0 gap-0.5 overscroll-contain bg-muted/30 p-1.5 [-webkit-overflow-scrolling:touch]",
+        horizontal
+          ? "flex-row overflow-x-auto border-b [scrollbar-width:none]"
+          : "w-40 flex-col overflow-y-auto border-r",
+      )}
+    >
       {providers.map((provider) => {
         const isActive = selectedProvider === provider;
         const isFeatured = provider === "featured";
@@ -193,7 +205,8 @@ function ProviderSidebar({
             type="button"
             onClick={() => onSelect(provider)}
             className={cn(
-              "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              horizontal ? "shrink-0" : "w-full",
               isActive
                 ? "bg-background text-foreground font-medium shadow-sm"
                 : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
@@ -204,7 +217,7 @@ function ProviderSidebar({
             <span className="shrink-0 flex items-center [&_svg]:size-3.5">
               <ProviderIcon author={provider} />
             </span>
-            <span className="flex-1 truncate leading-none">
+            <span className={cn("truncate leading-none", !horizontal && "flex-1")}>
               {getProviderLabel(provider, labels)}
             </span>
             <span className="tabular-nums text-xs opacity-50 shrink-0">
@@ -532,6 +545,7 @@ export function ChatComposerModelPicker({
 }: ChatComposerModelPickerProps) {
   const { shouldVerifyCard, isAnonymous } = useAvailableModels();
   const providerHealth = useModelHealth();
+  const isMobile = useIsMobile();
   const t = useExtracted();
   const modelDescriptionLabels: ModelDescriptionLabels = {
     xaiMostIntelligentModel: t("xAI's most intelligent model"),
@@ -576,80 +590,107 @@ export function ChatComposerModelPicker({
     setModelPopoverOpen(open);
   };
 
+  const triggerButton = (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={disabled}
+      aria-label={ariaLabel}
+      className={cn(
+        "h-auto gap-1.5 border-none bg-transparent px-2 py-1.5 font-medium text-muted-foreground shadow-none transition-colors dark:bg-input/30",
+        "hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground",
+        className,
+      )}
+    />
+  );
+  const triggerLabel = (
+    <ModelPickerTriggerLabel
+      selectedModel={selectedModel}
+      status={selectedModel ? providerHealth[getModelProvider(selectedModel)] : undefined}
+    />
+  );
+  const pickerBody = (
+    <div className="flex min-h-0 flex-1 flex-col rounded-[inherit]">
+      <div className={cn("shrink-0 border-b", isMobile && "mt-1")}>
+        <div className="relative">
+          <SearchIcon
+            className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            value={modelQuery}
+            onChange={(event) => setModelQuery(event.target.value)}
+            placeholder={t("Search")}
+            aria-label={t("Search")}
+            className={cn("pl-8 rounded-b-none", isMobile && "rounded-none")}
+          />
+        </div>
+      </div>
+      <div className={cn("flex min-h-0 flex-1 overflow-hidden", isMobile && "flex-col")}>
+        <ProviderSidebar
+          providers={availableProviders}
+          counts={filteredProviderGroups}
+          selectedProvider={selectedProvider}
+          labels={providerLabels}
+          orientation={isMobile ? "horizontal" : "vertical"}
+          onSelect={setSelectedProvider}
+        />
+
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain p-1.5 [-webkit-overflow-scrolling:touch]">
+            <ModelPickerList
+              activeModels={activeModels}
+              legacyModels={legacyModels}
+              selectedValue={model}
+              providerHealth={providerHealth}
+              legacyOpen={legacyModelsOpen}
+              onLegacyOpenChange={setLegacyModelsOpen}
+              modelDescriptionLabels={modelDescriptionLabels}
+              modelDescriptionCopy={modelDescriptionCopy}
+              onSelect={(value) => {
+                onModelChange(value);
+                setModelPopoverOpen(false);
+              }}
+            />
+          </div>
+          <ModelPickerFooter isAnonymous={isAnonymous} shouldVerifyCard={shouldVerifyCard} />
+        </div>
+      </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Sheet open={modelPopoverOpen && !disabled} onOpenChange={handleModelPopoverOpenChange}>
+        <SheetTrigger render={triggerButton}>{triggerLabel}</SheetTrigger>
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          // Avoid popping the on-screen keyboard by focusing search on touch open.
+          initialFocus={(openType) => openType !== "touch"}
+          className="overflow-hidden rounded-t-3xl p-0 data-[side=bottom]:h-[80dvh]"
+        >
+          <SheetTitle className="sr-only">{t("Select model")}</SheetTitle>
+          <div
+            className="mx-auto my-2 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/30"
+            aria-hidden="true"
+          />
+          {pickerBody}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
   return (
     <Popover open={modelPopoverOpen && !disabled} onOpenChange={handleModelPopoverOpenChange}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={disabled}
-            aria-label={ariaLabel}
-            className={cn(
-              "h-auto gap-1.5 border-none bg-transparent px-2 py-1.5 font-medium text-muted-foreground shadow-none transition-colors dark:bg-input/30",
-              "hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground",
-              className,
-            )}
-          />
-        }
-      >
-        <ModelPickerTriggerLabel
-          selectedModel={selectedModel}
-          status={selectedModel ? providerHealth[getModelProvider(selectedModel)] : undefined}
-        />
-      </PopoverTrigger>
+      <PopoverTrigger render={triggerButton}>{triggerLabel}</PopoverTrigger>
       <PopoverContent
-        className="flex w-[calc(100vw-1rem)] max-w-125 max-h-[min(31rem,var(--available-height))] flex-col overflow-hidden p-0 shadow-lg sm:w-125"
-        side="top"
-        align="start"
+        className="flex h-[min(31rem,var(--available-height))] w-125 max-w-[calc(100vw-1rem)] flex-col overflow-hidden p-0 shadow-lg"
+        side="right"
+        align="end"
         sideOffset={8}
       >
-        <div className="flex min-h-0 flex-1 flex-col rounded-[inherit]">
-          <div className="shrink-0 border-b">
-            <div className="relative">
-              <SearchIcon
-                className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                value={modelQuery}
-                onChange={(event) => setModelQuery(event.target.value)}
-                placeholder={t("Search")}
-                aria-label={t("Search")}
-                className="pl-8 rounded-b-none"
-              />
-            </div>
-          </div>
-          <div className="flex min-h-0 flex-1 overflow-hidden">
-            <ProviderSidebar
-              providers={availableProviders}
-              counts={filteredProviderGroups}
-              selectedProvider={selectedProvider}
-              labels={providerLabels}
-              onSelect={setSelectedProvider}
-            />
-
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain p-1.5 [-webkit-overflow-scrolling:touch]">
-                <ModelPickerList
-                  activeModels={activeModels}
-                  legacyModels={legacyModels}
-                  selectedValue={model}
-                  providerHealth={providerHealth}
-                  legacyOpen={legacyModelsOpen}
-                  onLegacyOpenChange={setLegacyModelsOpen}
-                  modelDescriptionLabels={modelDescriptionLabels}
-                  modelDescriptionCopy={modelDescriptionCopy}
-                  onSelect={(value) => {
-                    onModelChange(value);
-                    setModelPopoverOpen(false);
-                  }}
-                />
-              </div>
-              <ModelPickerFooter isAnonymous={isAnonymous} shouldVerifyCard={shouldVerifyCard} />
-            </div>
-          </div>
-        </div>
+        {pickerBody}
       </PopoverContent>
     </Popover>
   );

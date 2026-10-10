@@ -34,7 +34,6 @@ export function AppProviders({
 
   // Better Auth UI navigates to `?redirectTo=` after sign-in, which anyone can
   // put in a link. External destinations would make sign-in an open redirect.
-  // (OAuth provider continuations leave via window.location, not this.)
   const navigate = ({ to, replace }: { to: string; replace?: boolean }) => {
     const target = toSafeRedirectPath(to);
     if (replace) router.replace(target);

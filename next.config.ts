@@ -56,6 +56,10 @@ const nextConfig: NextConfig = {
       // The affiliate program was removed; reset credits now live on the billing page.
       { source: "/invite/:code", destination: "/auth/sign-up", permanent: true },
       { source: "/settings/affiliate", destination: "/settings/billing", permanent: true },
+      // Deni AI no longer acts as an OAuth/OIDC provider.
+      { source: "/settings/developer", destination: "/settings/api-keys", permanent: true },
+      { source: "/oauth/example", destination: "/", permanent: true },
+      { source: "/ja/oauth/example", destination: "/ja", permanent: true },
     ];
   },
   async headers() {

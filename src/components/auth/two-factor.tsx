@@ -14,7 +14,6 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
-import { getAuthRedirectUrl } from "@/lib/auth-redirect";
 import { runWithLoading } from "@/lib/run-with-loading";
 import { cn } from "@/lib/utils";
 
@@ -57,7 +56,7 @@ export function TwoFactor({ className }: TwoFactorProps) {
     void runWithLoading(setIsPending, async () => {
       setError(undefined);
 
-      const { data, error: verifyError } = await authClient.twoFactor.verifyTotp({
+      const { error: verifyError } = await authClient.twoFactor.verifyTotp({
         code,
         trustDevice,
       });
@@ -68,11 +67,6 @@ export function TwoFactor({ className }: TwoFactorProps) {
       }
 
       toast.success(t("Signed in successfully"));
-      const authRedirectUrl = getAuthRedirectUrl(data);
-      if (authRedirectUrl) {
-        window.location.assign(authRedirectUrl);
-        return;
-      }
       completeSignIn();
     });
   };
@@ -85,7 +79,7 @@ export function TwoFactor({ className }: TwoFactorProps) {
     void runWithLoading(setIsPending, async () => {
       setError(undefined);
 
-      const { data, error: verifyError } = await authClient.twoFactor.verifyBackupCode({
+      const { error: verifyError } = await authClient.twoFactor.verifyBackupCode({
         code,
         trustDevice,
       });
@@ -96,11 +90,6 @@ export function TwoFactor({ className }: TwoFactorProps) {
       }
 
       toast.success(t("Signed in successfully"));
-      const authRedirectUrl = getAuthRedirectUrl(data);
-      if (authRedirectUrl) {
-        window.location.assign(authRedirectUrl);
-        return;
-      }
       completeSignIn();
     });
   };

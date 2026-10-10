@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { getAuthRedirectUrl, toSafeRedirectPath } from "./auth-redirect";
+import { toSafeRedirectPath } from "./auth-redirect";
 
 test("keeps same-origin post-auth paths with their query and hash", () => {
   expect(toSafeRedirectPath("/chat")).toBe("/chat");
@@ -22,11 +22,4 @@ test.each([
 ])("rejects %j as a post-auth destination", (value) => {
   expect(toSafeRedirectPath(value)).toBe("/chat");
   expect(toSafeRedirectPath(value, "/home")).toBe("/home");
-});
-
-test("OAuth continuations may still leave the origin, but never as script URLs", () => {
-  expect(getAuthRedirectUrl({ redirect: true, url: "https://client.example/cb?code=1" })).toBe(
-    "https://client.example/cb?code=1",
-  );
-  expect(getAuthRedirectUrl({ redirect: true, url: "javascript:alert(1)" })).toBeUndefined();
 });

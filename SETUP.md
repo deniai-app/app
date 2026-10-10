@@ -10,7 +10,7 @@ Source of truth for validated env vars: [`src/env.ts`](src/env.ts). Starter temp
 - [PostgreSQL](https://neon.tech/) (Neon serverless recommended for self-hosting)
 - Core environment values (`DATABASE_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, and a 32-character `BETTER_AUTH_SECRET`)
 - Optional API keys for AI providers (OpenRouter)
-- Optional Google + GitHub OAuth credentials; the app also exposes Deni AI as an OAuth 2.1 / OpenID Connect provider
+- Optional Google + GitHub OAuth credentials
 - Optional Cloudflare Turnstile site + secret keys; set both to require a Turnstile check for email sign-up/sign-in, password reset, magic-link requests, and guest (anonymous) sign-in. Guests complete the check in a short dialog after choosing "Continue as Guest"; without both keys these flows run without a check.
 - Optional Exa API key (web search)
 - Optional Stripe secret and publishable keys (billing)
@@ -192,63 +192,6 @@ openssl rand -base64 24 | cut -c1-32
 2. Create a new OAuth App
 3. Authorization callback URL: `{NEXT_PUBLIC_BETTER_AUTH_URL}/api/auth/callback/github`  
    Local example: `http://localhost:3000/api/auth/callback/github`
-
-#### Providing Sign in with Deni AI
-
-Deni AI can act as an OAuth 2.1 authorization server for external applications. The provider uses the authorization-code flow with S256 PKCE and exposes OpenID Connect identity claims when the `openid` scope is requested. No additional environment variables are required; the provider uses the existing Better Auth secret and database, and `NEXT_PUBLIC_BETTER_AUTH_URL` is the issuer origin.
-
-Discovery endpoints (the canonical issuer is `{NEXT_PUBLIC_BETTER_AUTH_URL}/api/auth`):
-
-- OpenID Connect: `{NEXT_PUBLIC_BETTER_AUTH_URL}/api/auth/.well-known/openid-configuration`
-- OAuth authorization server: `{NEXT_PUBLIC_BETTER_AUTH_URL}/.well-known/oauth-authorization-server/api/auth`
-- Root aliases: `{NEXT_PUBLIC_BETTER_AUTH_URL}/.well-known/openid-configuration` and `{NEXT_PUBLIC_BETTER_AUTH_URL}/.well-known/oauth-authorization-server`
-- Issuer for an OAuth client: `{NEXT_PUBLIC_BETTER_AUTH_URL}/api/auth`
-
-The metadata advertises these endpoints under the Better Auth API path:
-
-- Authorization: `{NEXT_PUBLIC_BETTER_AUTH_URL}/api/auth/oauth2/authorize`
-- Token: `{NEXT_PUBLIC_BETTER_AUTH_URL}/api/auth/oauth2/token`
-- UserInfo: `{NEXT_PUBLIC_BETTER_AUTH_URL}/api/auth/oauth2/userinfo`
-
-The supported scopes are `openid`, `profile`, `email`, and `offline_access`. The server accepts `authorization_code` and `refresh_token` grants and requires S256 PKCE for authorization-code requests.
-
-Client registrations are intentionally not open to unauthenticated callers. Developers with a permanent Deni AI account can create and manage up to 10 applications (enforced atomically at insertion, including parallel requests) at `{NEXT_PUBLIC_BETTER_AUTH_URL}/settings/developer`. The page supports public PKCE and confidential clients, exact callback URLs, scope management, one-time secret display, secret rotation, editing, and deletion.
-
-Both registration APIs require an authenticated Deni AI session; `adminCreateOAuthClient` is server-only, but it still needs the operator session headers. The sample below is useful for administrative provisioning and assumes `operatorHeaders` contains those authenticated Better Auth headers:
-
-```ts
-import { auth } from "@/lib/auth";
-
-const client = await auth.api.adminCreateOAuthClient({
-  headers: operatorHeaders,
-  body: {
-    client_name: "Example application",
-    client_uri: "https://example.com",
-    redirect_uris: ["https://example.com/oauth/callback"],
-    token_endpoint_auth_method: "client_secret_basic",
-    grant_types: ["authorization_code", "refresh_token"],
-    response_types: ["code"],
-    scope: "openid profile email offline_access",
-    application_type: "web",
-  },
-});
-
-console.log(client.client_id, client.client_secret);
-```
-
-Run this only in a trusted server-side maintenance context. Store the returned client secret securely and register the exact callback URL. Do not expose either API call or a client secret in browser code. For a client owned by the currently signed-in user, use `createOAuthClient` with that user's session headers instead.
-
-For a public client, use `token_endpoint_auth_method: "none"` and PKCE. For a confidential web application, use a client authentication method supported by the token endpoint and keep PKCE enabled. The OAuth consent screen validates the signed request before showing the requested scopes, and the user's decision is returned to the registered callback URL.
-
-The hosted interactive playground is available at `{NEXT_PUBLIC_BETTER_AUTH_URL}/oauth/example`. The repository also includes a small Node.js client example at [`examples/sign-in-with-deni-ai.ts`](examples/sign-in-with-deni-ai.ts). Register its loopback callback (`http://127.0.0.1:8787/callback`) on a public client, then run:
-
-```bash
-DENI_AI_OAUTH_CLIENT_ID=your-client-id pnpm run oauth:example
-```
-
-Add `DENI_AI_OAUTH_CLIENT_SECRET` for a confidential client, or set `DENI_AI_ORIGIN` when the provider is not running at `http://localhost:3000`. The example prints a PKCE authorization URL, waits for the callback, exchanges the code, and calls UserInfo.
-
-To exercise the complete flow against the local development database, start `pnpm dev` in another terminal and run `pnpm run oauth:test`. The test creates temporary records, validates authorization, consent, authorization-code exchange, refresh-token exchange, and UserInfo, then removes the temporary user and cascaded OAuth records.
 
 ### 4. Set up the database
 

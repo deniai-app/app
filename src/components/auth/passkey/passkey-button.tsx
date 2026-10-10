@@ -10,7 +10,6 @@ import { Fingerprint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { passkeyPlugin } from "@/lib/auth/passkey-plugin";
-import { getAuthRedirectUrl } from "@/lib/auth-redirect";
 import { cn } from "@/lib/utils";
 
 export type PasskeyButtonProps = {
@@ -32,12 +31,7 @@ export function PasskeyButton({ view }: PasskeyButtonProps) {
   const { mutate: signInPasskey, isPending: passkeyPending } = useSignInPasskey(
     authClient as PasskeyAuthClient,
     {
-      onSuccess: (data) => {
-        const authRedirectUrl = getAuthRedirectUrl(data);
-        if (authRedirectUrl) {
-          window.location.assign(authRedirectUrl);
-          return;
-        }
+      onSuccess: () => {
         navigate({ to: redirectTo });
       },
     },

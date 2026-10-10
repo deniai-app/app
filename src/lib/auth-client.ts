@@ -1,5 +1,4 @@
 import { passkeyClient } from "@better-auth/passkey/client";
-import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import {
   anonymousClient,
   lastLoginMethodClient,
@@ -20,18 +19,13 @@ if (!baseURL) {
 export const authClient = createAuthClient({
   baseURL,
   plugins: [
-    // For OAuth authorization redirects, forward the signed query from the
-    // current login/consent page to Better Auth's continuation endpoints.
-    oauthProviderClient(),
     anonymousClient(),
     twoFactorClient({
       // Prefer SPA navigation when possible; fall back is still a hard assign so
       // users never land on /chat without a completed second factor.
       onTwoFactorRedirect() {
         if (typeof window === "undefined") return;
-        // Keep OAuth's signed query (and any explicit redirectTo) attached to
-        // the challenge page so its verification request can continue the
-        // original authorization flow.
+        // Keep any explicit redirectTo attached to the challenge page.
         window.location.assign(`${TWO_FACTOR_PATH}${window.location.search}`);
       },
     }),

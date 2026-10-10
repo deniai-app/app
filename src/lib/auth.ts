@@ -1,19 +1,16 @@
+import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { passkey } from "@better-auth/passkey";
-import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import { limitedAuthAdapter } from "@/lib/auth-adapter";
 import {
   anonymous,
   captcha,
   haveIBeenPwned,
-  jwt,
   lastLoginMethod,
   magicLink,
   organization,
 } from "better-auth/plugins";
 import { twoFactor } from "better-auth/plugins/two-factor";
-import { count, eq } from "drizzle-orm";
 import { createElement } from "react";
 import { db } from "@/db/drizzle";
 import * as schema from "@/db/schema";
@@ -131,10 +128,7 @@ function assertAllowedSignupEmail(email: string) {
 
 export const auth = betterAuth({
   appName: "Deni AI",
-  // Keep the legacy `/token` endpoint unavailable while OAuth 2.1 uses the
-  // explicit `/oauth2/token` endpoint below.
-  disabledPaths: ["/token"],
-  database: limitedAuthAdapter(),
+  database: drizzleAdapter(db, { provider: "pg", schema }),
   // Reject disallowed domains before verification / magic-link emails are sent.
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
@@ -261,36 +255,6 @@ export const auth = betterAuth({
       }
     : undefined,
   plugins: [
-    // Expose Deni AI as an OpenID Connect-compatible OAuth 2.1 provider for
-    // external applications. The authorization-code flow is intentionally the
-    // only interactive grant; refresh tokens require the offline_access scope.
-    // The OAuth provider signs its own access and ID tokens. Do not mirror the
-    // complete session user into a `set-auth-jwt` response header: profile
-    // images can be data URLs, and a large image would exceed Cloudflare's
-    // response-header limit and turn `/get-session` into a 502.
-    jwt({ disableSettingJwtHeader: true }),
-    oauthProvider({
-      loginPage: "/auth/sign-in",
-      consentPage: "/oauth/consent",
-      scopes: ["openid", "profile", "email", "offline_access"],
-      grantTypes: ["authorization_code", "refresh_token"],
-      clientPrivileges: async ({ action, user }) => {
-        if (!user || user.isAnonymous === true) return false;
-        if (action !== "create") return true;
-
-        const [result] = await db
-          .select({ value: count() })
-          .from(schema.oauthClient)
-          .where(eq(schema.oauthClient.userId, user.id));
-        return (result?.value ?? 0) < 10;
-      },
-      // The metadata endpoints are exposed at the public origin by the
-      // app/.well-known route handlers.
-      silenceWarnings: {
-        oauthAuthServerConfig: true,
-        openidConfig: true,
-      },
-    }),
     anonymous(),
     twoFactor(),
     passkey(),

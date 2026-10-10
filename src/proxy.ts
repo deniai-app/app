@@ -71,16 +71,6 @@ export function proxy(request: NextRequest) {
   // An expired or invalid cookie will redirect to /chat, where full server-side
   // auth validation occurs and handles the session properly.
   if (pathname === "/") {
-    // OAuth authorization errors with an untrusted redirect URI must not leave
-    // provider query parameters in the address bar. Better Auth falls back to
-    // `/?error=invalid_redirect` when it cannot safely redirect to the client;
-    // send that browser back to the public home page instead.
-    const oauthError = request.nextUrl.searchParams.get("error");
-    if (oauthError === "invalid_redirect" || oauthError === "invalid_redirect_uri") {
-      const destination = request.cookies.get(LOCALE_COOKIE)?.value === "ja" ? JA_PREFIX : "/home";
-      return NextResponse.redirect(new URL(destination, request.url));
-    }
-
     const destination = hasSessionCookie(request)
       ? "/chat"
       : request.cookies.get(LOCALE_COOKIE)?.value === "ja"

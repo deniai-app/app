@@ -16,7 +16,7 @@ Deni AI is a multi-model AI chat app for people who want strong model choice wit
 - **Teams** — organizations, seats, shared Pro or Max access (per-seat billing), and team projects
 - **Billing** — Stripe subscriptions (personal and team) plus Max Mode metered overage; scheduled cancellations keep the current paid plan through the period end, with an animated cancellation receipt. Enabling Max Mode requires an active subscription; cancellation, trial, and past-due states are not eligible. Optional self-host disable via `NEXT_PUBLIC_BILLING_DISABLED`
 - **Usage reset credits** — admins can grant credits to all users, a plan, or one user; each credit clears that user's basic and premium usage from Settings → Billing
-- **Auth** — Google / GitHub sign-in, Deni AI OAuth 2.1 / OpenID Connect provider, magic link, anonymous guest, passkeys, and 2FA (better-auth)
+- **Auth** — Google / GitHub sign-in, magic link, anonymous guest, passkeys, and 2FA (better-auth)
 - **History APIs** — security and team audit logs use `{ createdAt, id }` cursors to preserve events with identical timestamps. Pass `nextCursor` unchanged when requesting another page.
 - **Ads** — Chat Home shows a Deni AI Ads placement below the composer only for confirmed Free users (including anonymous guests). Paid users and users whose plan is still loading do not request ads.
 - **i18n** — English and Japanese (`next-intl`)

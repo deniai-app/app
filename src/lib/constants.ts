@@ -650,16 +650,13 @@ const catalogModels: readonly ModelDefinition[] = [
   // },
 ];
 
-/** OpenAI model served through OpenRouter; every other OpenAI model goes through the Deni AI API. */
-const OPENROUTER_OPENAI_MODEL_VALUE = "gpt-6-luna";
-
 /**
- * Routes OpenAI models other than GPT-6 Luna through the Deni AI API. Pro and
- * Fast modes depend on OpenRouter (`*-pro` slugs, `service_tier`), so they are
- * not offered on the Deni route.
+ * Routes every OpenAI model through the Deni AI API. Pro and Fast modes depend
+ * on OpenRouter (`*-pro` slugs, `service_tier`), so they are not offered on the
+ * Deni route.
  */
 function withDeniRouting(model: ModelDefinition): ModelDefinition {
-  if (model.author !== "openai" || model.value === OPENROUTER_OPENAI_MODEL_VALUE) {
+  if (model.author !== "openai") {
     return model;
   }
   const { supportsProMode: _pro, supportsFastMode: _fast, ...rest } = model;

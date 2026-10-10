@@ -10,7 +10,7 @@ import { createDeniOpenRouter } from "@/lib/openrouter-provider";
 const PROBE_TIMEOUT_MS = 30_000;
 const MAX_ERROR_LENGTH = 300;
 
-/** Catalog models probed by the scheduler: one per routing path (OpenRouter × 3, Deni AI API). */
+/** Catalog models probed by the scheduler: OpenAI models on the Deni AI API, others on OpenRouter. */
 export const HEALTH_CHECK_MODEL_VALUES = [
   "gpt-6-luna",
   "gpt-5.6-luna",

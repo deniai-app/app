@@ -27,44 +27,13 @@ export function useModelDescriptionCopy() {
     "Fastest, most affordable GPT-5.6 model for high-volume tasks.": t(
       "Fastest, most affordable GPT-5.6 model for high-volume tasks.",
     ),
-    "A new class of intelligence for coding and professional work.": t(
-      "A new class of intelligence for coding and professional work.",
-    ),
-    "A more affordable model for coding and professional work.": t(
-      "A more affordable model for coding and professional work.",
-    ),
-    "Our strongest mini model yet for coding, computer use, and subagents.": t(
-      "Our strongest mini model yet for coding, computer use, and subagents.",
-    ),
-    "Our cheapest GPT-5.4-class model for simple high-volume tasks.": t(
-      "Our cheapest GPT-5.4-class model for simple high-volume tasks.",
-    ),
-    "General purpose OpenAI model": t("General purpose OpenAI model"),
-    "The most capable agentic coding model to date.": t(
-      "The most capable agentic coding model to date.",
-    ),
     "For complex coding tasks": t("For complex coding tasks"),
     "A version of GPT-5.1-Codex optimized for long-running tasks.": t(
       "A version of GPT-5.1-Codex optimized for long-running tasks.",
     ),
     "For quick coding tasks": t("For quick coding tasks"),
-    "Flagship model for coding, reasoning, and agentic tasks across domains.": t(
-      "Flagship model for coding, reasoning, and agentic tasks across domains.",
-    ),
-    "Faster, more affordable GPT-5 for well-defined tasks.": t(
-      "Faster, more affordable GPT-5 for well-defined tasks.",
-    ),
-    "Fastest, most cost-efficient GPT-5 model.": t("Fastest, most cost-efficient GPT-5 model."),
-    "Smartest model for fast, everyday tasks.": t("Smartest model for fast, everyday tasks."),
-    "Fast, intelligent, flexible GPT model.": t("Fast, intelligent, flexible GPT model."),
-    "Fast, affordable small model for focused tasks.": t(
-      "Fast, affordable small model for focused tasks.",
-    ),
-    "Most powerful open-weight model": t("Most powerful open-weight model"),
-    "Medium-sized open-weight model": t("Medium-sized open-weight model"),
     "Best for complex tasks": t("Best for complex tasks"),
     "Best for coding and agentic tasks": t("Best for coding and agentic tasks"),
-    "Best for everyday tasks": t("Best for everyday tasks"),
     "Best for high volume tasks": t("Best for high volume tasks"),
     "Anthropic's flagship for agentic coding, computer use, and knowledge work.": t(
       "Anthropic's flagship for agentic coding, computer use, and knowledge work.",
@@ -84,16 +53,9 @@ export function useModelDescriptionCopy() {
     "Balanced Claude 5 model for coding, writing, and everyday agentic work.": t(
       "Balanced Claude 5 model for coding, writing, and everyday agentic work.",
     ),
-    "All-around professional model": t("All-around professional model"),
-    "Legacy All-around professional model": t("Legacy All-around professional model"),
-    "Hybrid reasoning model": t("Hybrid reasoning model"),
-    "Fast, lightweight Claude model for everyday chat and quick reasoning.": t(
-      "Fast, lightweight Claude model for everyday chat and quick reasoning.",
-    ),
     "Fast, lightweight Claude 5 model for everyday chat and quick reasoning.": t(
       "Fast, lightweight Claude 5 model for everyday chat and quick reasoning.",
     ),
-    "Legacy professional model": t("Legacy professional model"),
     "Beta Grok model for deep research with coordinated multi-agent tool use.": t(
       "Beta Grok model for deep research with coordinated multi-agent tool use.",
     ),

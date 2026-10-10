@@ -6,10 +6,6 @@ vi.mock("@/env", () => ({
 }));
 vi.mock("@/db/drizzle", () => ({ db: {} }));
 vi.mock("@/lib/billing-card-usage", () => ({ getBillingFingerprintUpdates: vi.fn() }));
-vi.mock("@/lib/affiliate", () => ({
-  isAffiliatePaidStatus: () => false,
-  processAffiliatePurchase: vi.fn(),
-}));
 vi.mock("@/lib/ad-checkout", () => ({
   activatePaidAd: vi.fn(),
   pauseReversedAdCharge: vi.fn(),

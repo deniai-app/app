@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
-import { AffiliateSessionClaim } from "@/components/affiliate/affiliate-session-claim";
 import { ChatRouteHost } from "@/components/chat/chat-route-host";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useNewChat } from "@/hooks/use-new-chat";
@@ -62,7 +61,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <AffiliateSessionClaim />
       {isChatSearchOpen ? <ChatSearch open onOpenChange={setIsChatSearchOpen} /> : null}
       <AppSidebar onOpenChatSearch={() => setIsChatSearchOpen(true)} />
       <SidebarInset>

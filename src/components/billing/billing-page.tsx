@@ -90,7 +90,6 @@ function BillingPageContent() {
     usageQuery,
     usageTier,
     usageTierLabel,
-    yearlySavingsPercent,
   } = useBillingPage();
 
   if (loading) {
@@ -151,7 +150,6 @@ function BillingPageContent() {
 
       <BillingPlansSection
         erroredMessage={errored?.message}
-        yearlySavingsPercent={yearlySavingsPercent}
         hasActiveSubscription={hasActiveSubscription}
         selectedPlusPlan={selectedPlusPlan}
         plusMonthly={plusMonthly}

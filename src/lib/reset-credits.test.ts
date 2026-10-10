@@ -1,6 +1,6 @@
 import { getTableName } from "drizzle-orm";
 import { beforeEach, expect, test, vi } from "vitest";
-import { consumeAffiliateResetCredit } from "./affiliate";
+import { consumeResetCredit } from "./reset-credits";
 
 const state = vi.hoisted(() => ({
   credits: 1,
@@ -9,7 +9,6 @@ const state = vi.hoisted(() => ({
   locked: false,
   writes: [] as string[],
 }));
-vi.mock("@/env", () => ({ env: { NEXT_PUBLIC_BETTER_AUTH_URL: "http://localhost:3000" } }));
 vi.mock("@/db/drizzle", () => ({
   db: {
     transaction: async (run: (tx: unknown) => Promise<unknown>) => {
@@ -31,7 +30,7 @@ vi.mock("@/db/drizzle", () => ({
                   return [];
                 }
                 if (state.credits <= 0) return [];
-                return [{ resetCredits: --state.credits }];
+                return [{ credits: --state.credits }];
               });
               return Object.assign(result, { returning: () => result });
             },
@@ -58,17 +57,17 @@ beforeEach(() => {
 });
 test("a failed reset returns the credit and keeps the original quota", async () => {
   state.failQuota = true;
-  await expect(consumeAffiliateResetCredit("user")).rejects.toThrow("Quota write failed");
+  await expect(consumeResetCredit("user")).rejects.toThrow("Quota write failed");
   expect(state.credits).toBe(1);
   expect(state.used).toBe(100);
 });
 test("a reset changes only the user's allowance, preserving all accrued billing ledgers", async () => {
-  expect(await consumeAffiliateResetCredit("user")).toBe(0);
+  expect(await consumeResetCredit("user")).toBe(0);
   expect(state.used).toBe(0);
-  expect(state.writes).toEqual(["affiliate_profile", "usage_quota"]);
+  expect(state.writes).toEqual(["reset_credit_balance", "usage_quota"]);
 });
 test("no credit leaves usage untouched", async () => {
   state.credits = 0;
-  expect(await consumeAffiliateResetCredit("user")).toBeNull();
+  expect(await consumeResetCredit("user")).toBeNull();
   expect(state.used).toBe(100);
 });

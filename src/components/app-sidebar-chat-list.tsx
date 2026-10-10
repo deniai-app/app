@@ -19,7 +19,6 @@ import {
   ChevronRight,
   FolderClosed,
   FolderOpen,
-  MessageSquare,
   MoreHorizontal,
   Pencil,
   Pin,

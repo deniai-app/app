@@ -13,12 +13,3 @@ export const settingsUsageQueryOptions = {
   refetchInterval: false,
   refetchIntervalInBackground: false,
 } as const;
-
-export const passiveUsageQueryOptions = {
-  staleTime: 5 * 60_000,
-  refetchOnMount: false,
-  refetchOnWindowFocus: false,
-  refetchOnReconnect: false,
-  refetchInterval: false,
-  refetchIntervalInBackground: false,
-} as const;

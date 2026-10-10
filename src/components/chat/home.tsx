@@ -1,6 +1,5 @@
 "use client";
 
-import { MessageSquare, Code, Image, FileText, PenLine } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useExtracted } from "next-intl";
@@ -35,29 +34,6 @@ export type InitialMessageData = {
   deepResearch: boolean;
   projectId: string | null;
 };
-
-type SuggestionCardProps = {
-  icon: React.ElementType;
-  title: string;
-  prompt: string;
-  onClick: (prompt: string) => void;
-};
-
-function SuggestionCard({ icon: Icon, title, prompt, onClick }: SuggestionCardProps) {
-  return (
-    <button
-      type="button"
-      onClick={() => onClick(prompt)}
-      className="group flex flex-col gap-1.5 p-3 rounded-xl border border-border bg-card text-left transition-colors hover:bg-accent"
-    >
-      <div className="flex items-center gap-2">
-        <Icon className="size-4 text-muted-foreground" />
-        <span className="font-medium text-sm">{title}</span>
-      </div>
-      <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{prompt}</p>
-    </button>
-  );
-}
 
 export default function ChatHome() {
   const t = useExtracted();
@@ -164,33 +140,6 @@ export default function ChatHome() {
     );
   };
 
-  const handleSuggestionClick = (prompt: string) => {
-    setInput(prompt);
-  };
-
-  const suggestions = [
-    {
-      icon: PenLine,
-      title: t("Creative Writing"),
-      prompt: t("Write a short story about a robot learning to paint"),
-    },
-    {
-      icon: Code,
-      title: t("Code Help"),
-      prompt: t("Explain how async/await works in JavaScript"),
-    },
-    {
-      icon: FileText,
-      title: t("Summarize"),
-      prompt: t("Summarize the key benefits of renewable energy"),
-    },
-    {
-      icon: Image,
-      title: t("Analyze"),
-      prompt: t("What makes a good user interface design?"),
-    },
-  ];
-
   return (
     <section
       aria-labelledby="chat-home-title"
@@ -203,19 +152,6 @@ export default function ChatHome() {
             {t("What's on your mind?")}
           </h1>
         </div>
-
-        {/* Suggestions */}
-        {/*<div className="grid grid-cols-2 gap-2">
-          {suggestions.map((suggestion) => (
-            <SuggestionCard
-              key={suggestion.title}
-              icon={suggestion.icon}
-              title={suggestion.title}
-              prompt={suggestion.prompt}
-              onClick={handleSuggestionClick}
-            />
-          ))}
-        </div>*/}
 
         {/* Composer */}
         <div>

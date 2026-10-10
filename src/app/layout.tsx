@@ -1,6 +1,6 @@
 import { GoogleAnalytics } from "@next/third-parties/google";
 import type { Metadata, Viewport } from "next";
-import { JetBrains_Mono, Geist, Geist_Mono, Inter } from "next/font/google";
+import { JetBrains_Mono, Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getExtracted, getLocale, getMessages } from "next-intl/server";
 import { Suspense } from "react";

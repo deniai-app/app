@@ -69,7 +69,7 @@ export function BlogSettingsPage() {
       >
         <p className="text-sm text-muted-foreground">
           {t(
-            "Ask an administrator to add your account email to BLOG_ADMIN_EMAILS or AFFILIATE_ADMIN_EMAILS.",
+            "Ask an administrator to add your account email to BLOG_ADMIN_EMAILS or ADMIN_EMAILS.",
           )}
         </p>
       </SettingsPageShell>

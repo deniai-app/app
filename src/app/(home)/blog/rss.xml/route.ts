@@ -1,22 +1,15 @@
-import { BLOG_ORIGIN, blogPosts, getBlogPostUrl } from "@/lib/blog/posts";
+import { BLOG_ORIGIN, getBlogPostUrl } from "@/lib/blog/posts";
 import { listPublishedManagedPosts } from "@/lib/blog/queries";
 
 export async function GET() {
   const managedPosts = await listPublishedManagedPosts().catch(() => []);
-  const items = [
-    ...managedPosts.map((post) => ({
+  const items = managedPosts
+    .map((post) => ({
       title: post.title,
       slug: post.slug,
       description: post.description,
       date: (post.publishedAt ?? post.createdAt).toISOString(),
-    })),
-    ...blogPosts.map((post) => ({
-      title: post.title,
-      slug: post.slug,
-      description: post.description,
-      date: `${post.date}T00:00:00.000Z`,
-    })),
-  ]
+    }))
     .sort((left, right) => right.date.localeCompare(left.date))
     .map((post) => {
       const url = getBlogPostUrl(post.slug);

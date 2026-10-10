@@ -24,6 +24,9 @@ export const env = createEnv({
      * portal configuration applies and must have subscription updates disabled.
      */
     STRIPE_PORTAL_CONFIGURATION_ID: z.string().min(1).optional(),
+    /** Operator emails (reset-credit grants, dispute alerts, blog fallback). */
+    ADMIN_EMAILS: z.string().min(1).optional(),
+    /** @deprecated Former name of `ADMIN_EMAILS`; still read when it is unset. */
     AFFILIATE_ADMIN_EMAILS: z.string().min(1).optional(),
     BLOG_ADMIN_EMAILS: z.string().min(1).optional(),
     OPENROUTER_API_KEY: z.string().min(1).optional(),
@@ -73,7 +76,7 @@ export const env = createEnv({
   },
   client: {
     /**
-     * Public app origin (OAuth callbacks, affiliate invite redirects, emails).
+     * Public app origin (OAuth callbacks, emails).
      * Must be the real public URL (e.g. https://deniai.app) — never the Docker
      * bind address (0.0.0.0) or an internal container hostname.
      */
@@ -117,6 +120,7 @@ export const env = createEnv({
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
     STRIPE_FLASH_OFFER_COUPON_ID: process.env.STRIPE_FLASH_OFFER_COUPON_ID,
     STRIPE_PORTAL_CONFIGURATION_ID: process.env.STRIPE_PORTAL_CONFIGURATION_ID,
+    ADMIN_EMAILS: process.env.ADMIN_EMAILS,
     AFFILIATE_ADMIN_EMAILS: process.env.AFFILIATE_ADMIN_EMAILS,
     BLOG_ADMIN_EMAILS: process.env.BLOG_ADMIN_EMAILS,
     CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,

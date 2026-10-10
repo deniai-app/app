@@ -1,5 +1,4 @@
 import type { MetadataRoute } from "next";
-import { blogPosts } from "@/lib/blog/posts";
 import { listPublishedManagedPosts } from "@/lib/blog/queries";
 import { changelogEntries } from "@/lib/changelog";
 import { absoluteUrl, hreflangLanguages } from "@/lib/locale-path";
@@ -27,16 +26,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date("2026-08-16");
   const changelogModified = new Date(changelogEntries[0]?.date ?? lastModified);
   const managedPosts = await listPublishedManagedPosts().catch(() => []);
-  const blogPaths = [
-    ...managedPosts.map((post) => ({
-      path: `/blog/${post.slug}`,
-      lastModified: post.updatedAt,
-    })),
-    ...blogPosts.map((post) => ({
-      path: `/blog/${post.slug}`,
-      lastModified: new Date(post.date),
-    })),
-  ];
+  const blogPaths = managedPosts.map((post) => ({
+    path: `/blog/${post.slug}`,
+    lastModified: post.updatedAt,
+  }));
 
   const publicEntries = publicPages.flatMap((page) => {
     if (page.path === "/") {

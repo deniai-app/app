@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: mocks.checkRateLimit }));
 vi.mock("@/db/drizzle", () => ({ db: {} }));
-vi.mock("@/lib/affiliate-risk", () => ({ hashClaimIp: (ip: string | null) => ip && `h:${ip}` }));
+vi.mock("@/env", () => ({ env: { BETTER_AUTH_SECRET: "test-secret" } }));
 
 const {
   assessSignup,

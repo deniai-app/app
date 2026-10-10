@@ -27,7 +27,6 @@ type PlanActionProps = {
 
 export function BillingPlansSection({
   erroredMessage,
-  yearlySavingsPercent,
   hasActiveSubscription,
   selectedPlusPlan,
   plusMonthly,
@@ -46,7 +45,6 @@ export function BillingPlansSection({
   planActions,
 }: {
   erroredMessage?: string | null;
-  yearlySavingsPercent: number;
   hasActiveSubscription: boolean;
   selectedPlusPlan?: ClientPlan;
   plusMonthly?: ClientPlan;

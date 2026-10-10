@@ -21,7 +21,6 @@ import {
 import { isBillingDisabled } from "@/lib/billing-config";
 import { unchangedBillingSnapshot } from "@/lib/billing-snapshot";
 import { getAccountDeletionStatus } from "@/lib/account-deletion-billing";
-import { isAffiliatePaidStatus, processAffiliatePurchase } from "@/lib/affiliate";
 import {
   createFlashOfferEndAt,
   getFlashOfferCouponId,
@@ -895,11 +894,6 @@ export const billingRouter = router({
             currentPeriodEnd: billingRecord.currentPeriodEnd ?? null,
           };
         }
-        await processAffiliatePurchase({
-          referredUserId: ctx.userId,
-          planId: plan.id,
-          purchasedAt: updates.firstPaidAt ?? new Date(),
-        });
         return {
           planId: saved.planId ?? null,
           status: saved.status ?? null,
@@ -926,14 +920,6 @@ export const billingRouter = router({
           },
         })
         .returning();
-
-      if (plan?.id && isAffiliatePaidStatus(saved.status)) {
-        await processAffiliatePurchase({
-          referredUserId: ctx.userId,
-          planId: plan.id,
-          purchasedAt: updates.firstPaidAt ?? new Date(),
-        });
-      }
 
       return {
         planId: saved.planId ?? null,

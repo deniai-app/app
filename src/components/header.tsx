@@ -110,12 +110,6 @@ export default function Header() {
           title: t("Desktop"),
           description: t("Desktop app."),
         },
-        {
-          href: hrefFor("/migration"),
-          icon: FileText,
-          title: t("Migration"),
-          description: t("Move your chats."),
-        },
       ],
     },
     {

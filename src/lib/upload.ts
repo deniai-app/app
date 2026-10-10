@@ -28,26 +28,3 @@ export async function uploadFile(file: File): Promise<string | null> {
     return null;
   }
 }
-
-/**
- * Upload a base64-encoded image to UploadThing.
- * Returns the public URL, or null if UploadThing is not configured.
- */
-export async function uploadImage(
-  base64Data: string,
-  mimeType: string,
-  filename?: string,
-): Promise<string | null> {
-  if (!utapi) return null;
-
-  try {
-    const buffer = Buffer.from(base64Data, "base64");
-    const ext = mimeType.split("/")[1] ?? "png";
-    const name = filename ?? `generated-${Date.now()}.${ext}`;
-    const file = new File([buffer], name, { type: mimeType });
-    return await uploadFile(file);
-  } catch (error) {
-    console.error("[upload] Failed to upload image:", error);
-    return null;
-  }
-}

@@ -7,7 +7,6 @@ import { env } from "@/env";
 import { findPlanByLookupKey, isTeamPlan } from "@/lib/billing";
 import { activatePaidAd, pauseReversedAdCharge, releaseExpiredAdCheckout } from "@/lib/ad-checkout";
 import { getBillingFingerprintUpdates } from "@/lib/billing-card-usage";
-import { isAffiliatePaidStatus, processAffiliatePurchase } from "@/lib/affiliate";
 import {
   findPaidLifetimePurchase,
   grantsSubscriptionAccess,
@@ -154,14 +153,6 @@ async function saveSubscription(payload: SubscriptionPayload) {
               eq(billing.stripeSubscriptionId, payload.subscriptionId),
             ),
       });
-
-  if (!organizationId && plan?.id && isAffiliatePaidStatus(payload.status)) {
-    await processAffiliatePurchase({
-      referredUserId: payload.userId,
-      planId: plan.id,
-      purchasedAt: updates.firstPaidAt ?? new Date(),
-    });
-  }
 }
 
 async function clearPlanData({
@@ -607,14 +598,6 @@ export async function POST(req: Request) {
 
           if (userId && isLifetimePlanId(planId) && !session.metadata?.organizationId) {
             await savePaidLifetimeCheckout(session, userId, planId);
-          }
-
-          if (userId && planId) {
-            await processAffiliatePurchase({
-              referredUserId: userId,
-              planId,
-              purchasedAt: new Date(event.created * 1000),
-            });
           }
         }
         break;

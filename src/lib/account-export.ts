@@ -2,14 +2,12 @@ import type { UIMessage } from "ai";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/drizzle";
 import {
-  affiliateProfile,
   billing,
   chats,
-  chatShares,
   memoryItem,
   projectFiles,
   projects,
-  providerSetting,
+  resetCreditBalance,
   securityActivity,
   usageQuota,
   user,
@@ -52,11 +50,9 @@ export async function buildAccountExport(userId: string) {
     projectRows,
     fileRows,
     chatRows,
-    shareRows,
     usageRows,
     billingRow,
-    affiliateRow,
-    providerRows,
+    resetCreditRow,
     activityRows,
   ] = await Promise.all([
     db
@@ -100,7 +96,6 @@ export async function buildAccountExport(userId: string) {
       })
       .from(chats)
       .where(eq(chats.uid, userId)),
-    db.select().from(chatShares).where(eq(chatShares.ownerId, userId)),
     db.select().from(usageQuota).where(eq(usageQuota.userId, userId)),
     db
       .select({
@@ -116,23 +111,13 @@ export async function buildAccountExport(userId: string) {
       .then((rows) => rows[0] ?? null),
     db
       .select({
-        code: affiliateProfile.code,
-        rewardPreference: affiliateProfile.rewardPreference,
-        resetCredits: affiliateProfile.resetCredits,
-        createdAt: affiliateProfile.createdAt,
+        credits: resetCreditBalance.credits,
+        updatedAt: resetCreditBalance.updatedAt,
       })
-      .from(affiliateProfile)
-      .where(eq(affiliateProfile.userId, userId))
+      .from(resetCreditBalance)
+      .where(eq(resetCreditBalance.userId, userId))
       .limit(1)
       .then((rows) => rows[0] ?? null),
-    db
-      .select({
-        provider: providerSetting.provider,
-        preferByok: providerSetting.preferByok,
-        apiStyle: providerSetting.apiStyle,
-      })
-      .from(providerSetting)
-      .where(eq(providerSetting.userId, userId)),
     db
       .select({
         action: securityActivity.action,
@@ -207,13 +192,6 @@ export async function buildAccountExport(userId: string) {
       updatedAt: chat.updatedAt,
       messages: simplifyMessages(chat.messages),
     })),
-    shares: shareRows.map((share) => ({
-      id: share.id,
-      chatId: share.chatId,
-      visibility: share.visibility,
-      allowFork: share.allowFork,
-      createdAt: share.createdAt,
-    })),
     usage: usageRows.map((row) => ({
       category: row.category,
       planTier: row.planTier,
@@ -224,8 +202,7 @@ export async function buildAccountExport(userId: string) {
       periodEnd: row.periodEnd,
     })),
     billing: billingRow,
-    affiliate: affiliateRow,
-    providers: providerRows,
+    resetCredits: resetCreditRow,
     securityActivity: activityRows,
   };
 }

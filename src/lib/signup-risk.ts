@@ -1,14 +1,15 @@
+import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/drizzle";
 import { signupRisk } from "@/db/schema";
+import { env } from "@/env";
 import {
   extractEmailDomain,
   extractEmailLocalPart,
   isAllowedEducationalDomain,
   isRandomLookingLocalPart,
 } from "@/lib/email-domain-policy";
-import { hashClaimIp } from "@/lib/affiliate-risk";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -32,6 +33,14 @@ export const SIGNUP_RISK_FLAGS = {
 } as const;
 
 export type SignupAssessment = { score: number; flags: string[]; flagged: boolean };
+
+/** HMAC(secret, network) so repeat networks match without storing a reversible IP. */
+function hashNetworkKey(network: string | null): string | null {
+  if (!network || network === "unknown") {
+    return null;
+  }
+  return createHmac("sha256", env.BETTER_AUTH_SECRET).update(network).digest("hex");
+}
 
 /** IPv4 as is; IPv6 reduced to its /64, because one subscriber controls a whole /64. */
 export function networkKey(ip: string): string {
@@ -184,7 +193,7 @@ export async function recordSignupRisk({
         score: assessment.score,
         flags: assessment.flags,
         // Hashed per network (IPv6 by /64), the same grouping the sign-up limits use.
-        ipHash: hashClaimIp(ip ? networkKey(ip) : null),
+        ipHash: hashNetworkKey(ip ? networkKey(ip) : null),
       })
       .onConflictDoNothing();
   }

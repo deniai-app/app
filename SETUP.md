@@ -93,8 +93,8 @@ STRIPE_WEBHOOK_SECRET=whsec_your-webhook-secret
 CLOUDFLARE_ACCOUNT_ID=your-cloudflare-account-id
 CLOUDFLARE_API_TOKEN=your-cloudflare-api-token
 
-# Affiliate administration (optional; comma-separated server-side admin emails)
-# AFFILIATE_ADMIN_EMAILS=you@example.com
+# Operator administration (optional; comma-separated server-side admin emails)
+# ADMIN_EMAILS=you@example.com
 
 # Rate limiting (optional — falls back to in-memory)
 UPSTASH_REDIS_REST_URL=
@@ -150,7 +150,7 @@ Notes:
 - Joining an organization cancels a personal subscription only when membership and a live licensed team subscription are verified. Free/unpaid teams or Stripe verification errors leave the personal plan untouched.
 - Team billing identity is organization-scoped, serialized with a PostgreSQL advisory transaction lock. Existing per-admin copies are retained for ledger history but ignored for entitlement; subscription synchronization/revocation updates all copies. No schema migration or automatic data deletion is required.
 - Personal/team plan changes use Stripe `error_if_incomplete`: a failed upgrade payment must not grant the requested tier. Requests requiring further payment authentication are rejected instead of applying an unpaid upgrade.
-- Affiliate/blog administrator email allowlists require verified, non-anonymous accounts even when email delivery is disabled. Configure a supported mailbox-verification path before relying on these administrator roles.
+- Operator/blog administrator email allowlists require verified, non-anonymous accounts even when email delivery is disabled. Configure a supported mailbox-verification path before relying on these administrator roles.
 - Card verification validates the intent's user, customer, and purpose. The shared card fingerprint is locked and its eligibility plus verification claim committed together before external follow-up, preventing simultaneous free-tier claims above the card limit.
 - Better Auth self-service organization leave is audited server-side and reconciles licensed seats after successful authorization, just like member removal.
 - Device approval requires the configured public origin and `application/json`; initiate/poll remain available to extension clients without a browser Origin. Reverse proxies must preserve the browser's Origin header.
@@ -159,9 +159,8 @@ Notes:
 - `OPENROUTER_API_KEY` routes OpenAI-family and other OpenRouter models when voids mode is off. It also serves as the Anthropic fallback when `ANTHROPIC_API_KEY` is absent.
 - Optional voids.top mode: set `VOIDS_MODE=true` (or `1`) and provide **`VOIDS_API_KEY`** to send OpenAI and Anthropic traffic through the OpenAI-compatible voids.top gateway. Without the key, normal provider routing is used. Optional `VOIDS_BASE_URL` (default `https://capi.voids.top/v2`). When `VOIDS_MODE` is off, OpenAI uses OpenRouter and Anthropic uses its native key when present, otherwise OpenRouter.
 - Optional Deni AI API: set **`DENI_API_KEY`** (and optionally **`DENI_API_BASE_URL`**, default `https://api.deniai.app/v1`, an OpenAI-compatible Chat Completions endpoint) to expose OpenAI models, including GPT-6 Luna. OpenAI models on this route are sent as `openai/<id>` (e.g. `openai/gpt-6-sol`) and do not offer Pro or Fast mode. A missing key hides those models.
-- Affiliate administration: set `AFFILIATE_ADMIN_EMAILS` to a comma-separated list of account emails that can approve reset rewards, grant reset credits, and send manual affiliate coupon emails. The address is read only on the server.
-- Blog administration: set `BLOG_ADMIN_EMAILS` to a comma-separated list of account emails that can write and publish posts at `/settings/blog`. If omitted, `AFFILIATE_ADMIN_EMAILS` is used.
-- New 30% OFF affiliate coupon rewards remain pending until an admin enters a Stripe coupon or promotion code and sends the email from the affiliate settings page.
+- Operator administration: set `ADMIN_EMAILS` to a comma-separated list of account emails that can grant usage reset credits from **Settings → Billing** and receive dispute alerts. The address is read only on the server. The former name `AFFILIATE_ADMIN_EMAILS` is still read when `ADMIN_EMAILS` is unset; rename it when convenient.
+- Blog administration: set `BLOG_ADMIN_EMAILS` to a comma-separated list of account emails that can write and publish posts at `/settings/blog`. If omitted, `ADMIN_EMAILS` is used.
 - **Email (Cloudflare Email Sending):** requires a Workers Paid plan and the sending domain (e.g. `deniai.app`) onboarded under **Email Service → Email Sending** in the Cloudflare dashboard (DNS/SPF/DKIM managed there). Create an API token with **Email Sending: Edit**, then set `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN`. From address defaults to `Deni AI <noreply@deniai.app>` (`EMAIL_FROM` in `src/lib/constants.ts`). When either env var is missing, magic link / verification / invite emails are disabled, and so is changing an account's email address. With email configured, a verified account changes its email in two steps: the current address approves the request, then the new address receives a verification link, and the email updates only after that link is opened.
 
 #### Generate `BETTER_AUTH_SECRET`
@@ -343,7 +342,7 @@ NEXT_PUBLIC_BILLING_DISABLED=1
 
 Optional flash offer coupon: `STRIPE_FLASH_OFFER_COUPON_ID`.
 
-Dispute handling is automatic when those extra webhook events are enabled. On `charge.dispute.created` the app emails admins and cancels the related subscription (immediately for fraud, otherwise at period end). Evidence is not submitted automatically; contest from the Stripe Dashboard if needed. On `radar.early_fraud_warning.created` it refunds as fraud only when the payment is still actionable, 3D Secure did not authenticate it, and the account has no post-payment service use. Alerts go to `AFFILIATE_ADMIN_EMAILS` / `BLOG_ADMIN_EMAILS` when Cloudflare email is configured.
+Dispute handling is automatic when those extra webhook events are enabled. On `charge.dispute.created` the app emails admins and cancels the related subscription (immediately for fraud, otherwise at period end). Evidence is not submitted automatically; contest from the Stripe Dashboard if needed. On `radar.early_fraud_warning.created` it refunds as fraud only when the payment is still actionable, 3D Secure did not authenticate it, and the account has no post-payment service use. Alerts go to `ADMIN_EMAILS` / `BLOG_ADMIN_EMAILS` when Cloudflare email is configured.
 
 Checkout and card verification always request 3D Secure (`request_three_d_secure: any`), matching the Radar policy that also blocks `:card_3d_secure_support: = 'not_supported'`. A verified card unlocks the full chat model catalog for free accounts (subject to the verified-free token limits); guests remain limited to the guest model. Signed-in free users without a verified card see a reminder at the bottom of the model selector's right panel; it stays visible while scrolling the model list and is hidden for verified-card users, paid users, guests, and deployments with billing disabled.
 
@@ -399,19 +398,18 @@ pnpm run tools:stripe-portal --check
 
 Schemas live under `src/db/schema/`. Main domains:
 
-| Area                                  | Purpose                                       |
-| ------------------------------------- | --------------------------------------------- |
-| **auth-schema**                       | Users, sessions, accounts, orgs (better-auth) |
-| **chat**                              | Conversations and messages                    |
-| **provider-keys / provider-settings** | Legacy encrypted BYOK records; no longer used |
-| **api-keys**                          | User API key records                          |
-| **memory**                            | Personalization memories                      |
-| **project**                           | Project context; legacy file records retained |
-| **billing**                           | Stripe subscriptions / payment data           |
-| **usage**                             | Platform usage and limits                     |
-| **share**                             | Legacy chat-share records; links are disabled |
-| **team-usage-policy**                 | Team usage policies                           |
-| **device-auth**                       | Device / desktop auth                         |
+| Area                  | Purpose                                       |
+| --------------------- | --------------------------------------------- |
+| **auth-schema**       | Users, sessions, accounts, orgs (better-auth) |
+| **chat**              | Conversations and messages                    |
+| **api-keys**          | User API key records                          |
+| **memory**            | Personalization memories                      |
+| **project**           | Project context; legacy file records retained |
+| **billing**           | Stripe subscriptions / payment data           |
+| **usage**             | Platform usage and limits                     |
+| **reset-credit**      | Usage reset credit balances                   |
+| **team-usage-policy** | Team usage policies                           |
+| **device-auth**       | Device / desktop auth                         |
 
 Schema change workflow:
 
@@ -474,7 +472,7 @@ Any host that can run a Next.js standalone Node server (Railway, Render, Fly.io,
 
 ### Client IP behind proxies
 
-The client IP keys the device-authorization rate limit, anonymous Deni AI Ads view/click deduplication and billing, and affiliate claim fraud signals (all through `src/lib/client-ip.ts`). Configure it for your ingress topology:
+The client IP keys the device-authorization rate limit, and anonymous Deni AI Ads view/click deduplication and billing (all through `src/lib/client-ip.ts`). Configure it for your ingress topology:
 
 | Topology                                                                           | Setting                                      |
 | ---------------------------------------------------------------------------------- | -------------------------------------------- |
@@ -487,7 +485,7 @@ The client IP keys the device-authorization rate limit, anonymous Deni AI Ads vi
 - **When trusting a header such as `cf-connecting-ip`, the origin must not be reachable directly**: allow only your edge (e.g. Cloudflare IP ranges, Cloudflare Tunnel, or authenticated origin pulls), otherwise anyone can send the header themselves. Proxies between the edge and the app must pass the header through unchanged.
 - `TRUSTED_PROXY_HOPS` counts the trusted proxies that append to `X-Forwarded-For`; the entry that many positions from the right is used, and client-supplied entries to its left are ignored. The count must be exact: too low selects a proxy address (everyone shares one identity), too high selects a client-controlled value. A chain shorter than N resolves no IP.
 - With neither set, the first `X-Forwarded-For` entry (else `X-Real-IP`) is used, as before. Clients can spoof this unless the edge strips client-supplied `X-Forwarded-For` / `X-Real-IP`.
-- Invalid or missing values resolve no IP: device authorization falls back to a shared rate-limit bucket, anonymous ad views and clicks are not counted, and affiliate claims omit the IP signal.
+- Invalid or missing values resolve no IP: device authorization falls back to a shared rate-limit bucket, and anonymous ad views and clicks are not counted.
 - Better Auth (its own rate limiting, session IP, and Turnstile `remoteip`) uses `CLIENT_IP_HEADER` via `advanced.ipAddress.ipAddressHeaders`. `TRUSTED_PROXY_HOPS` is not passed to Better Auth, whose `trustedProxies` option takes proxy IP/CIDR ranges rather than a hop count. Without `CLIENT_IP_HEADER`, Better Auth reads `X-Forwarded-For` only when it holds exactly one entry; behind two or more appending proxies no IP is resolved and its rate limiting falls back to a shared per-path bucket, so prefer `CLIENT_IP_HEADER` there.
 
 ## Request and preview security
@@ -501,12 +499,12 @@ The client IP keys the device-authorization rate limit, anonymous Deni AI Ads vi
 
 ## Troubleshooting
 
-| Issue                         | What to check                                                                                                                                                                      |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Env validation errors on boot | Missing keys in `src/env.ts`; empty optional strings are OK                                                                                                                        |
-| OAuth redirect mismatch       | Callback URLs must match `NEXT_PUBLIC_BETTER_AUTH_URL`                                                                                                                             |
-| Affiliate link is `0.0.0.0`   | Set `NEXT_PUBLIC_BETTER_AUTH_URL` to the **public** HTTPS origin (not Docker `HOSTNAME=0.0.0.0`). Rebuild so `NEXT_PUBLIC_*` is re-inlined. `/invite/*` redirects use that origin. |
-| DB migrate fails              | Correct `DATABASE_URL`; use `db:migrate:dev` for local                                                                                                                             |
-| Stripe checkout broken        | Publishable key + webhook secret; Stripe CLI for local                                                                                                                             |
-| Search / browse tools fail    | Valid `EXA_API_KEY`                                                                                                                                                                |
-| Docker build env issues       | Pass `NEXT_PUBLIC_*` as build args; see `Dockerfile` comments                                                                                                                      |
+| Issue                         | What to check                                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Env validation errors on boot | Missing keys in `src/env.ts`; empty optional strings are OK                                                                                 |
+| OAuth redirect mismatch       | Callback URLs must match `NEXT_PUBLIC_BETTER_AUTH_URL`                                                                                      |
+| Public links use `0.0.0.0`    | Set `NEXT_PUBLIC_BETTER_AUTH_URL` to the **public** HTTPS origin (not Docker `HOSTNAME=0.0.0.0`). Rebuild so `NEXT_PUBLIC_*` is re-inlined. |
+| DB migrate fails              | Correct `DATABASE_URL`; use `db:migrate:dev` for local                                                                                      |
+| Stripe checkout broken        | Publishable key + webhook secret; Stripe CLI for local                                                                                      |
+| Search / browse tools fail    | Valid `EXA_API_KEY`                                                                                                                         |
+| Docker build env issues       | Pass `NEXT_PUBLIC_*` as build args; see `Dockerfile` comments                                                                               |

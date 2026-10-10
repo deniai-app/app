@@ -5,7 +5,7 @@ import { useExtracted } from "next-intl";
 import { useLocalizeError } from "@/hooks/use-localize-error";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import type { AffiliateResetPlanTier } from "@/lib/affiliate-types";
+import type { ResetCreditPlanTier } from "@/lib/reset-credits";
 import { trpc } from "@/lib/trpc/react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -31,24 +31,24 @@ export function BillingResetCard() {
   const localizeError = useLocalizeError();
   const utils = trpc.useUtils();
   const [targetType, setTargetType] = useState<ResetTargetType>("all");
-  const [planTier, setPlanTier] = useState<AffiliateResetPlanTier>("plus");
+  const [planTier, setPlanTier] = useState<ResetCreditPlanTier>("plus");
   const [userIdentifier, setUserIdentifier] = useState("");
   const [quantity, setQuantity] = useState("1");
 
-  const statusQuery = trpc.affiliate.status.useQuery(undefined, {
+  const statusQuery = trpc.resetCredits.status.useQuery(undefined, {
     staleTime: 30_000,
   });
 
   const invalidateResetData = async () => {
     await Promise.all([
-      utils.affiliate.status.invalidate(),
+      utils.resetCredits.status.invalidate(),
       utils.billing.usage.invalidate(),
       utils.billing.status.invalidate(),
       utils.billing.maxModeStatus.invalidate(),
     ]);
   };
 
-  const consumeResetCredit = trpc.affiliate.consumeResetCredit.useMutation({
+  const consumeResetCredit = trpc.resetCredits.consume.useMutation({
     onSuccess: async ({ remaining }) => {
       toast.success(t("Rate limits reset."));
       await invalidateResetData();
@@ -59,7 +59,7 @@ export function BillingResetCard() {
     onError: (error) => toast.error(localizeError(error)),
   });
 
-  const grantResetCredits = trpc.affiliate.adminGrantResetCredits.useMutation({
+  const grantResetCredits = trpc.resetCredits.adminGrant.useMutation({
     onSuccess: async ({ grantedUsers, quantity: grantedQuantity }) => {
       toast.success(
         t("Granted {quantity} reset credits to {count} users.", {
@@ -132,7 +132,7 @@ export function BillingResetCard() {
               {t("Usage reset credits")}
             </CardTitle>
             <CardDescription className="mt-1">
-              {t("Affiliate reset credits can clear your basic and premium usage immediately.")}
+              {t("Reset credits can clear your basic and premium usage immediately.")}
             </CardDescription>
           </div>
           <Badge variant="secondary" className="shrink-0 tabular-nums">
@@ -218,7 +218,7 @@ export function BillingResetCard() {
                       <FieldLabel htmlFor="reset-plan-tier">{t("Plan")}</FieldLabel>
                       <Select
                         value={planTier}
-                        onValueChange={(value) => setPlanTier(value as AffiliateResetPlanTier)}
+                        onValueChange={(value) => setPlanTier(value as ResetCreditPlanTier)}
                       >
                         <SelectTrigger id="reset-plan-tier" className="w-full">
                           <SelectValue />

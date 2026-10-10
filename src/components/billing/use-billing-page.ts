@@ -9,11 +9,7 @@ import type { BillingPlanId, ClientPlan, IndividualPlanId } from "@/lib/billing"
 import { isIndividualPlanId, isTeamPlan } from "@/lib/billing";
 import { trpc } from "@/lib/trpc/react";
 import { settingsUsageQueryOptions } from "@/lib/usage-query-options";
-import {
-  ACTIVE_STATUSES,
-  calculateYearlySavingsPercent,
-  useBillingReceiptCopy,
-} from "./billing-utils";
+import { ACTIVE_STATUSES, useBillingReceiptCopy } from "./billing-utils";
 import type { SubscriptionReceiptData } from "./subscription-receipt-data";
 
 export function useBillingPage() {
@@ -209,11 +205,6 @@ export function useBillingPage() {
   const selectedPlusPlan = plusInterval === "monthly" ? plusMonthly : plusYearly;
   const selectedProPlan = proInterval === "monthly" ? proMonthly : proYearly;
   const selectedMaxPlan = maxInterval === "monthly" ? maxMonthly : maxYearly;
-  const yearlySavingsPercent = Math.max(
-    calculateYearlySavingsPercent(plusYearly, plusMonthly),
-    calculateYearlySavingsPercent(proYearly, proMonthly),
-    calculateYearlySavingsPercent(maxYearly, maxMonthly),
-  );
   const basicUsage = usage.find((entry) => entry.category === "basic");
   const premiumUsage = usage.find((entry) => entry.category === "premium");
   const cancelReceipt = {
@@ -280,6 +271,5 @@ export function useBillingPage() {
     usageQuery,
     usageTier,
     usageTierLabel,
-    yearlySavingsPercent,
   };
 }

@@ -287,8 +287,8 @@ export function useLocalizeError() {
           "Add an English title, description, and body before publishing.",
         ),
         ...mapKeys(
-          t("Affiliate administration access is not configured for this account."),
-          "Affiliate administration access is not configured for this account.",
+          t("Reset credit administration is not configured for this account."),
+          "Reset credit administration is not configured for this account.",
         ),
         ...mapKeys(
           t("An active team subscription is required to manage Max Mode."),
@@ -319,7 +319,6 @@ export function useLocalizeError() {
         ...mapKeys(t("Could not unpublish the post."), "Could not unpublish the post."),
         ...mapKeys(t("Could not update featured state."), "Could not update featured state."),
         ...mapKeys(t("Could not update the post."), "Could not update the post."),
-        ...mapKeys(t("Coupon reward recipient not found."), "Coupon reward recipient not found."),
         ...mapKeys(
           t("Guest accounts cannot create API keys. Please sign in with an account."),
           "Guest accounts cannot create API keys. Please sign in with an account.",
@@ -425,25 +424,14 @@ export function useLocalizeError() {
           t("Target plan must be a team subscription plan."),
           "Target plan must be a team subscription plan.",
         ),
-        ...mapKeys(
-          t("That slug is reserved by an existing built-in article."),
-          "That slug is reserved by an existing built-in article.",
-        ),
+        ...mapKeys(t("That slug is reserved."), "That slug is reserved."),
         ...mapKeys(
           t("This checkout session is not a personal plan purchase."),
           "This checkout session is not a personal plan purchase.",
         ),
         ...mapKeys(
-          t("This coupon reward is already being processed or was already sent."),
-          "This coupon reward is already being processed or was already sent.",
-        ),
-        ...mapKeys(
           t("This one-time plan has already been purchased."),
           "This one-time plan has already been purchased.",
-        ),
-        ...mapKeys(
-          t("This reset reward is no longer pending."),
-          "This reset reward is no longer pending.",
         ),
         ...mapKeys(
           t("This team already has an active subscription. Use Change plan or cancel first."),
@@ -507,10 +495,6 @@ export function useLocalizeError() {
         ),
         ...mapKeys(t("Unable to check usage"), "Unable to check usage"),
         ...mapKeys(t("Unknown provider"), "Unknown provider"),
-        ...mapKeys(
-          t("Coupon email was sent, but the reward could not be recorded."),
-          "Coupon email was sent, but the reward could not be recorded.",
-        ),
         ...mapKeys(
           t("Unable to create personal billing record"),
           "Unable to create personal billing record",

@@ -18,10 +18,6 @@ vi.mock("@/env", () => ({
 vi.mock("@/lib/billing-card-usage", () => ({
   getBillingFingerprintUpdates: async () => ({ paymentMethodFingerprint: "fp" }),
 }));
-vi.mock("@/lib/affiliate", () => ({
-  isAffiliatePaidStatus: () => false,
-  processAffiliatePurchase: vi.fn(),
-}));
 vi.mock("@/lib/ad-checkout", () => ({
   activatePaidAd: vi.fn(),
   pauseReversedAdCharge: vi.fn(),

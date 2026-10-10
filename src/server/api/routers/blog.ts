@@ -54,7 +54,7 @@ async function assertSlugAvailable(slug: string, currentId?: string) {
   if (RESERVED_BLOG_SLUGS.has(slug)) {
     throw new TRPCError({
       code: "CONFLICT",
-      message: "That slug is reserved by an existing built-in article.",
+      message: "That slug is reserved.",
     });
   }
 

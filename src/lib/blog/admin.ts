@@ -1,13 +1,5 @@
 import { env } from "@/env";
-
-function parseAdminEmails(value: string | undefined) {
-  return new Set(
-    (value ?? "")
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean),
-  );
-}
+import { getAdminEmails, parseAdminEmails } from "@/lib/admin-emails";
 
 export function getBlogAdminEmails() {
   const dedicated = parseAdminEmails(env.BLOG_ADMIN_EMAILS);
@@ -15,7 +7,7 @@ export function getBlogAdminEmails() {
     return dedicated;
   }
 
-  return parseAdminEmails(env.AFFILIATE_ADMIN_EMAILS);
+  return getAdminEmails();
 }
 
 export function isBlogAdmin(email: string | null | undefined) {

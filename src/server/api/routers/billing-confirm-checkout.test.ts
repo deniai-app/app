@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   retrieve: vi.fn(),
   insert: vi.fn(),
   execute: vi.fn(),
-  processAffiliatePurchase: vi.fn(),
 }));
 
 vi.mock("@/db/drizzle", () => ({ db: {} }));
@@ -16,10 +15,6 @@ vi.mock("@/lib/stripe", () => ({
 }));
 vi.mock("@/lib/billing-card-usage", () => ({
   getBillingFingerprintUpdates: async () => ({ paymentMethodFingerprint: null }),
-}));
-vi.mock("@/lib/affiliate", () => ({
-  isAffiliatePaidStatus: (status: string | null) => status === "paid",
-  processAffiliatePurchase: mocks.processAffiliatePurchase,
 }));
 
 const { billingRouter } = await import("./billing");
@@ -97,7 +92,6 @@ test("replaying a refunded lifetime checkout does not restore the revoked plan",
   });
   expect(result).toMatchObject({ planId: null, status: "inactive" });
   expect(mocks.insert).not.toHaveBeenCalled();
-  expect(mocks.processAffiliatePurchase).not.toHaveBeenCalled();
 });
 
 test("replaying a disputed lifetime checkout does not restore the revoked plan", async () => {
@@ -115,7 +109,6 @@ test("an unreversed lifetime checkout is still confirmed", async () => {
 
   expect(result).toMatchObject({ planId: "pro_lifetime", status: "paid", mode: "payment" });
   expect(mocks.insert).toHaveBeenCalledTimes(1);
-  expect(mocks.processAffiliatePurchase).toHaveBeenCalledTimes(1);
 });
 
 test("a refund landing before the locked write does not grant the lifetime plan", async () => {
@@ -133,7 +126,6 @@ test("a refund landing before the locked write does not grant the lifetime plan"
   expect(mocks.retrieve).toHaveBeenCalledTimes(2);
   expect(result).toMatchObject({ planId: null, status: "inactive" });
   expect(mocks.insert).not.toHaveBeenCalled();
-  expect(mocks.processAffiliatePurchase).not.toHaveBeenCalled();
 });
 
 test("a fully discounted lifetime checkout is still confirmed", async () => {
@@ -143,5 +135,4 @@ test("a fully discounted lifetime checkout is still confirmed", async () => {
 
   expect(result).toMatchObject({ planId: "pro_lifetime", status: "paid", mode: "payment" });
   expect(mocks.insert).toHaveBeenCalledTimes(1);
-  expect(mocks.processAffiliatePurchase).toHaveBeenCalledTimes(1);
 });

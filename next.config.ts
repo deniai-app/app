@@ -48,6 +48,16 @@ const nextConfig: NextConfig = {
     turbopackFileSystemCacheForBuild: true,
     turbopackRustReactCompiler: true,
   },
+  async redirects() {
+    return [
+      // The legacy migrator site is gone; chat imports now live in Settings.
+      { source: "/migration", destination: "/settings/import", permanent: true },
+      { source: "/ja/migration", destination: "/settings/import", permanent: true },
+      // The affiliate program was removed; reset credits now live on the billing page.
+      { source: "/invite/:code", destination: "/auth/sign-up", permanent: true },
+      { source: "/settings/affiliate", destination: "/settings/billing", permanent: true },
+    ];
+  },
   async headers() {
     const securityHeaders = [
       { key: "X-Content-Type-Options", value: "nosniff" },
@@ -154,10 +164,6 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/legal/:path*",
-        headers: legalCacheHeaders,
-      },
-      {
-        source: "/migration",
         headers: legalCacheHeaders,
       },
       {

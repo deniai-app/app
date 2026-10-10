@@ -469,7 +469,7 @@ function FeaturesStep() {
         icon={Cpu}
         title={t("Latest Models")}
         description={t(
-          "Access cutting-edge AI like GPT-5 and Claude Sonnet 4 for powerful, intelligent conversations.",
+          "Access cutting-edge AI like GPT-6 and Claude Opus 5.5 for powerful, intelligent conversations.",
         )}
       />
       <FeatureCard

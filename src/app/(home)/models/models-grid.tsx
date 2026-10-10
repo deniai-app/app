@@ -12,15 +12,6 @@ import {
 import { translateModelDescription } from "@/lib/model-description-copy";
 import { authorLabels } from "./models-author-labels";
 
-const featureStyles: Record<string, string> = {
-  smartest: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  smart: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  reasoning: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
-  fast: "bg-green-500/10 text-green-700 dark:text-green-400",
-  fastest: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  coding: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
-};
-
 export function ModelsGrid({
   grouped,
   modelDescriptionCopy,
@@ -171,18 +162,6 @@ export function ModelsGrid({
                         : ""}
                     </p>
                   ) : null}
-                  {model.features && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {model.features.map((feature) => (
-                        <span
-                          key={feature}
-                          className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${featureStyles[feature] ?? "bg-secondary text-muted-foreground"}`}
-                        >
-                          {feature}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>

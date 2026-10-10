@@ -7,18 +7,14 @@ import SiGooglegemini from "@icons-pack/react-simple-icons/icons/SiGooglegemini"
 import SiX from "@icons-pack/react-simple-icons/icons/SiX";
 import {
   ArchiveIcon,
-  ArrowBigUpDash,
   Bot,
-  BrainCircuit,
   ChevronDownIcon,
-  Code,
   Coins,
   CreditCard,
   Gem,
   LogIn,
   SearchIcon,
   Sparkle,
-  StarIcon,
   TriangleAlert,
 } from "lucide-react";
 import { useExtracted, useLocale } from "next-intl";
@@ -42,15 +38,6 @@ type ModelDescriptionLabels = {
   stealthModel: string;
 };
 
-type FeatureLabels = {
-  reasoning: string;
-  smart: string;
-  fast: string;
-  coding: string;
-  fastest: string;
-  smartest: string;
-};
-
 type ProviderLabels = {
   featured: string;
 };
@@ -69,25 +56,6 @@ function getModelDescription(value: string, labels: ModelDescriptionLabels): str
       return labels.stealthModel;
     default:
       return value;
-  }
-}
-
-function getFeatureLabel(feature: string, labels: FeatureLabels): string {
-  switch (feature) {
-    case "reasoning":
-      return labels.reasoning;
-    case "smart":
-      return labels.smart;
-    case "fast":
-      return labels.fast;
-    case "coding":
-      return labels.coding;
-    case "fastest":
-      return labels.fastest;
-    case "smartest":
-      return labels.smartest;
-    default:
-      return feature;
   }
 }
 
@@ -191,14 +159,13 @@ function ModelStatusBadge({ status }: { status: ModelHealthStatus | undefined })
     );
   }
   return (
-    <Badge
-      variant="secondary"
-      className="bg-red-500/15 text-red-700 dark:text-red-400 text-[10px] leading-none py-0.5 h-auto"
-      title={t("This model is currently unavailable.")}
+    <TriangleAlert
+      className="size-3.5 shrink-0 text-yellow-500 dark:text-yellow-400"
+      role="img"
+      aria-label={t("This model is currently unavailable.")}
     >
-      <TriangleAlert className="size-3" aria-hidden="true" />
-      {t("Unavailable")}
-    </Badge>
+      <title>{t("This model is currently unavailable.")}</title>
+    </TriangleAlert>
   );
 }
 
@@ -316,7 +283,6 @@ function ModelPickerItem({
   isSelected,
   status,
   onSelect,
-  featureLabels,
   modelDescriptionLabels,
   modelDescriptionCopy,
 }: {
@@ -324,7 +290,6 @@ function ModelPickerItem({
   isSelected: boolean;
   status: ModelHealthStatus | undefined;
   onSelect: () => void;
-  featureLabels: FeatureLabels;
   modelDescriptionLabels: ModelDescriptionLabels;
   modelDescriptionCopy: Record<string, string>;
 }) {
@@ -336,8 +301,6 @@ function ModelPickerItem({
   const { warning: deprecationWarning, label: deprecationLabel } = useModelDeprecationCopy(
     model.deprecation,
   );
-  const highlightFeatures = model.features.filter((f) => f.includes("est"));
-  const regularFeatures = model.features.filter((f) => !f.includes("est"));
 
   return (
     <button
@@ -379,51 +342,10 @@ function ModelPickerItem({
               {model.tokenMultiplier}x
             </Badge>
           )}
-        {highlightFeatures.map((feature) => (
-          <Badge
-            variant="secondary"
-            className="bg-primary/10 text-[10px] leading-none px-1 py-0.5 h-auto"
-            key={feature}
-          >
-            <StarIcon
-              className="size-3 text-yellow-500 dark:fill-yellow-400 mr-0.5"
-              aria-hidden="true"
-            />
-            {getFeatureLabel(feature, featureLabels)}
-          </Badge>
-        ))}
       </span>
 
       {description && (
         <span className="text-xs text-muted-foreground leading-snug pl-5">{description}</span>
-      )}
-
-      {regularFeatures.length > 0 && (
-        <span className="flex gap-1 flex-wrap pl-5">
-          {regularFeatures.map((feature) => (
-            <Badge
-              variant="secondary"
-              className="bg-primary/10 text-[10px] leading-none px-1 py-0.5 h-auto"
-              key={feature}
-            >
-              {(() => {
-                switch (feature) {
-                  case "smart":
-                    return <Sparkle className="size-3 mr-0.5" aria-hidden="true" />;
-                  case "reasoning":
-                    return <BrainCircuit className="size-3 mr-0.5" aria-hidden="true" />;
-                  case "fast":
-                    return <ArrowBigUpDash className="size-3 mr-0.5" aria-hidden="true" />;
-                  case "coding":
-                    return <Code className="size-3 mr-0.5" aria-hidden="true" />;
-                  default:
-                    return null;
-                }
-              })()}
-              {getFeatureLabel(feature, featureLabels)}
-            </Badge>
-          ))}
-        </span>
       )}
     </button>
   );
@@ -456,7 +378,7 @@ function filterProviderGroups(
   const filtered: Record<string, ModelOption[]> = {};
   for (const [provider, entries] of Object.entries(groups)) {
     const matches = entries.filter((entry) =>
-      [entry.name, entry.value, entry.author, provider, getDescription(entry), ...entry.features]
+      [entry.name, entry.value, entry.author, provider, getDescription(entry)]
         .join(" ")
         .toLowerCase()
         .includes(normalizedQuery),
@@ -521,7 +443,6 @@ function ModelPickerList({
   providerHealth,
   legacyOpen,
   onLegacyOpenChange,
-  featureLabels,
   modelDescriptionLabels,
   modelDescriptionCopy,
   onSelect,
@@ -532,7 +453,6 @@ function ModelPickerList({
   providerHealth: Record<string, ModelHealthStatus>;
   legacyOpen: boolean;
   onLegacyOpenChange: (open: boolean) => void;
-  featureLabels: FeatureLabels;
   modelDescriptionLabels: ModelDescriptionLabels;
   modelDescriptionCopy: Record<string, string>;
   onSelect: (value: string) => void;
@@ -551,7 +471,6 @@ function ModelPickerList({
       model={m}
       isSelected={m.value === selectedValue}
       status={providerHealth[getModelProvider(m)]}
-      featureLabels={featureLabels}
       modelDescriptionLabels={modelDescriptionLabels}
       modelDescriptionCopy={modelDescriptionCopy}
       onSelect={() => onSelect(m.value)}
@@ -620,14 +539,6 @@ export function ChatComposerModelPicker({
     stealthModel: t("Stealth model"),
   };
   const modelDescriptionCopy = useModelDescriptionCopy();
-  const featureLabels: FeatureLabels = {
-    reasoning: t("Reasoning"),
-    smart: t("Smart"),
-    fast: t("Fast"),
-    coding: t("Coding"),
-    fastest: t("Fastest"),
-    smartest: t("Smartest"),
-  };
   const providerLabels: ProviderLabels = {
     featured: t("Featured"),
   };
@@ -727,7 +638,6 @@ export function ChatComposerModelPicker({
                   providerHealth={providerHealth}
                   legacyOpen={legacyModelsOpen}
                   onLegacyOpenChange={setLegacyModelsOpen}
-                  featureLabels={featureLabels}
                   modelDescriptionLabels={modelDescriptionLabels}
                   modelDescriptionCopy={modelDescriptionCopy}
                   onSelect={(value) => {

@@ -11,6 +11,9 @@ vi.mock("next-intl", () => ({
 vi.mock("@/hooks/use-available-models", () => ({
   useAvailableModels: () => ({ shouldVerifyCard: false }),
 }));
+vi.mock("@/hooks/use-model-health", () => ({
+  useModelHealth: () => ({}),
+}));
 vi.mock("@/lib/model-description-copy", () => ({
   useModelDescriptionCopy: () => ({}),
   translateModelDescription: () => "Description",

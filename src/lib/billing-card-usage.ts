@@ -1,7 +1,8 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import { db } from "@/db/drizzle";
 import { billing } from "@/db/schema";
+import { CARD_FLASH_OFFER_DURATION_HOURS } from "@/lib/billing-offers";
 import { stripe } from "@/lib/stripe";
 
 // Same card may be attached across at most this many distinct users.
@@ -264,6 +265,36 @@ export function claimCardVerification(
     },
     { isolationLevel: "read committed" },
   );
+}
+
+/**
+ * Give a never-paid user a flash offer ending CARD_FLASH_OFFER_DURATION_HOURS
+ * from now, once per account. Never shortens a longer running offer. Returns
+ * whether the offer was granted.
+ */
+export async function grantCardVerificationFlashOffer(
+  database: typeof db,
+  userId: string,
+  now = new Date(),
+) {
+  const endsAt = new Date(now.getTime() + CARD_FLASH_OFFER_DURATION_HOURS * 60 * 60 * 1000);
+  const granted = await database
+    .update(billing)
+    .set({
+      flashOfferEndsAt: sql`GREATEST(${billing.flashOfferEndsAt}, ${endsAt.toISOString()}::timestamp)`,
+      cardOfferGrantedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(billing.userId, userId),
+        isNull(billing.organizationId),
+        isNull(billing.cardOfferGrantedAt),
+        isNull(billing.firstPaidAt),
+      ),
+    )
+    .returning({ userId: billing.userId });
+  return granted.length > 0;
 }
 
 export async function getBillingFingerprintUpdates({

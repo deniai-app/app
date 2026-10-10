@@ -1,0 +1,1 @@
+ALTER TABLE "billing" ADD COLUMN "card_offer_granted_at" timestamp;

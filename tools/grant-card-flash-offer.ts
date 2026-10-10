@@ -1,6 +1,8 @@
 /**
  * One-off campaign: give every card-verified, never-paid user a flash offer
  * ending `--hours` (default 48) from now. Never shortens a longer running offer.
+ * Marks the one-time card offer as granted, so re-verifying a card later does
+ * not grant another one (see grantCardVerificationFlashOffer).
  *
  * Dry run by default; pass `--apply` to write.
  */
@@ -19,6 +21,7 @@ if (!databaseUrl) {
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
 const hoursArg = args.find((arg) => arg.startsWith("--hours="));
+// Default mirrors CARD_FLASH_OFFER_DURATION_HOURS; billing-offers.ts loads env, so it is not imported.
 const hours = hoursArg ? Number(hoursArg.slice("--hours=".length)) : 48;
 if (!Number.isFinite(hours) || hours <= 0) {
   console.error(`Invalid --hours value: ${hoursArg}`);
@@ -36,6 +39,8 @@ const eligible = and(
   isNull(billing.organizationId),
   isNotNull(billing.cardVerifiedAt),
   isNull(billing.firstPaidAt),
+  // Skip accounts that already received the one-time card offer.
+  isNull(billing.cardOfferGrantedAt),
   eq(billing.deletionPending, false),
   or(isNull(billing.status), notInArray(billing.status, ACTIVE_SUB_STATUSES)),
   or(isNull(billing.flashOfferEndsAt), lt(billing.flashOfferEndsAt, endsAt)),
@@ -65,7 +70,7 @@ if (!apply) {
 
 const updated = await db
   .update(billing)
-  .set({ flashOfferEndsAt: endsAt, updatedAt: new Date() })
+  .set({ flashOfferEndsAt: endsAt, cardOfferGrantedAt: new Date(), updatedAt: new Date() })
   .where(eligible)
   .returning({ userId: billing.userId });
 

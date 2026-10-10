@@ -136,7 +136,7 @@ Notes:
 - Remove old `NEXT_PUBLIC_ADSENSE_*` configuration from deployments; AdSense and `ads.txt` are no longer used.
 
 - Empty optional vars are treated as unset (`emptyStringAsUndefined` in `src/env.ts`), which helps Docker / Dokploy builds that inject `""` for missing keys.
-- Provider keys are capability switches: missing `ANTHROPIC_API_KEY` falls back to OpenRouter, missing `GOOGLE_GENERATIVE_AI_API_KEY` disables memory, missing `EXA_API_KEY` disables web search, and missing Stripe keys disables billing.
+- Provider keys are capability switches: missing `ANTHROPIC_API_KEY` falls back to OpenRouter, missing `DENI_API_KEY` disables memory (extraction uses GPT-6 Luna on the Deni AI API), missing `EXA_API_KEY` disables web search, and missing Stripe keys disables billing.
 - Guest sessions use only `gpt-5.6-luna` and have twice the basic request allowance of the standard guest limit (40 requests).
 - Each web `search` tool call consumes 10,000 basic tokens (1 basic request for guests). Failed searches are refunded. Browse does not consume a separate search charge. Image and video generation have been removed.
 - Browse validates every redirect and pins direct HTTP(S) connections to validated public DNS answers. Direct and reader responses are limited to 2,000,000 bytes while streaming. The direct path uses Node HTTP(S), so it requires the Node.js runtime.

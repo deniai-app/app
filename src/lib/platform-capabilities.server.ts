@@ -37,7 +37,7 @@ export function getPlatformCapabilities(): PlatformCapabilities {
     },
     features: {
       webSearch: hasValue(env.EXA_API_KEY),
-      memory: hasOpenRouter,
+      memory: hasDeniApi,
       billing: hasStripeSecret && hasStripePublishableKey && !billingExplicitlyDisabled,
     },
     auth: {

@@ -1,4 +1,4 @@
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject, type UIMessage } from "ai";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -36,9 +36,10 @@ const defaultProfile: PersonalizationProfile = {
   autoMemory: true,
 };
 
-const openrouterApiKey = env.OPENROUTER_API_KEY?.trim();
-const memoryModel = openrouterApiKey
-  ? createOpenRouter({ apiKey: openrouterApiKey })("openai/gpt-6-luna")
+// Memory extraction runs on GPT-6 Luna through the Deni AI API, like chat.
+const deniApiKey = env.DENI_API_KEY?.trim();
+const memoryModel = deniApiKey
+  ? createOpenAI({ apiKey: deniApiKey, baseURL: env.DENI_API_BASE_URL }).chat("openai/gpt-6-luna")
   : null;
 
 export async function getUserMemoryState(userId: string) {

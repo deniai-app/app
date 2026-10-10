@@ -31,7 +31,6 @@ export type ClientPlan = {
   interval: string | null;
   intervalCount: number;
   isTeamPlan: boolean;
-  trialDays?: number | null;
   limitedTimeOfferEndsAt?: string | null;
 };
 

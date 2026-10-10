@@ -1,16 +1,17 @@
 "use client";
 
-import { ShieldCheck, Sparkles } from "lucide-react";
+import { Clock, ShieldCheck, Sparkles } from "lucide-react";
 import { useExtracted, useLocale } from "next-intl";
 import type { ClientPlan, IndividualPlanId } from "@/lib/billing";
 import { useBillingPlanCopy } from "@/lib/billing-plan-copy";
 import { formatMinorCurrency } from "@/lib/currency";
-import { formatAppDate } from "@/lib/format-date";
 import { useFormatPriceParts } from "@/lib/use-format-price-parts";
 import { cn } from "@/lib/utils";
+import { OfferCountdown } from "./offer-countdown";
 import { PlanHighlights } from "./plan-highlights";
 import {
   calculateYearlySavingsPercent,
+  getOfferPercentOff,
   useFormatPriceLabel,
   usePlanFitCopy,
   useTierLabel,
@@ -59,14 +60,8 @@ export function PlanCard({
   const getPlanFitCopy = usePlanFitCopy();
   const planCopy = useBillingPlanCopy(plan.id);
   const mode = plan.mode ?? "subscription";
-  const offerEndsLabel = plan.limitedTimeOfferEndsAt
-    ? formatAppDate(plan.limitedTimeOfferEndsAt, locale, {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : null;
+  const offerPercentOff = getOfferPercentOff(plan);
+  const offerEndsAt = offerPercentOff > 0 ? plan.limitedTimeOfferEndsAt : null;
   const canChange =
     status.hasActiveSubscription && !cancelDate && !status.isCurrent && mode === "subscription";
   const isBlockedByCancel =
@@ -105,9 +100,7 @@ export function PlanCard({
           ? t("Change plan")
           : mode === "payment"
             ? t("Buy once")
-            : plan.trialDays
-              ? t("Start {days}-day trial", { days: plan.trialDays.toString() })
-              : t("Subscribe");
+            : t("Subscribe");
   const showTrustCopy = !status.isOnTeamPlan && !status.isCurrent && !isBlockedByCancel;
 
   return (
@@ -115,6 +108,7 @@ export function PlanCard({
       className={cn(
         "flex flex-col",
         interval === "yearly" && "border-foreground/20 bg-muted/20",
+        offerEndsAt && "border-amber-500/50 ring-2 ring-amber-500/25 dark:ring-amber-500/25",
         status.isCurrent && "border-foreground ring-1 ring-foreground/10",
       )}
     >
@@ -125,11 +119,9 @@ export function PlanCard({
               <CardTitle className="text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">
                 {tierName}
               </CardTitle>
-              {plan.trialDays ? (
-                <Badge className="border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300">
-                  {t("{days}-day free trial", {
-                    days: plan.trialDays.toString(),
-                  })}
+              {offerEndsAt ? (
+                <Badge className="border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                  {t("{percent}% off", { percent: offerPercentOff.toString() })}
                 </Badge>
               ) : interval === "yearly" && savingsPercent > 0 ? (
                 <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
@@ -221,10 +213,12 @@ export function PlanCard({
             {mode === "payment" && (
               <p className="text-sm font-medium text-foreground">{t("One-time purchase")}</p>
             )}
-            {offerEndsLabel && (
-              <p className="text-xs text-muted-foreground">
-                {t("24-hour offer ends {date}", { date: offerEndsLabel })}
-              </p>
+            {offerEndsAt && (
+              <div className="flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300">
+                <Clock className="size-4" />
+                <span>{t("Offer ends in")}</span>
+                <OfferCountdown endsAt={offerEndsAt} className="font-mono font-semibold" />
+              </div>
             )}
           </div>
           <div className="mt-5 rounded-md border border-border/70 bg-background/70 p-3">
@@ -233,8 +227,8 @@ export function PlanCard({
               <div>
                 <div className="text-sm font-medium">{getPlanFitCopy(plan.id)}</div>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  {plan.trialDays
-                    ? t("Try the upgraded limits first. You only continue if it fits.")
+                  {offerEndsAt
+                    ? t("Limited-time price. Applied automatically at checkout.")
                     : interval === "yearly" && savingsPercent > 0
                       ? t("Lock in the lower monthly equivalent for the year.")
                       : mode === "payment"

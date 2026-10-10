@@ -16,6 +16,10 @@ const TwoFactorBanner = dynamic(
   () => import("@/components/two-factor-banner").then((mod) => mod.TwoFactorBanner),
   { loading: () => null },
 );
+const FlashOfferStrip = dynamic(
+  () => import("@/components/billing/flash-offer-strip").then((mod) => mod.FlashOfferStrip),
+  { loading: () => null },
+);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   // Track which pathname the dialog was opened for so navigation closes it
@@ -65,6 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AppSidebar onOpenChatSearch={() => setIsChatSearchOpen(true)} />
       <SidebarInset>
         <TwoFactorBanner />
+        <FlashOfferStrip />
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
           {/* Chat routes: SPA host. Everything else: normal RSC children. */}
           <ChatRouteHost>{children}</ChatRouteHost>

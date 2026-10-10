@@ -1,8 +1,5 @@
 import { env } from "@/env";
 
-export const SUBSCRIPTION_TRIAL_DAYS = 30;
-export const TEAM_SUBSCRIPTION_TRIAL_DAYS = 14;
-export const TEAM_TRIAL_MAX_SEATS = 5;
 export const FLASH_OFFER_DURATION_HOURS = 24;
 
 export function createFlashOfferEndAt(now = new Date()) {

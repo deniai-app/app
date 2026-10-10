@@ -3,13 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useExtracted } from "next-intl";
 import { useLocalizeError } from "@/hooks/use-localize-error";
-import { startTransition, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { BillingPlanId, ClientPlan, IndividualPlanId } from "@/lib/billing";
 import { isIndividualPlanId, isTeamPlan } from "@/lib/billing";
 import { trpc } from "@/lib/trpc/react";
 import { settingsUsageQueryOptions } from "@/lib/usage-query-options";
-import { ACTIVE_STATUSES, useBillingReceiptCopy } from "./billing-utils";
+import { ACTIVE_STATUSES, getOfferPercentOff, useBillingReceiptCopy } from "./billing-utils";
 import type { SubscriptionReceiptData } from "./subscription-receipt-data";
 
 export function useBillingPage() {
@@ -17,9 +17,10 @@ export function useBillingPage() {
   const localizeError = useLocalizeError();
   const { push } = useRouter();
   const [changeTarget, setChangeTarget] = useState<ClientPlan | null>(null);
-  const [plusInterval, setPlusInterval] = useState<"monthly" | "yearly">("monthly");
-  const [proInterval, setProInterval] = useState<"monthly" | "yearly">("monthly");
-  const [maxInterval, setMaxInterval] = useState<"monthly" | "yearly">("monthly");
+  // null follows the default: yearly while a limited-time offer is running, else monthly.
+  const [plusIntervalChoice, setPlusInterval] = useState<"monthly" | "yearly" | null>(null);
+  const [proIntervalChoice, setProInterval] = useState<"monthly" | "yearly" | null>(null);
+  const [maxIntervalChoice, setMaxInterval] = useState<"monthly" | "yearly" | null>(null);
   const [hasAgreed, setHasAgreed] = useState(false);
   const [pendingPlanId, setPendingPlanId] = useState<IndividualPlanId | null>(null);
 
@@ -202,6 +203,37 @@ export function useBillingPage() {
   const maxYearly = allPlans.find((p) => p.id === "max_yearly");
   const proLifetime = allPlans.find((p) => p.id === "pro_lifetime");
 
+  const offerPercents = allPlans.map(getOfferPercentOff).filter((percent) => percent > 0);
+  const flashOfferEndsAt = allPlans.find((p) => getOfferPercentOff(p) > 0)?.limitedTimeOfferEndsAt;
+  const flashOffer =
+    flashOfferEndsAt && !isOnTeamPlan && !hasActiveSubscription
+      ? {
+          endsAt: flashOfferEndsAt,
+          percentOff: Math.max(...offerPercents),
+          isUpTo: Math.min(...offerPercents) !== Math.max(...offerPercents),
+        }
+      : null;
+
+  // Refetch when the offer expires so cards drop back to regular prices.
+  useEffect(() => {
+    if (!flashOfferEndsAt) return;
+    const timeout = setTimeout(
+      () => void utils.billing.plans.invalidate(),
+      Math.max(0, new Date(flashOfferEndsAt).getTime() - Date.now()),
+    );
+    return () => clearTimeout(timeout);
+  }, [flashOfferEndsAt, utils]);
+
+  const defaultInterval = flashOffer ? "yearly" : "monthly";
+  const plusInterval = plusIntervalChoice ?? defaultInterval;
+  const proInterval = proIntervalChoice ?? defaultInterval;
+  const maxInterval = maxIntervalChoice ?? defaultInterval;
+  const showYearlyPlans = () => {
+    setPlusInterval("yearly");
+    setProInterval("yearly");
+    setMaxInterval("yearly");
+  };
+
   const selectedPlusPlan = plusInterval === "monthly" ? plusMonthly : plusYearly;
   const selectedProPlan = proInterval === "monthly" ? proMonthly : proYearly;
   const selectedMaxPlan = maxInterval === "monthly" ? maxMonthly : maxYearly;
@@ -234,6 +266,7 @@ export function useBillingPage() {
     enableMaxMode,
     estimateQuery,
     errored,
+    flashOffer,
     handleChangePlanClick,
     handleCheckout,
     handleConfirmChangePlan,
@@ -266,6 +299,7 @@ export function useBillingPage() {
     setPlusInterval,
     setProInterval,
     setShredOpen,
+    showYearlyPlans,
     shredOpen,
     statusQuery,
     usageQuery,

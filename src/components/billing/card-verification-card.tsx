@@ -113,6 +113,7 @@ function CardActions({
       toast.success(t("Card removed."));
       await utils.billing.usage.invalidate();
       await utils.billing.status.invalidate();
+      await utils.billing.flashOffer.invalidate();
     },
     onError: (error) => toast.error(localizeError(error)),
   });
@@ -270,6 +271,7 @@ function CardSetupForm({
         );
         await utils.billing.usage.invalidate();
         await utils.billing.status.invalidate();
+        await utils.billing.flashOffer.invalidate();
         onDone();
       } catch (err) {
         setError(localizeError(err, t("Failed to confirm card.")));

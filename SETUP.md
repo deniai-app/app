@@ -284,7 +284,7 @@ To hide billing in the client:
 NEXT_PUBLIC_BILLING_DISABLED=1
 ```
 
-Optional flash offer coupon: `STRIPE_FLASH_OFFER_COUPON_ID`.
+Optional flash offer coupon: `STRIPE_FLASH_OFFER_COUPON_ID`. For 24 hours after a user first opens billing, the coupon discounts yearly and lifetime plans, and the billing page shows an offer banner with a countdown. Users who have verified a card also see a dismissible offer strip at the top of the app while the offer runs. Without the coupon (or if it is invalid), no offer is shown.
 
 Dispute handling is automatic when those extra webhook events are enabled. On `charge.dispute.created` the app emails admins and cancels the related subscription (immediately for fraud, otherwise at period end). Evidence is not submitted automatically; contest from the Stripe Dashboard if needed. On `radar.early_fraud_warning.created` it refunds as fraud only when the payment is still actionable, 3D Secure did not authenticate it, and the account has no post-payment service use. Alerts go to `ADMIN_EMAILS` / `BLOG_ADMIN_EMAILS` when Cloudflare email is configured.
 

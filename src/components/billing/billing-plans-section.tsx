@@ -6,6 +6,7 @@ import { useExtracted } from "next-intl";
 import type { ClientPlan, IndividualPlanId } from "@/lib/billing";
 import { cn } from "@/lib/utils";
 import { PlanCard } from "./billing-plan-card";
+import { BILLING_PLANS_SECTION_ID } from "./billing-utils";
 import { PlanHighlights } from "./plan-highlights";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -88,7 +89,7 @@ export function BillingPlansSection({
 
   return (
     <>
-      <div className="space-y-4">
+      <div id={BILLING_PLANS_SECTION_ID} className="scroll-mt-6 space-y-4">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {selectedPlusPlan && (
             <PlanCard

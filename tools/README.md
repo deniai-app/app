@@ -2,12 +2,13 @@
 
 Internal scripts for maintainers. Run from the **repository root** with pnpm. Package scripts explicitly load `.env.local` when present; production maintenance uses `.env.production`.
 
-| Script                   | npm script                       | Purpose                                        |
-| ------------------------ | -------------------------------- | ---------------------------------------------- |
-| `codename-generator.ts`  | `pnpm run tools:codename`        | Generate Deni AI version codenames             |
-| `commit.ts`              | `pnpm run tools:commit`          | Conventional commit messages via OpenRouter    |
-| `purge-anonymous.ts`     | `pnpm run tools:purge-anonymous` | Purge anonymous users (uses `.env.production`) |
-| `stripe-portal-setup.ts` | `pnpm run tools:stripe-portal`   | Stripe Customer Portal configuration           |
+| Script                      | npm script                              | Purpose                                                                |
+| --------------------------- | --------------------------------------- | ---------------------------------------------------------------------- |
+| `codename-generator.ts`     | `pnpm run tools:codename`               | Generate Deni AI version codenames                                     |
+| `commit.ts`                 | `pnpm run tools:commit`                 | Conventional commit messages via OpenRouter                            |
+| `grant-card-flash-offer.ts` | `pnpm run tools:grant-card-flash-offer` | One-off flash offer for card-verified users (dry run unless `--apply`) |
+| `purge-anonymous.ts`        | `pnpm run tools:purge-anonymous`        | Purge anonymous users (uses `.env.production`)                         |
+| `stripe-portal-setup.ts`    | `pnpm run tools:stripe-portal`          | Stripe Customer Portal configuration                                   |
 
 ## Commit helper
 

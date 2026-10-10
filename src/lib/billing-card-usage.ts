@@ -4,7 +4,7 @@ import { db } from "@/db/drizzle";
 import { billing } from "@/db/schema";
 import { stripe } from "@/lib/stripe";
 
-// Same card may be attached across at most this many distinct users (incl. for trials).
+// Same card may be attached across at most this many distinct users.
 export const MAX_USES_PER_CARD = 2;
 // Prepaid cards are more abuse-prone (gift cards, virtual numbers).
 export const MAX_USES_PER_PREPAID_CARD = 1;
@@ -148,18 +148,8 @@ export async function getCustomerPrimaryCardInfo(
   }
 }
 
-// Back-compat: callers that only need the fingerprint.
-export async function getCustomerPrimaryCardFingerprint(
-  customerId: string,
-  subscriptionId?: string | null,
-) {
-  const info = await getCustomerPrimaryCardInfo(customerId, subscriptionId);
-  return info.fingerprint;
-}
-
 // Count distinct users (excluding `excludeUserId`, typically the caller) that
-// have this card fingerprint on their billing record. Used for both card-
-// registration and trial eligibility under a single rule.
+// have this card fingerprint on their billing record.
 export async function countCardUsesByFingerprint(
   fingerprint: string,
   options: { excludeUserId?: string } = {},
@@ -187,8 +177,8 @@ export type CardEligibilityResult =
   | { eligible: true }
   | { eligible: false; reason: CardEligibilityReason; usedCount: number; maxUses: number };
 
-// Single source of truth for "may this card be used (for trial or free-tier
-// verification) on this account?" credit/debit: 2 distinct users max, prepaid: 1.
+// Single source of truth for "may this card be used (for free-tier verification)
+// on this account?" credit/debit: 2 distinct users max, prepaid: 1.
 // The current user's own prior use does not count against them.
 export async function checkCardEligibility({
   fingerprint,
@@ -276,56 +266,19 @@ export function claimCardVerification(
   );
 }
 
-export async function isTrialFingerprintEligible(
-  fingerprint: string | null,
-  context?: {
-    customerId?: string;
-    userId?: string;
-    organizationId?: string | null;
-    funding?: CardFunding;
-  },
-) {
-  if (!fingerprint) {
-    return false;
-  }
-
-  const funding = context?.funding ?? "unknown";
-  const userId = context?.userId;
-  if (userId) {
-    const result = await checkCardEligibility({ fingerprint, funding, userId });
-    return result.eligible;
-  }
-  // Fallback when userId is unavailable: count globally without self-exclusion.
-  const count = await countCardUsesByFingerprint(fingerprint);
-  return count < getMaxUsesForFunding(funding);
-}
-
 export async function getBillingFingerprintUpdates({
   customerId,
   subscriptionId,
-  markTrialUsed,
 }: {
   customerId: string;
   subscriptionId?: string | null;
-  markTrialUsed: boolean;
 }) {
   const { fingerprint, funding } = await getCustomerPrimaryCardInfo(customerId, subscriptionId);
-  if (markTrialUsed && !fingerprint) {
-    console.warn(
-      "[billing] getBillingFingerprintUpdates could not mark trial used because getCustomerPrimaryCardInfo returned no fingerprint",
-      {
-        customerId,
-        subscriptionId,
-      },
-    );
-  }
 
   return {
     // `undefined` leaves the stored value alone: a failed or empty Stripe lookup
-    // must not erase the fingerprint that card-reuse and trial checks rely on.
+    // must not erase the fingerprint that card-reuse checks rely on.
     paymentMethodFingerprint: fingerprint ?? undefined,
     cardFunding: fingerprint ? funding : undefined,
-    trialPaymentMethodFingerprint: markTrialUsed && fingerprint ? fingerprint : undefined,
-    trialUsedAt: markTrialUsed && fingerprint ? new Date() : undefined,
   };
 }

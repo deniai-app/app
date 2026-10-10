@@ -21,7 +21,6 @@ export function TeamBillingPage() {
     teamBillingQuery,
     teamMaxModeQuery,
     teamPlans,
-    teamTrialDays,
     createTeamCheckout,
     changeTeamPlan,
     cancelSub,
@@ -79,7 +78,6 @@ export function TeamBillingPage() {
         isLoading={teamBillingQuery.isLoading}
         billingStatus={teamBillingQuery.data}
         plans={teamPlans}
-        teamTrialDays={teamTrialDays}
         checkoutPending={createTeamCheckout.isPending}
         checkoutPlanId={createTeamCheckout.variables?.planId}
         changePending={changeTeamPlan.isPending}

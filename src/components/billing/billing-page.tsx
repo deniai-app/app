@@ -7,6 +7,7 @@ import { SettingsPageShell } from "../settings-page-shell";
 import { CardVerificationCard } from "./card-verification-card";
 import { BillingChangePlanDialog } from "./billing-change-plan-dialog";
 import { BillingCurrentPlanCard } from "./billing-current-plan-card";
+import { BillingFlashOfferBanner } from "./billing-flash-offer-banner";
 import { BillingMaxModeCard } from "./billing-max-mode-card";
 import { BillingPlansSection } from "./billing-plans-section";
 import { BillingResetCard } from "./billing-reset-card";
@@ -53,6 +54,7 @@ function BillingPageContent() {
     enableMaxMode,
     estimateQuery,
     errored,
+    flashOffer,
     handleChangePlanClick,
     handleCheckout,
     handleConfirmChangePlan,
@@ -85,6 +87,7 @@ function BillingPageContent() {
     setPlusInterval,
     setProInterval,
     setShredOpen,
+    showYearlyPlans,
     shredOpen,
     statusQuery,
     usageQuery,
@@ -106,6 +109,15 @@ function BillingPageContent() {
       description={t("Manage your subscription and usage")}
       className="max-w-6xl"
     >
+      {flashOffer && (
+        <BillingFlashOfferBanner
+          endsAt={flashOffer.endsAt}
+          percentOff={flashOffer.percentOff}
+          isUpTo={flashOffer.isUpTo}
+          onViewOffer={showYearlyPlans}
+        />
+      )}
+
       <BillingCurrentPlanCard
         isOnTeamPlan={isOnTeamPlan}
         rawPlanId={rawPlanId}

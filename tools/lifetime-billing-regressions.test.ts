@@ -18,13 +18,10 @@ const state = vi.hoisted(() => ({
 vi.mock("@/db/drizzle", () => ({ db: {} }));
 vi.mock("@/lib/auth", () => ({ auth: { api: { getSession: vi.fn() } } }));
 vi.mock("@/lib/billing-config", () => ({ isBillingDisabled: false }));
-vi.mock("@/lib/billing-trials", () => ({ isTrialEligibleForCustomer: async () => false }));
 vi.mock("@/lib/billing-card-usage", () => ({
   claimCardVerification: vi.fn(),
   getBillingFingerprintUpdates: async () => ({ paymentMethodFingerprint: null }),
   getCustomerPrimaryCardInfo: async () => ({ fingerprint: null, funding: "unknown" }),
-  getCustomerPrimaryCardFingerprint: vi.fn(),
-  isTrialFingerprintEligible: async () => false,
 }));
 vi.mock("@/lib/stripe", () => ({
   stripe: {

@@ -37,6 +37,7 @@ import {
   checkSignupEmail,
   signupEmailDenialCode,
   signupEmailDenialMessage,
+  type SignupOAuthProvider,
 } from "@/lib/email-domain-policy";
 import {
   isAnonymousUser,
@@ -117,8 +118,8 @@ function resolveSignupUserAgent(ctx: SignupContext) {
   return signupHeaders(ctx)?.get("user-agent");
 }
 
-function assertAllowedSignupEmail(email: string) {
-  const result = checkSignupEmail(email);
+function assertAllowedSignupEmail(email: string, oauthProvider?: SignupOAuthProvider) {
+  const result = checkSignupEmail(email, oauthProvider);
   if (result.ok) return;
   throw new APIError("BAD_REQUEST", {
     message: signupEmailDenialMessage(result.reason),
@@ -461,13 +462,18 @@ export const auth = betterAuth({
             });
           }
 
-          const path = typeof ctx?.path === "string" ? ctx.path : undefined;
-          // OAuth (Google / GitHub) may use corporate domains — allow those.
-          if (path?.startsWith("/callback/")) return;
-
-          // Email/password, magic-link (new user), and other non-OAuth creates:
-          // major providers + educational domains only (see email-domain-policy).
-          assertAllowedSignupEmail(user.email);
+          // Better Auth verifies the provider before reaching this hook, for both
+          // OAuth callbacks and direct ID-token sign-ins.
+          const provider =
+            ctx?.path === "/callback/:id"
+              ? ctx.params?.id
+              : ctx?.path === "/sign-in/social"
+                ? ctx.body?.provider
+                : undefined;
+          assertAllowedSignupEmail(
+            user.email,
+            provider === "google" || provider === "github" ? provider : undefined,
+          );
         },
         after: async (user, ctx) => {
           if (user.isAnonymous || !user.email) return;

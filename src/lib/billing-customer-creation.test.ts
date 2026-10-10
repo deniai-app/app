@@ -18,10 +18,13 @@ vi.mock("@/lib/team-billing", () => ({
   getOrgMemberCount: async () => 1,
   updateTeamSeatCount: vi.fn(),
 }));
-vi.mock("@/lib/billing-trials", () => ({ isTrialEligibleForCustomer: async () => false }));
-vi.mock("@/lib/billing-card-usage", () => ({
-  getCustomerPrimaryCardFingerprint: async () => null,
-  isTrialFingerprintEligible: async () => false,
+vi.mock("@/lib/stripe-subscriptions", () => ({
+  listCustomerSubscriptions: async () => [],
+  pickLicensedSubscription: () => undefined,
+}));
+vi.mock("@/lib/team-billing-record", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/team-billing-record")>()),
+  saveTeamBillingRecord: async () => null,
 }));
 vi.mock("@/lib/stripe", () => ({
   stripe: {
@@ -123,7 +126,9 @@ test.each(["personal", "team"])(
       Array.from({ length: 8 }, () =>
         kind === "personal"
           ? billingRouter.createCaller(context(db)).createCardSetupIntent()
-          : organizationRouter.createCaller(context(db)).teamPlans(),
+          : organizationRouter
+              .createCaller(context(db))
+              .teamBillingStatus({ organizationId: "team" }),
       ),
     );
     expect(state.customers.size).toBe(1);
@@ -137,9 +142,11 @@ test.each(["personal", "team"])(
 
 test("team search errors do not create another customer", async () => {
   state.search.mockRejectedValue(new Error("Stripe search unavailable"));
-  await expect(organizationRouter.createCaller(context(database())).teamPlans()).rejects.toThrow(
-    "Stripe search unavailable",
-  );
+  await expect(
+    organizationRouter
+      .createCaller(context(database()))
+      .teamBillingStatus({ organizationId: "team" }),
+  ).rejects.toThrow("Stripe search unavailable");
   expect(state.create).not.toHaveBeenCalled();
   expect(state.rows).toHaveLength(0);
 });

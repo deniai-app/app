@@ -4,6 +4,15 @@ import { formatMinorCurrency } from "@/lib/currency";
 import { useExtracted, useLocale } from "next-intl";
 
 export const ACTIVE_STATUSES = new Set(["active", "trialing", "paid"]);
+export const BILLING_PLANS_SECTION_ID = "billing-plans";
+
+/** Whole-percent discount of a limited-time offer price, or 0 when none applies. */
+export function getOfferPercentOff(plan: ClientPlan | null | undefined) {
+  if (!plan?.limitedTimeOfferEndsAt || !plan.originalAmount || plan.amount == null) {
+    return 0;
+  }
+  return Math.round((1 - plan.amount / plan.originalAmount) * 100);
+}
 
 export function useFormatPriceLabel() {
   const t = useExtracted();

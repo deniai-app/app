@@ -1,5 +1,5 @@
 /**
- * Email domain policy for credential / magic-link sign-up.
+ * Email domain policy for all non-guest sign-up paths, including OAuth.
  *
  * Allowlist model:
  *  1. Known major consumer mail providers (exact domain match)
@@ -16,9 +16,9 @@
  *    include a birth year. They use the existing CAPTCHA / email-verification
  *    signup flow when configured, rather than being rejected as aliases.
  *
- * OAuth (Google / GitHub) is not gated by this module — those identities
- * are already provider-verified. Apply only on email-based registration
- * paths (see auth.ts).
+ * OAuth (Google / GitHub) uses the same domain allowlist. Google OAuth also
+ * permits Gmail / Googlemail. Alias checks remain email-registration-only;
+ * OAuth mailbox identities are supplied by the verified provider.
  */
 
 /** Google consumer mail — email/password and magic-link sign-up forbidden. */
@@ -257,24 +257,29 @@ export type SignupEmailDenyReason =
 
 export type SignupEmailPolicyResult = { ok: true } | { ok: false; reason: SignupEmailDenyReason };
 
+export type SignupOAuthProvider = "google" | "github";
+
 /**
- * Full sign-up policy for email/password and magic-link registration.
- * Does not apply to OAuth callbacks.
+ * Full sign-up policy. Pass an OAuth provider only from an authenticated
+ * provider flow, after its token / authorization code has been verified.
  */
-export function checkSignupEmail(email: string): SignupEmailPolicyResult {
+export function checkSignupEmail(
+  email: string,
+  oauthProvider?: SignupOAuthProvider,
+): SignupEmailPolicyResult {
   const domain = extractEmailDomain(email);
   if (!domain) return { ok: false, reason: "invalid" };
 
   // Gmail aliases all deliver to one inbox; require Google-verified identity.
   if (isGoogleMailDomain(domain)) {
-    return { ok: false, reason: "use_google_oauth" };
+    return oauthProvider === "google" ? { ok: true } : { ok: false, reason: "use_google_oauth" };
   }
 
   const local = extractEmailLocalPart(email);
   if (!local) return { ok: false, reason: "invalid" };
 
-  // Unambiguous alias local parts rejected on every domain (provider, edu, etc.).
-  if (isAliasLikeLocalPart(local)) {
+  // Email-registration alias rules do not change provider-verified identities.
+  if (!oauthProvider && isAliasLikeLocalPart(local)) {
     return { ok: false, reason: "alias_not_allowed" };
   }
 

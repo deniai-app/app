@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNotNull, isNull, like, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, like, or, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import { z } from "zod";
 import { billing, member, user } from "@/db/schema";
@@ -15,8 +15,6 @@ import {
   type CardFunding,
   claimCardVerification,
   getBillingFingerprintUpdates,
-  getCustomerPrimaryCardInfo,
-  isTrialFingerprintEligible,
 } from "@/lib/billing-card-usage";
 import { isBillingDisabled } from "@/lib/billing-config";
 import { unchangedBillingSnapshot } from "@/lib/billing-snapshot";
@@ -26,7 +24,6 @@ import {
   getFlashOfferCouponId,
   isFlashOfferActive,
   isFlashOfferPlan,
-  SUBSCRIPTION_TRIAL_DAYS,
 } from "@/lib/billing-offers";
 import {
   findPaidLifetimePurchase,
@@ -39,7 +36,6 @@ import {
 } from "@/lib/lifetime-plan";
 import { disableMaxMode, enableMaxMode, getMaxModeStatus } from "@/lib/max-mode";
 import { attachMaxModeMeteredItems } from "@/lib/max-mode-stripe";
-import { isTrialEligibleForCustomer } from "@/lib/billing-trials";
 import { escapeStripeSearchValue } from "@/lib/stripe-search";
 import { stripe } from "@/lib/stripe";
 import { createBillingPortalSession } from "@/lib/stripe-portal";
@@ -189,10 +185,6 @@ function applyCouponToAmount(
   }
 
   return amount;
-}
-
-function isProTrialPlan(planId: string, mode: "subscription" | "payment") {
-  return mode === "subscription" && planId.startsWith("pro_") && !planId.endsWith("_lifetime");
 }
 
 async function fetchUserProfile(ctx: ProtectedContext, userId: string) {
@@ -456,23 +448,6 @@ export const billingRouter = router({
   plans: billingEnabledProcedure.query(async ({ ctx }) => {
     const individualPlans = billingPlans.filter((p) => !isTeamPlan(p.id));
     const billingRecord = await ensureBillingRecord(ctx, ctx.userId);
-    let trialFingerprint: string | null = billingRecord.paymentMethodFingerprint ?? null;
-    let trialFunding: CardFunding = (billingRecord.cardFunding as CardFunding | null) ?? "unknown";
-    if (!trialFingerprint) {
-      const info = await getCustomerPrimaryCardInfo(
-        billingRecord.stripeCustomerId,
-        billingRecord.stripeSubscriptionId,
-      );
-      trialFingerprint = info.fingerprint;
-      trialFunding = info.funding;
-    }
-    const trialEligible =
-      (await isTrialEligibleForCustomer(billingRecord.stripeCustomerId)) &&
-      (await isTrialFingerprintEligible(trialFingerprint, {
-        customerId: billingRecord.stripeCustomerId,
-        userId: ctx.userId,
-        funding: trialFunding,
-      }));
     const flashOfferActive = isFlashOfferActive(billingRecord.flashOfferEndsAt);
     const flashOfferEndsAt = flashOfferActive
       ? (billingRecord.flashOfferEndsAt?.toISOString() ?? null)
@@ -497,16 +472,73 @@ export const billingRouter = router({
         interval: price.recurring?.interval ?? null,
         intervalCount: price.recurring?.interval_count ?? 1,
         isTeamPlan: false,
-        trialDays:
-          isProTrialPlan(plan.id, mode) && trialEligible && flashOfferActive
-            ? SUBSCRIPTION_TRIAL_DAYS
-            : null,
-        limitedTimeOfferEndsAt:
-          flashOfferEndsAt && isFlashOfferPlan(plan.id) ? flashOfferEndsAt : null,
+        // Only advertise the offer when the coupon actually lowers this price.
+        limitedTimeOfferEndsAt: discountedAmount !== price.unit_amount ? flashOfferEndsAt : null,
       };
     });
 
     return { plans };
+  }),
+  /**
+   * App-wide flash offer promo for card-verified users who have never paid.
+   * Read-only: unlike `plans`, it never creates a billing record or starts the timer.
+   */
+  flashOffer: protectedProcedure.query(async ({ ctx }) => {
+    if (isBillingDisabled || ctx.session?.user?.isAnonymous) return null;
+
+    const [record] = await ctx.db
+      .select({
+        cardVerifiedAt: billing.cardVerifiedAt,
+        firstPaidAt: billing.firstPaidAt,
+        flashOfferEndsAt: billing.flashOfferEndsAt,
+        status: billing.status,
+      })
+      .from(billing)
+      .where(and(eq(billing.userId, ctx.userId), isNull(billing.organizationId)))
+      .limit(1);
+    if (
+      !record?.cardVerifiedAt ||
+      record.firstPaidAt ||
+      ACTIVE_SUB_STATUSES.has(record.status ?? "") ||
+      !isFlashOfferActive(record.flashOfferEndsAt)
+    ) {
+      return null;
+    }
+
+    const [teamRecord] = await ctx.db
+      .select({ id: billing.id })
+      .from(billing)
+      .innerJoin(member, eq(billing.organizationId, member.organizationId))
+      .where(
+        and(
+          eq(member.userId, ctx.userId),
+          isNotNull(billing.organizationId),
+          inArray(billing.status, [...ACTIVE_SUB_STATUSES]),
+        ),
+      )
+      .limit(1);
+    if (teamRecord) return null;
+
+    const coupon = await getFlashOfferCoupon();
+    if (!coupon?.valid) return null;
+    const offerPlans = billingPlans.filter((p) => !isTeamPlan(p.id) && isFlashOfferPlan(p.id));
+    const prices = await getPricesForPlans(offerPlans);
+    const percents = prices
+      .map((price) => {
+        const amount = applyCouponToAmount(price.unit_amount, coupon, price.currency);
+        return amount != null && price.unit_amount
+          ? Math.round((1 - amount / price.unit_amount) * 100)
+          : 0;
+      })
+      .filter((percent) => percent > 0);
+    if (percents.length === 0 || !record.flashOfferEndsAt) return null;
+
+    const percentOff = Math.max(...percents);
+    return {
+      endsAt: record.flashOfferEndsAt.toISOString(),
+      percentOff,
+      isUpTo: Math.min(...percents) !== percentOff,
+    };
   }),
   status: billingEnabledProcedure.query(async ({ ctx }) => {
     const [subscription, teamRecords] = await Promise.all([
@@ -638,31 +670,6 @@ export const billingRouter = router({
         });
       }
 
-      const trialEligible =
-        mode === "subscription"
-          ? await isTrialEligibleForCustomer(billingRecord.stripeCustomerId)
-          : false;
-      let trialFingerprint: string | null = billingRecord.paymentMethodFingerprint ?? null;
-      let trialFunding: CardFunding =
-        (billingRecord.cardFunding as CardFunding | null) ?? "unknown";
-      if (!trialFingerprint) {
-        const info = await getCustomerPrimaryCardInfo(
-          billingRecord.stripeCustomerId,
-          billingRecord.stripeSubscriptionId,
-        );
-        trialFingerprint = info.fingerprint;
-        trialFunding = info.funding;
-      }
-      const proTrialEligible =
-        isProTrialPlan(plan.id, mode) &&
-        trialEligible &&
-        flashOfferActive &&
-        (await isTrialFingerprintEligible(trialFingerprint, {
-          customerId: billingRecord.stripeCustomerId,
-          userId: ctx.userId,
-          funding: trialFunding,
-        }));
-
       const session = await stripe.checkout.sessions.create(
         {
           mode: mode === "payment" ? "payment" : "subscription",
@@ -689,7 +696,6 @@ export const billingRouter = router({
                     userId: ctx.userId,
                     planId: plan.id,
                   },
-                  trial_period_days: proTrialEligible ? SUBSCRIPTION_TRIAL_DAYS : undefined,
                 }
               : undefined,
           discounts: flashOfferEligible ? [{ coupon: couponId! }] : undefined,
@@ -809,7 +815,6 @@ export const billingRouter = router({
         const fingerprintUpdates = await getBillingFingerprintUpdates({
           customerId:
             (session.customer as string | null | undefined) ?? billingRecord.stripeCustomerId,
-          markTrialUsed: subscription.status === "trialing",
         });
         updates.stripeSubscriptionId = subscription.id;
         updates.status = resolveSubscriptionStatus(subscription);
@@ -819,10 +824,6 @@ export const billingRouter = router({
         updates.paymentMethodFingerprint = fingerprintUpdates.paymentMethodFingerprint;
         if (fingerprintUpdates.cardFunding) {
           updates.cardFunding = fingerprintUpdates.cardFunding;
-        }
-        if (fingerprintUpdates.trialPaymentMethodFingerprint) {
-          updates.trialPaymentMethodFingerprint = fingerprintUpdates.trialPaymentMethodFingerprint;
-          updates.trialUsedAt = fingerprintUpdates.trialUsedAt;
         }
       } else if (!isPaidCheckoutPaymentCurrent(session)) {
         // A refunded or disputed one-time payment keeps its "succeeded"/"paid"
@@ -835,7 +836,6 @@ export const billingRouter = router({
         const fingerprintUpdates = await getBillingFingerprintUpdates({
           customerId:
             (session.customer as string | null | undefined) ?? billingRecord.stripeCustomerId,
-          markTrialUsed: false,
         });
         updates.status = "paid";
         updates.mode = "payment";
@@ -849,7 +849,6 @@ export const billingRouter = router({
         const fingerprintUpdates = await getBillingFingerprintUpdates({
           customerId:
             (session.customer as string | null | undefined) ?? billingRecord.stripeCustomerId,
-          markTrialUsed: false,
         });
         updates.status = "paid";
         updates.firstPaidAt = billingRecord.firstPaidAt ?? new Date();

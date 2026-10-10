@@ -54,7 +54,6 @@ async function saveSubscription(payload: SubscriptionPayload) {
   const fingerprintUpdates = await getBillingFingerprintUpdates({
     customerId: payload.customerId,
     subscriptionId: payload.subscriptionId,
-    markTrialUsed: payload.status === "trialing",
   });
 
   const whereClause = organizationId
@@ -118,8 +117,6 @@ async function saveSubscription(payload: SubscriptionPayload) {
         : (existingRecord?.firstPaidAt ?? new Date()),
     paymentMethodFingerprint: fingerprintUpdates.paymentMethodFingerprint,
     cardFunding: fingerprintUpdates.cardFunding,
-    trialPaymentMethodFingerprint: fingerprintUpdates.trialPaymentMethodFingerprint,
-    trialUsedAt: fingerprintUpdates.trialUsedAt,
   };
 
   if (organizationId) {
@@ -256,7 +253,7 @@ async function savePaidLifetimeCheckout(
 
   const [lineItems, fingerprintUpdates] = await Promise.all([
     stripe.checkout.sessions.listLineItems(session.id, { limit: 1 }),
-    getBillingFingerprintUpdates({ customerId, markTrialUsed: false }),
+    getBillingFingerprintUpdates({ customerId }),
   ]);
 
   await saveLifetimePlan(db, {

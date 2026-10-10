@@ -9,7 +9,7 @@ import { useExtracted } from "next-intl";
 import { startTransition, useEffect, useReducer, useState } from "react";
 import { toast } from "sonner";
 import { usePlatformCapabilities } from "@/components/platform-capabilities-provider";
-import type { BillingPlanId, ClientPlan, IndividualPlanId, TeamPlanId } from "@/lib/billing";
+import type { BillingPlanId, IndividualPlanId, TeamPlanId } from "@/lib/billing";
 import { findPlanById, getPlanTier, isMaxTeamPlan } from "@/lib/billing";
 import { stripeJsPromise } from "@/lib/stripe-js";
 import { useLocalizeError } from "@/hooks/use-localize-error";
@@ -44,7 +44,6 @@ type StripeCheckoutPageProps = BillingCheckoutProps | TeamCheckoutProps;
 
 type CheckoutBootstrapState = {
   session: CheckoutSessionSummary | null;
-  availablePlans: ClientPlan[];
   stripeInstance: Stripe | null;
   bootstrapError: string | null;
   isBootstrapping: boolean;
@@ -55,14 +54,12 @@ type CheckoutBootstrapAction =
   | {
       type: "success";
       session: CheckoutSessionSummary;
-      availablePlans: ClientPlan[];
       stripeInstance: Stripe;
     }
   | { type: "failure"; message: string };
 
 const INITIAL_CHECKOUT_BOOTSTRAP_STATE: CheckoutBootstrapState = {
   session: null,
-  availablePlans: [],
   stripeInstance: null,
   bootstrapError: null,
   isBootstrapping: true,
@@ -83,7 +80,6 @@ function checkoutBootstrapReducer(
     case "success":
       return {
         session: action.session,
-        availablePlans: action.availablePlans,
         stripeInstance: action.stripeInstance,
         bootstrapError: null,
         isBootstrapping: false,
@@ -256,7 +252,6 @@ function CheckoutForm({
   returnUrl,
   appearance,
   planId,
-  plan,
   sessionPaidAt,
 }: {
   backHref: string;
@@ -264,7 +259,6 @@ function CheckoutForm({
   returnUrl: string;
   appearance: Appearance;
   planId: BillingPlanId | null;
-  plan: ClientPlan | null;
   sessionPaidAt: string | null;
 }) {
   const t = useExtracted();
@@ -367,13 +361,7 @@ function CheckoutForm({
     <CheckoutReceiptForm
       checkout={activeCheckout}
       confirmHint={activeCheckout.recurring ? t("Cancel anytime") : t("Pay once. Keep access.")}
-      confirmLabel={
-        activeCheckout.recurring
-          ? plan?.trialDays
-            ? t("Start {days}-day trial", { days: plan.trialDays.toString() })
-            : t("Start subscription")
-          : t("Complete payment")
-      }
+      confirmLabel={activeCheckout.recurring ? t("Start subscription") : t("Complete payment")}
       homeHref={backHref}
       homeLabel={receiptHomeLabel}
       isSubmitting={isSubmitting}
@@ -490,8 +478,7 @@ export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
     checkoutBootstrapReducer,
     INITIAL_CHECKOUT_BOOTSTRAP_STATE,
   );
-  const { session, availablePlans, stripeInstance, bootstrapError, isBootstrapping } =
-    bootstrapState;
+  const { session, stripeInstance, bootstrapError, isBootstrapping } = bootstrapState;
   const resolvedPlanId = (() => {
     const candidate = session?.planId ?? planId;
     return candidate ? (findPlanById(candidate)?.id ?? null) : null;
@@ -502,7 +489,6 @@ export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
     scope === "billing" ? "/settings/billing" : "/settings/team",
     t("Home"),
   );
-  const selectedPlan = availablePlans.find((plan) => plan.id === resolvedPlanId) ?? null;
   const checkoutAppearance = getStripeCheckoutAppearance();
 
   const isReceiptPreview = sessionId === "preview";
@@ -552,11 +538,6 @@ export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
         throw new Error(t("An organization is required to start team checkout."));
       }
 
-      const planResult =
-        scope === "billing"
-          ? await trpcClient.billing.plans.query()
-          : await trpcClient.organization.teamPlans.query();
-
       if (sessionId) {
         const result =
           scope === "billing"
@@ -573,7 +554,6 @@ export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
               ...result,
               status: result.status ?? "open",
             },
-            availablePlans: planResult.plans,
             stripeInstance: loadedStripe,
           });
         }
@@ -616,7 +596,6 @@ export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
       dispatchBootstrap({
         type: "success",
         session: nextSession,
-        availablePlans: planResult.plans,
         stripeInstance: loadedStripe,
       });
 
@@ -750,7 +729,6 @@ export function StripeCheckoutPage(props: StripeCheckoutPageProps) {
             returnUrl={returnUrl}
             appearance={checkoutAppearance}
             planId={resolvedPlanId}
-            plan={selectedPlan}
             sessionPaidAt={session?.paidAt ?? null}
           />
         </CheckoutElementsProvider>

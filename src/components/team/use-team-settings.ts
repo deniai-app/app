@@ -702,7 +702,6 @@ export function useTeamSettings() {
 
   const isLoading = session.isPending || (organizationsLoading && organizations.length === 0);
   const teamPlans = teamPlansQuery.data?.plans ?? [];
-  const teamTrialDays = teamPlans.find((plan) => plan.trialDays)?.trialDays ?? null;
 
   return {
     t,
@@ -721,7 +720,6 @@ export function useTeamSettings() {
     teamBillingQuery,
     teamMaxModeQuery,
     teamPlans,
-    teamTrialDays,
     createTeamCheckout,
     changeTeamPlan,
     cancelSub,

@@ -14,7 +14,6 @@ type TeamPlan = {
   id: string;
   amount: number | null;
   currency: string | null;
-  trialDays?: number | null;
 };
 
 type BillingStatus = {
@@ -112,7 +111,6 @@ export function TeamBillingCard({
   isLoading,
   billingStatus,
   plans,
-  teamTrialDays,
   checkoutPending,
   checkoutPlanId,
   changePending,
@@ -129,7 +127,6 @@ export function TeamBillingCard({
   isLoading: boolean;
   billingStatus?: BillingStatus | null;
   plans: TeamPlan[];
-  teamTrialDays: number | null;
   checkoutPending: boolean;
   checkoutPlanId?: string;
   changePending: boolean;
@@ -163,16 +160,6 @@ export function TeamBillingCard({
         <CardDescription>
           {t("Team plans give every member Pro or Max access with per-seat pricing.")}
         </CardDescription>
-        {teamTrialDays && (
-          <div className="pt-2 space-y-2">
-            <Badge className="border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300">
-              {t("{days}-day free trial", { days: teamTrialDays.toString() })}
-            </Badge>
-            <p className="text-xs text-muted-foreground">
-              {t("Team trial is available for up to {count} seats.", { count: "5" })}
-            </p>
-          </div>
-        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading ? (
